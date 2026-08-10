@@ -1,0 +1,27 @@
+{
+  "name": "event-tomiris",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Городской квест на QR-кодах: React для отображения контента + Node.js для генерации QR и Telegram-уведомлений.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "qr": "node scripts/generate-qr.js",
+    "server": "node server/index.js"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "qrcode": "^1.5.4",
+    "vite": "^5.4.8"
+  }
+}
