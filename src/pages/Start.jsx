@@ -99,7 +99,11 @@ export default function Start() {
         📝 Зарегистрироваться на квест
       </button>
 
-      <button className="btn ghost mt" onClick={() => navigate("/progress")}>
+      <button className="btn ghost mt" onClick={() => navigate("/landing")}>
+        ✨ Презентация квеста и таймер
+      </button>
+
+      <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => navigate("/progress")}>
         {started ? "Мой прогресс" : "Открыть прогресс"}
       </button>
 

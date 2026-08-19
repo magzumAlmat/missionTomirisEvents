@@ -6,6 +6,7 @@ import Progress from "./pages/Progress.jsx";
 import Final from "./pages/Final.jsx";
 import Admin from "./pages/Admin.jsx";
 import Register from "./pages/Register.jsx";
+import Landing from "./pages/Landing.jsx";
 
 export default function App() {
   return (
@@ -17,6 +18,8 @@ export default function App() {
 
       <Routes>
         <Route path="/" element={<Start />} />
+        <Route path="/landing" element={<Landing />} />
+        <Route path="/welcome" element={<Landing />} />
         <Route path="/register" element={<Register />} />
         <Route path="/reg" element={<Register />} />
         <Route path="/s/:id" element={<Station />} />
@@ -27,6 +30,10 @@ export default function App() {
       </Routes>
 
       <div className="footer">
+        <Link className="small" to="/landing">
+          ✨ Презентация
+        </Link>{" "}
+        · {" "}
         <Link className="small" to="/register">
           📝 Регистрация
         </Link>{" "}
