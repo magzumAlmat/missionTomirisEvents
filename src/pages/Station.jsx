@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
 import { useProgress } from "../useProgress.js";
 import { notify, HAS_BACKEND } from "../lib/api.js";
-import { getTeam } from "../lib/team.js";
+import { getTeam, setTeam } from "../lib/team.js";
 import { getPhone, setPhone, isValidPhone } from "../lib/phone.js";
 
 export default function Station() {
@@ -16,6 +16,7 @@ export default function Station() {
   const already = station ? isSolved(station.id) : false;
 
   const [phone, setPhoneState] = useState(getPhone());
+  const [team, setTeamState] = useState(getTeam());
   const [arrive, setArrive] = useState("idle"); // idle | sending | done | error
   const [solved, setSolved] = useState(already ? "done" : "idle");
   const [revealed, setRevealed] = useState(already);
@@ -34,6 +35,11 @@ export default function Station() {
   function onPhoneChange(v) {
     setPhoneState(v);
     setPhone(v);
+  }
+
+  function onTeamChange(v) {
+    setTeamState(v);
+    setTeam(v);
   }
 
   if (!station) {
@@ -67,7 +73,7 @@ export default function Station() {
         stationId: station.id,
         stationName: station.name,
         phone: phone.trim(),
-        team: getTeam(),
+        team: team.trim(),
       });
       setState("done");
       return true;
@@ -119,6 +125,14 @@ export default function Station() {
         {!phoneOk && phone.length > 0 && (
           <p className="center err-text tiny">Введите корректный номер (мин. 10 цифр).</p>
         )}
+
+        <label className="field-label mt">Название команды / Имя</label>
+        <input
+          type="text"
+          placeholder="Например: Барсы"
+          value={team}
+          onChange={(e) => onTeamChange(e.target.value)}
+        />
       </div>
 
       <div className="actions">

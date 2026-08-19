@@ -5,6 +5,7 @@ import Station from "./pages/Station.jsx";
 import Progress from "./pages/Progress.jsx";
 import Final from "./pages/Final.jsx";
 import Admin from "./pages/Admin.jsx";
+import Register from "./pages/Register.jsx";
 
 export default function App() {
   return (
@@ -16,6 +17,8 @@ export default function App() {
 
       <Routes>
         <Route path="/" element={<Start />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/reg" element={<Register />} />
         <Route path="/s/:id" element={<Station />} />
         <Route path="/progress" element={<Progress />} />
         <Route path="/final" element={<Final />} />
@@ -24,6 +27,10 @@ export default function App() {
       </Routes>
 
       <div className="footer">
+        <Link className="small" to="/register">
+          📝 Регистрация
+        </Link>{" "}
+        · {" "}
         <Link className="small" to="/progress">
           Мой прогресс
         </Link>{" "}

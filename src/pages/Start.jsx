@@ -95,7 +95,11 @@ export default function Start() {
 
       <Slots letters={letters} solvedCount={solvedCount} total={total} />
 
-      <button className="btn" onClick={() => navigate("/progress")}>
+      <button className="btn green" onClick={() => navigate("/register")}>
+        📝 Зарегистрироваться на квест
+      </button>
+
+      <button className="btn ghost mt" onClick={() => navigate("/progress")}>
         {started ? "Мой прогресс" : "Открыть прогресс"}
       </button>
 

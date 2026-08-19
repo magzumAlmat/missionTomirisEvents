@@ -23,5 +23,27 @@ export async function notify(event, { stationId, stationName, phone, team }) {
   return data;
 }
 
+/**
+ * Регистрация нового участника.
+ * payload: { name, phone, hasCar: boolean }
+ */
+export async function registerParticipant({ name, phone, hasCar }) {
+  if (!API_URL) {
+    throw new Error(
+      "Бэкенд не подключён: не задан VITE_API_URL. Перезапусти `npm run dev` после правки .env."
+    );
+  }
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, phone, hasCar }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "Не удалось отправить заявку.");
+  }
+  return data;
+}
+
 export const HAS_BACKEND = !!API_URL;
 export const API_BASE = API_URL;
