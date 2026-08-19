@@ -65,7 +65,7 @@ async function main() {
   }
   for (const s of QUEST.stations) {
     const file = `point-${String(s.id).padStart(2, "0")}.png`;
-    items.push({ file, title: `Точка ${s.id}`, name: s.name, url: targetFor(s.id) });
+    items.push({ file, title: `Точка ${s.id}`, name: s.name, url: targetFor(s.code || s.id) });
   }
 
   for (const it of items) {

@@ -6,4 +6,7 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   base: "./",
+  server: {
+    host: true, // Разрешает подключение по IP-адресу в сети (например 172.20.10.7)
+  },
 });

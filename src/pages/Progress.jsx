@@ -5,7 +5,7 @@ import Slots from "../components/Slots.jsx";
 
 export default function Progress() {
   const navigate = useNavigate();
-  const { letters, solvedCount, total, allSolved, isSolved } = useProgress();
+  const { letters, solvedCount, total, allSolved, isSolved, reset } = useProgress();
 
   return (
     <div className="card">
@@ -46,6 +46,20 @@ export default function Progress() {
       <button className="btn ghost" onClick={() => navigate("/")}>
         На главную
       </button>
+
+      {solvedCount > 0 && (
+        <button
+          className="btn ghost"
+          style={{ marginTop: 12, opacity: 0.7, fontSize: 13 }}
+          onClick={() => {
+            if (confirm("Очистить все разгаданные буквы и начать заново?")) {
+              reset();
+            }
+          }}
+        >
+          🔄 Сбросить прогресс
+        </button>
+      )}
     </div>
   );
 }

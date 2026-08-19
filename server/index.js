@@ -20,13 +20,25 @@ app.use(express.json());
 const ALLOWED = process.env.ALLOWED_ORIGIN || "*";
 app.use(cors({ origin: ALLOWED }));
 
-const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-const PORT = process.env.PORT || 3001;
+import dotenv from "dotenv";
+dotenv.config();
 
-const API = (method) => `https://api.telegram.org/bot${TOKEN}/${method}`;
+function getEnv() {
+  dotenv.config(); // Динамически перечитываем .env
+  return {
+    TOKEN: process.env.TELEGRAM_BOT_TOKEN || "",
+    CHAT_ID: process.env.TELEGRAM_CHAT_ID || "",
+    PORT: process.env.PORT || 3001,
+  };
+}
+
+const API = (method) => {
+  const { TOKEN } = getEnv();
+  return `https://api.telegram.org/bot${TOKEN}/${method}`;
+};
 
 function requireToken(res) {
+  const { TOKEN } = getEnv();
   if (!TOKEN) {
     res.status(500).json({ ok: false, error: "TELEGRAM_BOT_TOKEN не задан в .env" });
     return false;
@@ -38,17 +50,21 @@ function requireToken(res) {
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 // Тексты для разных событий.
-function buildMessage(event, stationId, stationName, team) {
-  const who = team ? `👥 <b>${escapeHtml(team)}</b>` : "👤 Участник";
+function buildMessage(event, stationId, stationName, team, phone) {
+  // Кто: телефон (если есть) + имя/команда (если есть).
+  const parts = [];
+  if (phone) parts.push(`📞 <b>${escapeHtml(phone)}</b>`);
+  if (team) parts.push(`👥 ${escapeHtml(team)}`);
+  const who = parts.length ? parts.join(" · ") : "👤 Участник";
+
   const point = stationName
     ? `точку ${escapeHtml(String(stationId))} · ${escapeHtml(stationName)}`
     : `точку ${escapeHtml(String(stationId))}`;
   const time = new Date().toLocaleString("ru-RU");
-  if (event === "solved") {
-    return `✅ <b>Загадка отгадана</b>\n${who} отгадал ${point}\n🕒 ${time}`;
-  }
-  // по умолчанию — прибытие
-  return `📍 <b>Прибытие на точку</b>\n${who} прибыл на ${point}\n🕒 ${time}`;
+
+  const head = event === "solved" ? "✅ <b>Загадка отгадана</b>" : "📍 <b>Прибытие на точку</b>";
+  const verb = event === "solved" ? "отгадал(а)" : "прибыл(а) на";
+  return `${head}\n${who}\n${verb} ${point}\n🕒 ${time}`;
 }
 
 /**
@@ -57,13 +73,14 @@ function buildMessage(event, stationId, stationName, team) {
  */
 async function handleNotify(req, res, forcedEvent) {
   if (!requireToken(res)) return;
+  const { CHAT_ID } = getEnv();
   if (!CHAT_ID) {
     return res.status(500).json({ ok: false, error: "TELEGRAM_CHAT_ID не задан в .env" });
   }
 
-  const { stationId, stationName, team } = req.body || {};
+  const { stationId, stationName, team, phone } = req.body || {};
   const event = forcedEvent || (req.body && req.body.event) || "arrived";
-  const text = buildMessage(event, stationId, stationName, team);
+  const text = buildMessage(event, stationId, stationName, team, phone);
 
   try {
     const r = await fetch(API("sendMessage"), {
@@ -119,7 +136,8 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 }
 
-app.listen(PORT, () => {
+app.listen(process.env.PORT || 3001, () => {
+  const { TOKEN, CHAT_ID, PORT } = getEnv();
   console.log(`\n🤖 Telegram-бэкенд запущен: http://localhost:${PORT}`);
   console.log(`   Токен: ${TOKEN ? "задан ✅" : "НЕ задан ❌ (заполни .env)"}`);
   console.log(`   Chat ID: ${CHAT_ID ? CHAT_ID : "НЕ задан ❌ — открой /api/chat-id-helper"}`);

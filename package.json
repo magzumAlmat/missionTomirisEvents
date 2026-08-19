@@ -12,6 +12,7 @@
     "server": "node server/index.js"
   },
   "dependencies": {
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.2"
@@ -21,7 +22,6 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
-    "qrcode": "^1.5.4",
     "vite": "^5.4.8"
   }
 }
