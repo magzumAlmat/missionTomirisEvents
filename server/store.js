@@ -166,7 +166,7 @@ export function solveStation({ key, teamNumber, teamName, phone, stationId, lett
   return entry;
 }
 
-/** Отметить финиш (введён верный финальный код). Первое время не перетираем. */
+/** Отметить финиш (взяты все точки). Первое время не перетираем. */
 export function markFinished({ key, teamNumber, teamName, phone }) {
   if (!key) return null;
   const all = readProgress();

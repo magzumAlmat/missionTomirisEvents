@@ -66,12 +66,13 @@ export default function Progress() {
       </ul>
 
       {allSolved ? (
-        <button className="btn green mt" onClick={() => navigate("/final")}>
-          Ввести финальный код
-        </button>
+        <div className="feedback ok">
+          ✓ Все точки пройдены! Возвращайтесь к организаторам — время финиша уже
+          записано.
+        </div>
       ) : (
         <p className="center muted mt">
-          Найди и разгадай все точки, чтобы открыть финал.
+          Найдите и разгадайте все точки — время последней и определяет победителя.
         </p>
       )}
 

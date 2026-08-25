@@ -17,12 +17,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { startVideoBot } from "./videoBot.js";
 import {
-  FINAL_CODE,
-  FINAL_WIN,
+  ALL_DONE,
   TOTAL_STATIONS,
   findStation,
   isCorrectAnswer,
-  norm,
 } from "./questSecret.js";
 import {
   findOrCreateTeam,
@@ -319,12 +317,28 @@ app.post("/api/answer", async (req, res) => {
   });
   const solvedCount = Object.keys(entry?.stations || {}).length;
 
+  // Взяты все точки — это и есть финиш. Отдельного финального кода в квесте нет,
+  // победителя определяет время последней точки.
+  const allDone = solvedCount >= TOTAL_STATIONS;
+  if (allDone) {
+    markFinished({
+      key,
+      teamNumber: team ? team.number : null,
+      teamName: team ? team.name : "",
+      phone,
+    });
+  }
+
+  const who = whoText({ teamNumber: team?.number, teamName: team?.name, phone });
   notifyOrganizers(
-    `🧩 <b>Точка взята</b>\n` +
-      `${whoText({ teamNumber: team?.number, teamName: team?.name, phone })}\n` +
-      `точка ${station.id} · ${escapeHtml(station.name || "")}\n` +
-      `Взято точек: ${solvedCount} из ${TOTAL_STATIONS}\n` +
-      `🕒 ${new Date().toLocaleString("ru-RU")}`
+    allDone
+      ? `🏆 <b>КОМАНДА ПРОШЛА ВСЕ ТОЧКИ</b>\n${who}\n` +
+          `Взято точек: ${solvedCount} из ${TOTAL_STATIONS}\n` +
+          `🕒 ${new Date().toLocaleString("ru-RU")}`
+      : `🧩 <b>Точка взята</b>\n${who}\n` +
+          `точка ${station.id} · ${escapeHtml(station.name || "")}\n` +
+          `Взято точек: ${solvedCount} из ${TOTAL_STATIONS}\n` +
+          `🕒 ${new Date().toLocaleString("ru-RU")}`
   );
 
   res.json({
@@ -334,41 +348,9 @@ app.post("/api/answer", async (req, res) => {
     nextHint: station.nextHint || "",
     solvedCount,
     total: TOTAL_STATIONS,
+    allDone,
+    finishMessage: allDone ? ALL_DONE : "",
   });
-});
-
-/**
- * Проверка финального кода.
- * body: { code, phone, teamNumber? }
- */
-app.post("/api/final", async (req, res) => {
-  const { code, phone, teamNumber } = req.body || {};
-  if (!code || !String(code).trim()) {
-    return res.status(400).json({ ok: false, error: "Введите код." });
-  }
-  if (norm(code) !== norm(FINAL_CODE)) {
-    return res.json({ ok: true, correct: false });
-  }
-
-  const team = teamNumber ? findTeamByNumber(teamNumber) : null;
-  const key = progressKey({ teamNumber: team ? team.number : null, phone });
-  const entry = key
-    ? markFinished({
-        key,
-        teamNumber: team ? team.number : null,
-        teamName: team ? team.name : "",
-        phone,
-      })
-    : null;
-
-  notifyOrganizers(
-    `🏆 <b>ФИНАЛЬНЫЙ КОД ПРИНЯТ</b>\n` +
-      `${whoText({ teamNumber: team?.number, teamName: team?.name, phone })}\n` +
-      `Взято точек: ${Object.keys(entry?.stations || {}).length} из ${TOTAL_STATIONS}\n` +
-      `🕒 ${new Date().toLocaleString("ru-RU")}`
-  );
-
-  res.json({ ok: true, correct: true, message: FINAL_WIN });
 });
 
 /**

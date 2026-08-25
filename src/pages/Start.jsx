@@ -2,22 +2,21 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
 import { useProgress } from "../useProgress.js";
-import Slots from "../components/Slots.jsx";
-import { getTeamNumber, setTeamNumber } from "../lib/team.js";
+import { getTeam, setTeam } from "../lib/team.js";
 import { getPhone, setPhone } from "../lib/phone.js";
 import { HAS_BACKEND } from "../lib/api.js";
 
 export default function Start() {
   const navigate = useNavigate();
-  const { letters, solvedCount, total } = useProgress();
-  const [team, setTeamState] = useState(getTeamNumber());
+  const { solvedCount } = useProgress();
+  const [team, setTeamState] = useState(getTeam());
   const [phone, setPhoneState] = useState(getPhone());
   const poster = QUEST.poster || {};
   const started = solvedCount > 0;
 
   function onTeamChange(v) {
     setTeamState(v);
-    setTeamNumber(v);
+    setTeam(v);
   }
   function onPhoneChange(v) {
     setPhoneState(v);
@@ -79,22 +78,19 @@ export default function Start() {
             value={phone}
             onChange={(e) => onPhoneChange(e.target.value)}
           />
-          <label className="field-label mt">Номер команды</label>
+          <label className="field-label mt">Название команды</label>
           <input
-            type="number"
-            inputMode="numeric"
-            placeholder="Например: 7"
+            type="text"
+            placeholder="Например: Барсы"
             value={team}
-            onChange={(e) => onTeamChange(e.target.value.replace(/\D/g, ""))}
+            onChange={(e) => onTeamChange(e.target.value)}
           />
           <p className="center muted tiny">
-            Номер выдаётся при регистрации команды. По нему организаторы видят,
-            кто взял точку, — название команды набирать не нужно.
+            Телефон и название команды увидят организаторы, когда вы нажмёте
+            «Я прибыл» на точке.
           </p>
         </div>
       )}
-
-      <Slots letters={letters} solvedCount={solvedCount} total={total} />
 
       <button className="btn green" onClick={() => navigate("/register")}>
         📝 Зарегистрироваться на квест

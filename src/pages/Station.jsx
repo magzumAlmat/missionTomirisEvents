@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
 import { useProgress } from "../useProgress.js";
 import { notify, checkAnswer, HAS_BACKEND } from "../lib/api.js";
-import { getTeamNumber, setTeamNumber } from "../lib/team.js";
+import { getTeamNumber, setTeamNumber, getTeam } from "../lib/team.js";
 import { getPhone, setPhone, isValidPhone } from "../lib/phone.js";
 
 export default function Station() {
@@ -79,7 +79,7 @@ export default function Station() {
         stationId: station.id,
         stationName: station.name,
         phone: phone.trim(),
-        team: teamNo ? `команда №${teamNo}` : "",
+        team: [getTeam(), teamNo ? `№${teamNo}` : ""].filter(Boolean).join(" "),
       });
       setArrive("done");
     } catch (e) {

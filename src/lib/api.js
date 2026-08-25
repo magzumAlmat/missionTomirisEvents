@@ -74,11 +74,6 @@ export async function checkAnswer({ stationCode, answer, phone, teamNumber }) {
   return post("/api/answer", { stationCode, answer, phone, teamNumber });
 }
 
-/** Проверить финальный код (сверяется на сервере). */
-export async function checkFinalCode({ code, phone, teamNumber }) {
-  return post("/api/final", { code, phone, teamNumber });
-}
-
 /** Забрать прогресс с сервера — например, при смене телефона. */
 export async function fetchProgress({ teamNumber, phone }) {
   if (!API_URL) throw new Error("Бэкенд не подключён (VITE_API_URL).");
