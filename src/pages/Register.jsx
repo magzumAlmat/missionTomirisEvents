@@ -2,19 +2,53 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { registerParticipant, HAS_BACKEND } from "../lib/api.js";
 import { getPhone, setPhone, isValidPhone } from "../lib/phone.js";
-import { getTeam, setTeam } from "../lib/team.js";
+import { getTeam, setTeam, getName, setName } from "../lib/team.js";
+
+/** Кнопка-переключатель «Да/Нет». */
+function ChoiceButton({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      className={`btn ${active ? "" : "ghost"}`}
+      style={{
+        borderRadius: 12,
+        borderColor: active ? "var(--accent)" : "rgba(255,255,255,0.1)",
+        background: active ? undefined : "rgba(255,255,255,0.05)",
+      }}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+const TWO_COLS = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 10,
+  marginTop: 6,
+};
 
 export default function Register() {
   const navigate = useNavigate();
-  const [name, setName] = useState(getTeam());
+  const [name, setNameState] = useState(getName());
   const [phone, setPhoneState] = useState(getPhone());
   const [hasCar, setHasCar] = useState(true); // true = Да, false = Нет
+
+  // Ветка команды: если «Да» — нужны название и количество человек.
+  const [hasTeam, setHasTeam] = useState(false);
+  const [teamName, setTeamNameState] = useState(getTeam());
+  const [teamSize, setTeamSize] = useState("");
 
   const [status, setStatus] = useState("idle"); // idle | sending | done | error
   const [err, setErr] = useState("");
 
   const phoneOk = isValidPhone(phone);
   const nameOk = name.trim().length > 0;
+  const teamNameOk = !hasTeam || teamName.trim().length > 0;
+  const teamSizeNum = Number(teamSize);
+  const teamSizeOk = !hasTeam || (Number.isFinite(teamSizeNum) && teamSizeNum >= 1);
+  const formOk = nameOk && phoneOk && teamNameOk && teamSizeOk;
 
   function onPhoneChange(v) {
     setPhoneState(v);
@@ -22,7 +56,12 @@ export default function Register() {
   }
 
   function onNameChange(v) {
+    setNameState(v);
     setName(v);
+  }
+
+  function onTeamNameChange(v) {
+    setTeamNameState(v);
     setTeam(v);
   }
 
@@ -42,6 +81,14 @@ export default function Register() {
       setErr("Введите корректный номер телефона (не менее 10 цифр).");
       return;
     }
+    if (!teamNameOk) {
+      setErr("Введите название команды.");
+      return;
+    }
+    if (!teamSizeOk) {
+      setErr("Укажите количество человек в команде (от 1).");
+      return;
+    }
 
     setStatus("sending");
     try {
@@ -49,6 +96,9 @@ export default function Register() {
         name: name.trim(),
         phone: phone.trim(),
         hasCar,
+        hasTeam,
+        teamName: hasTeam ? teamName.trim() : "",
+        teamSize: hasTeam ? teamSizeNum : 0,
       });
       setStatus("done");
     } catch (e) {
@@ -64,9 +114,7 @@ export default function Register() {
           ✓ Успешно
         </div>
         <h2>Вы зарегистрированы! 🎉</h2>
-        <p className="muted">
-          Ваши данные отправлены организаторам в Telegram.
-        </p>
+        <p className="muted">Ваши данные отправлены организаторам в Telegram.</p>
 
         <div className="reveal" style={{ marginTop: 20 }}>
           <p>
@@ -75,6 +123,9 @@ export default function Register() {
             <b>Телефон:</b> {phone}
             <br />
             <b>Своё авто:</b> {hasCar ? "Да 🚗" : "Нет 🚶"}
+            <br />
+            <b>Команда:</b>{" "}
+            {hasTeam ? `«${teamName}», ${teamSizeNum} чел.` : "Нет 🙋"}
           </p>
         </div>
 
@@ -108,7 +159,7 @@ export default function Register() {
 
       <form onSubmit={onSubmit}>
         <div className="field-block">
-          <label className="field-label">1. Ваше имя</label>
+          <label className="field-label">1. Имя участника</label>
           <input
             type="text"
             placeholder="Например: Азамат"
@@ -117,7 +168,7 @@ export default function Register() {
             required
           />
 
-          <label className="field-label mt">2. Ваш номер телефона</label>
+          <label className="field-label mt">2. Номер телефона</label>
           <input
             type="tel"
             inputMode="tel"
@@ -132,42 +183,55 @@ export default function Register() {
             </p>
           )}
 
-          <label className="field-label mt">
-            3. За рулём на своей машине?
-          </label>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 10,
-              marginTop: 6,
-            }}
-          >
-            <button
-              type="button"
-              className={`btn ${hasCar ? "" : "ghost"}`}
-              style={{
-                borderRadius: 12,
-                borderColor: hasCar ? "var(--accent)" : "rgba(255,255,255,0.1)",
-                background: hasCar ? undefined : "rgba(255,255,255,0.05)",
-              }}
-              onClick={() => setHasCar(true)}
-            >
-              🚗 Да (на авто)
-            </button>
-            <button
-              type="button"
-              className={`btn ${!hasCar ? "" : "ghost"}`}
-              style={{
-                borderRadius: 12,
-                borderColor: !hasCar ? "var(--accent)" : "rgba(255,255,255,0.1)",
-                background: !hasCar ? undefined : "rgba(255,255,255,0.05)",
-              }}
-              onClick={() => setHasCar(false)}
-            >
-              🚶 Нет (без авто)
-            </button>
+          <label className="field-label mt">3. Есть ли у вас машина?</label>
+          <div style={TWO_COLS}>
+            <ChoiceButton active={hasCar} onClick={() => setHasCar(true)}>
+              🚗 Да
+            </ChoiceButton>
+            <ChoiceButton active={!hasCar} onClick={() => setHasCar(false)}>
+              🚶 Нет
+            </ChoiceButton>
           </div>
+
+          <label className="field-label mt">4. Есть команда?</label>
+          <div style={TWO_COLS}>
+            <ChoiceButton active={hasTeam} onClick={() => setHasTeam(true)}>
+              👥 Да
+            </ChoiceButton>
+            <ChoiceButton active={!hasTeam} onClick={() => setHasTeam(false)}>
+              🙋 Нет
+            </ChoiceButton>
+          </div>
+
+          {hasTeam && (
+            <div className="reveal" style={{ marginTop: 12 }}>
+              <label className="field-label">Название команды</label>
+              <input
+                type="text"
+                placeholder="Например: Барсы"
+                value={teamName}
+                onChange={(e) => onTeamNameChange(e.target.value)}
+                required
+              />
+
+              <label className="field-label mt">Количество человек</label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min="1"
+                step="1"
+                placeholder="Например: 4"
+                value={teamSize}
+                onChange={(e) => setTeamSize(e.target.value)}
+                required
+              />
+              {!teamSizeOk && teamSize.length > 0 && (
+                <p className="err-text tiny" style={{ marginTop: 4 }}>
+                  Укажите число от 1.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {err && <div className="feedback err">{err}</div>}
@@ -175,7 +239,7 @@ export default function Register() {
         <button
           type="submit"
           className="btn green mt"
-          disabled={status === "sending" || !phoneOk || !nameOk}
+          disabled={status === "sending" || !formOk}
           style={{ width: "100%" }}
         >
           {status === "sending" ? "Отправка..." : "📝 Зарегистрироваться"}

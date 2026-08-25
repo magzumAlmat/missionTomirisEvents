@@ -5,3 +5,6 @@ qr-output
 *.log
 .env
 .env.local
+
+# Состояние видео-бота (телефоны и имена капитанов) — не в репозиторий.
+server/videoSenders.json

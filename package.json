@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "qr": "node scripts/generate-qr.js",
     "server": "node server/index.js",
+    "video-bot": "node server/videoBot.js",
     "deploy": "bash start.sh",
     "start:all": "bash start.sh"
   },

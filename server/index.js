@@ -15,6 +15,7 @@ import cors from "cors";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { startVideoBot } from "./videoBot.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -125,9 +126,16 @@ app.post("/api/notify", (req, res) => handleNotify(req, res));
 // Обратная совместимость: старый путь = событие «прибыл».
 app.post("/api/arrived", (req, res) => handleNotify(req, res, "arrived"));
 
+/** Текст «есть ли команда» для сообщений в Telegram. */
+function teamText(p) {
+  if (!p.hasTeam) return "Нет 🙋 (без команды)";
+  const size = p.teamSize ? `, ${p.teamSize} чел.` : "";
+  return `Да 👥 «${escapeHtml(p.teamName || "—")}»${size}`;
+}
+
 /**
  * Регистрация нового участника.
- * body: { name, phone, hasCar }
+ * body: { name, phone, hasCar, hasTeam, teamName?, teamSize? }
  */
 app.post("/api/register", async (req, res) => {
   if (!requireToken(res)) return;
@@ -136,12 +144,23 @@ app.post("/api/register", async (req, res) => {
     return res.status(500).json({ ok: false, error: "TELEGRAM_CHAT_ID не задан в .env" });
   }
 
-  const { name, phone, hasCar } = req.body || {};
+  const { name, phone, hasCar, hasTeam, teamName, teamSize } = req.body || {};
   if (!name || !name.trim()) {
     return res.status(400).json({ ok: false, error: "Введите имя участника." });
   }
   if (!phone || !phone.trim()) {
     return res.status(400).json({ ok: false, error: "Введите номер телефона." });
+  }
+
+  // Если участник в команде — нужны её название и размер.
+  const inTeam = !!hasTeam;
+  const teamNameClean = inTeam ? String(teamName || "").trim() : "";
+  const teamSizeNum = inTeam ? Number(teamSize) : 0;
+  if (inTeam && !teamNameClean) {
+    return res.status(400).json({ ok: false, error: "Введите название команды." });
+  }
+  if (inTeam && (!Number.isFinite(teamSizeNum) || teamSizeNum < 1)) {
+    return res.status(400).json({ ok: false, error: "Укажите количество человек в команде (от 1)." });
   }
 
   const carText = hasCar ? "Да 🚗 (на своей машине)" : "Нет 🚶 (без машины)";
@@ -152,6 +171,9 @@ app.post("/api/register", async (req, res) => {
     name: name.trim(),
     phone: phone.trim(),
     hasCar: !!hasCar,
+    hasTeam: inTeam,
+    teamName: teamNameClean,
+    teamSize: inTeam ? teamSizeNum : 0,
     createdAt: new Date().toISOString(),
   };
 
@@ -166,6 +188,7 @@ app.post("/api/register", async (req, res) => {
     `👤 <b>Имя:</b> ${escapeHtml(newEntry.name)}\n` +
     `📞 <b>Телефон:</b> ${escapeHtml(newEntry.phone)}\n` +
     `🚘 <b>За рулём на своей машине:</b> ${carText}\n` +
+    `👥 <b>Команда:</b> ${teamText(newEntry)}\n` +
     `🕒 <b>Время:</b> ${new Date().toLocaleString("ru-RU")}\n\n` +
     `📊 <b>Всего зарегистрировано:</b> ${totalCount} чел. (на машине: ${driversCount})`;
 
@@ -221,11 +244,15 @@ async function sendParticipantsListToChat(chatId) {
     msg += `${idx + 1}. 👤 <b>${escapeHtml(p.name)}</b>\n`;
     msg += `   📞 <code>${escapeHtml(p.phone)}</code>\n`;
     msg += `   🚘 <b>За рулём:</b> ${carStr}\n`;
+    msg += `   👥 <b>Команда:</b> ${teamText(p)}\n`;
     msg += `   📅 <b>Дата регистрации:</b> ${dateStr}\n\n`;
   });
 
+  const withTeam = participants.filter((p) => p.hasTeam).length;
+
   msg += `───────────────\n`;
-  msg += `📊 <b>Итого:</b> ${participants.length} чел. (🚘 На машине: ${withCar} | 🚶 Без авто: ${withoutCar})`;
+  msg += `📊 <b>Итого:</b> ${participants.length} чел. (🚘 На машине: ${withCar} | 🚶 Без авто: ${withoutCar})\n`;
+  msg += `👥 <b>В командах:</b> ${withTeam} | 🙋 Без команды: ${participants.length - withTeam}`;
 
   await fetch(API("sendMessage"), {
     method: "POST",
@@ -242,6 +269,7 @@ app.get("/api/participants", (_req, res) => {
     total: participants.length,
     withCar: participants.filter((p) => p.hasCar).length,
     withoutCar: participants.filter((p) => !p.hasCar).length,
+    withTeam: participants.filter((p) => p.hasTeam).length,
     participants,
   });
 });
@@ -433,4 +461,5 @@ app.listen(process.env.PORT || 3001, () => {
 
   setupBotMenu();
   pollTelegramUpdates();
+  startVideoBot();
 });
