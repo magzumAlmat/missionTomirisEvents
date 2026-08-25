@@ -68,14 +68,18 @@ function findParticipantByPhone(phone) {
 
 /* ---------- Telegram API ---------- */
 
+// Если группу превратили в супергруппу, её id меняется. Telegram сообщает
+// новый id в ошибке — запоминаем его на время работы процесса.
+let migratedChatId = null;
+
 function getEnv() {
   return {
     TOKEN: process.env.TELEGRAM_VIDEO_BOT_TOKEN || "",
-    CHAT_ID: process.env.TELEGRAM_VIDEO_CHAT_ID || "",
+    CHAT_ID: migratedChatId || process.env.TELEGRAM_VIDEO_CHAT_ID || "",
   };
 }
 
-async function tg(method, payload) {
+async function callTelegram(method, payload) {
   const { TOKEN } = getEnv();
   const res = await fetch(`https://api.telegram.org/bot${TOKEN}/${method}`, {
     method: "POST",
@@ -83,6 +87,20 @@ async function tg(method, payload) {
     body: JSON.stringify(payload),
   });
   return res.json();
+}
+
+async function tg(method, payload) {
+  const data = await callTelegram(method, payload);
+  const newId = data?.parameters?.migrate_to_chat_id;
+  if (!data.ok && newId) {
+    migratedChatId = String(newId);
+    console.log(
+      `videoBot: группа стала супергруппой, новый id ${migratedChatId}. ` +
+        `Пропишите его в .env → TELEGRAM_VIDEO_CHAT_ID`
+    );
+    return callTelegram(method, { ...payload, chat_id: newId });
+  }
+  return data;
 }
 
 function escapeHtml(s) {
