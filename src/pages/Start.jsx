@@ -3,21 +3,21 @@ import { useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
 import { useProgress } from "../useProgress.js";
 import Slots from "../components/Slots.jsx";
-import { getTeam, setTeam } from "../lib/team.js";
+import { getTeamNumber, setTeamNumber } from "../lib/team.js";
 import { getPhone, setPhone } from "../lib/phone.js";
 import { HAS_BACKEND } from "../lib/api.js";
 
 export default function Start() {
   const navigate = useNavigate();
   const { letters, solvedCount, total } = useProgress();
-  const [team, setTeamState] = useState(getTeam());
+  const [team, setTeamState] = useState(getTeamNumber());
   const [phone, setPhoneState] = useState(getPhone());
   const poster = QUEST.poster || {};
   const started = solvedCount > 0;
 
   function onTeamChange(v) {
     setTeamState(v);
-    setTeam(v);
+    setTeamNumber(v);
   }
   function onPhoneChange(v) {
     setPhoneState(v);
@@ -79,16 +79,17 @@ export default function Start() {
             value={phone}
             onChange={(e) => onPhoneChange(e.target.value)}
           />
-          <label className="field-label mt">Название команды / имя (необязательно)</label>
+          <label className="field-label mt">Номер команды</label>
           <input
-            type="text"
-            placeholder="Например: Барсы"
+            type="number"
+            inputMode="numeric"
+            placeholder="Например: 7"
             value={team}
-            onChange={(e) => onTeamChange(e.target.value)}
+            onChange={(e) => onTeamChange(e.target.value.replace(/\D/g, ""))}
           />
           <p className="center muted tiny">
-            Телефон и имя увидят организаторы, когда вы нажмёте «Я прибыл» или
-            «Я отгадал» на точке.
+            Номер выдаётся при регистрации команды. По нему организаторы видят,
+            кто взял точку, — название команды набирать не нужно.
           </p>
         </div>
       )}

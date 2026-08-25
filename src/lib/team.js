@@ -16,6 +16,26 @@ export function setTeam(name) {
   }
 }
 
+// Номер команды выдаёт сервер при регистрации. Это ключ команды на точках
+// и в боте для видео — чтобы не набирать название текстом каждый раз.
+const NUMBER_KEY = "event_tomiris_team_no";
+
+export function getTeamNumber() {
+  try {
+    return localStorage.getItem(NUMBER_KEY) || "";
+  } catch (e) {
+    return "";
+  }
+}
+
+export function setTeamNumber(n) {
+  try {
+    localStorage.setItem(NUMBER_KEY, n ? String(n) : "");
+  } catch (e) {
+    /* ignore */
+  }
+}
+
 // Имя самого участника — отдельно от названия команды.
 const NAME_KEY = "event_tomiris_name";
 

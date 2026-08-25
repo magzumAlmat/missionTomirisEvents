@@ -16,6 +16,23 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { startVideoBot } from "./videoBot.js";
+import {
+  FINAL_CODE,
+  FINAL_WIN,
+  TOTAL_STATIONS,
+  findStation,
+  isCorrectAnswer,
+  norm,
+} from "./questSecret.js";
+import {
+  findOrCreateTeam,
+  findTeamByNumber,
+  getProgress,
+  markFinished,
+  progressKey,
+  solveStation,
+  standings,
+} from "./store.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -130,7 +147,8 @@ app.post("/api/arrived", (req, res) => handleNotify(req, res, "arrived"));
 function teamText(p) {
   if (!p.hasTeam) return "Нет 🙋 (без команды)";
   const size = p.teamSize ? `, ${p.teamSize} чел.` : "";
-  return `Да 👥 «${escapeHtml(p.teamName || "—")}»${size}`;
+  const num = p.teamNumber ? `№${p.teamNumber} ` : "";
+  return `Да 👥 ${num}«${escapeHtml(p.teamName || "—")}»${size}`;
 }
 
 /**
@@ -166,6 +184,17 @@ app.post("/api/register", async (req, res) => {
   const carText = hasCar ? "Да 🚗 (на своей машине)" : "Нет 🚶 (без машины)";
   const participants = readParticipants();
 
+  // Команде выдаётся НОМЕР — он же ключ на точках и в боте для видео.
+  // Одинаковое название = одна команда, повторная заявка номер не плодит.
+  const team = inTeam
+    ? findOrCreateTeam({
+        name: teamNameClean,
+        captainName: name.trim(),
+        captainPhone: phone.trim(),
+        size: teamSizeNum,
+      })
+    : null;
+
   const newEntry = {
     id: Date.now(),
     name: name.trim(),
@@ -174,6 +203,7 @@ app.post("/api/register", async (req, res) => {
     hasTeam: inTeam,
     teamName: teamNameClean,
     teamSize: inTeam ? teamSizeNum : 0,
+    teamNumber: team ? team.number : null,
     createdAt: new Date().toISOString(),
   };
 
@@ -207,10 +237,165 @@ app.post("/api/register", async (req, res) => {
     if (!data.ok) {
       return res.status(502).json({ ok: false, error: data.description || "Telegram error" });
     }
-    res.json({ ok: true, participant: newEntry, totalCount });
+    res.json({
+      ok: true,
+      participant: newEntry,
+      totalCount,
+      teamNumber: team ? team.number : null,
+    });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
   }
+});
+
+/* =====================================================================
+   КВЕСТ: проверка ответов на сервере.
+   Раньше кнопка «Я отгадал» просто открывала букву — ответы не сверялись,
+   а всё содержимое квеста лежало в бандле сайта. Теперь участник шлёт
+   ответ сюда, сервер сверяет его с server/questSecret.js и только при
+   совпадении отдаёт букву и подсказку, попутно записывая время взятия.
+   ===================================================================== */
+
+/** Уведомить организаторов в Telegram (не роняем запрос, если не вышло). */
+async function notifyOrganizers(text) {
+  const { TOKEN, CHAT_ID } = getEnv();
+  if (!TOKEN || !CHAT_ID) return;
+  try {
+    await fetch(API("sendMessage"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: "HTML" }),
+    });
+  } catch (e) {
+    console.error("Не удалось отправить уведомление организаторам:", e.message);
+  }
+}
+
+/** Как подписать участника в уведомлении. */
+function whoText({ teamNumber, teamName, phone }) {
+  const parts = [];
+  if (teamNumber) parts.push(`👥 <b>№${teamNumber}</b>`);
+  if (teamName) parts.push(escapeHtml(teamName));
+  if (phone) parts.push(`📞 ${escapeHtml(phone)}`);
+  return parts.length ? parts.join(" · ") : "👤 Участник";
+}
+
+/**
+ * Проверка ответа на точке.
+ * body: { stationCode, answer, phone, teamNumber? }
+ * ответ: { ok, correct, letter?, nextHint?, solvedCount }
+ */
+app.post("/api/answer", async (req, res) => {
+  const { stationCode, answer, phone, teamNumber } = req.body || {};
+
+  const station = findStation(stationCode);
+  if (!station) {
+    return res.status(404).json({ ok: false, error: "Точка не найдена. Проверьте QR-код." });
+  }
+  if (!answer || !String(answer).trim()) {
+    return res.status(400).json({ ok: false, error: "Введите ответ." });
+  }
+
+  const team = teamNumber ? findTeamByNumber(teamNumber) : null;
+  const key = progressKey({ teamNumber: team ? team.number : null, phone });
+  if (!key) {
+    return res.status(400).json({
+      ok: false,
+      error: "Укажите номер команды или телефон — иначе прогресс не сохранить.",
+    });
+  }
+
+  if (!isCorrectAnswer(answer, station.answers)) {
+    return res.json({ ok: true, correct: false });
+  }
+
+  const entry = solveStation({
+    key,
+    teamNumber: team ? team.number : null,
+    teamName: team ? team.name : "",
+    phone,
+    stationId: station.id,
+    letter: station.letter,
+  });
+  const solvedCount = Object.keys(entry?.stations || {}).length;
+
+  notifyOrganizers(
+    `🧩 <b>Точка взята</b>\n` +
+      `${whoText({ teamNumber: team?.number, teamName: team?.name, phone })}\n` +
+      `точка ${station.id} · ${escapeHtml(station.name || "")}\n` +
+      `Взято точек: ${solvedCount} из ${TOTAL_STATIONS}\n` +
+      `🕒 ${new Date().toLocaleString("ru-RU")}`
+  );
+
+  res.json({
+    ok: true,
+    correct: true,
+    letter: station.letter,
+    nextHint: station.nextHint || "",
+    solvedCount,
+    total: TOTAL_STATIONS,
+  });
+});
+
+/**
+ * Проверка финального кода.
+ * body: { code, phone, teamNumber? }
+ */
+app.post("/api/final", async (req, res) => {
+  const { code, phone, teamNumber } = req.body || {};
+  if (!code || !String(code).trim()) {
+    return res.status(400).json({ ok: false, error: "Введите код." });
+  }
+  if (norm(code) !== norm(FINAL_CODE)) {
+    return res.json({ ok: true, correct: false });
+  }
+
+  const team = teamNumber ? findTeamByNumber(teamNumber) : null;
+  const key = progressKey({ teamNumber: team ? team.number : null, phone });
+  const entry = key
+    ? markFinished({
+        key,
+        teamNumber: team ? team.number : null,
+        teamName: team ? team.name : "",
+        phone,
+      })
+    : null;
+
+  notifyOrganizers(
+    `🏆 <b>ФИНАЛЬНЫЙ КОД ПРИНЯТ</b>\n` +
+      `${whoText({ teamNumber: team?.number, teamName: team?.name, phone })}\n` +
+      `Взято точек: ${Object.keys(entry?.stations || {}).length} из ${TOTAL_STATIONS}\n` +
+      `🕒 ${new Date().toLocaleString("ru-RU")}`
+  );
+
+  res.json({ ok: true, correct: true, message: FINAL_WIN });
+});
+
+/**
+ * Восстановление прогресса на новом устройстве.
+ * query: ?teamNumber=7 или ?phone=+7700...
+ */
+app.get("/api/progress", (req, res) => {
+  const { teamNumber, phone } = req.query || {};
+  const team = teamNumber ? findTeamByNumber(teamNumber) : null;
+  const key = progressKey({ teamNumber: team ? team.number : null, phone });
+  if (!key) {
+    return res.status(400).json({ ok: false, error: "Нужен номер команды или телефон." });
+  }
+  const entry = getProgress(key);
+  res.json({
+    ok: true,
+    total: TOTAL_STATIONS,
+    teamNumber: team ? team.number : null,
+    teamName: team ? team.name : entry?.teamName || "",
+    stations: entry?.stations || {},
+    finishedAt: entry?.finishedAt || null,
+  });
+});
+
+/** Судейская таблица (без телефонов — можно показывать участникам). */
+app.get("/api/standings", (_req, res) => {
+  res.json({ ok: true, total: TOTAL_STATIONS, rows: standings() });
 });
 
 /** Отправить список всех участников в Telegram-чат */
@@ -253,6 +438,48 @@ async function sendParticipantsListToChat(chatId) {
   msg += `───────────────\n`;
   msg += `📊 <b>Итого:</b> ${participants.length} чел. (🚘 На машине: ${withCar} | 🚶 Без авто: ${withoutCar})\n`;
   msg += `👥 <b>В командах:</b> ${withTeam} | 🙋 Без команды: ${participants.length - withTeam}`;
+
+  await fetch(API("sendMessage"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: "HTML", reply_markup }),
+  });
+}
+
+/** Судейская таблица в Telegram: кто сколько точек взял и когда финишировал. */
+async function sendStandingsToChat(chatId) {
+  const rows = standings();
+  const reply_markup = {
+    inline_keyboard: [[{ text: "🔄 Обновить таблицу", callback_data: "standings" }]],
+  };
+
+  if (rows.length === 0) {
+    await fetch(API("sendMessage"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: "🏁 <b>Таблица пуста.</b>\nНи одна команда ещё не зарегистрирована.",
+        parse_mode: "HTML",
+        reply_markup,
+      }),
+    });
+    return;
+  }
+
+  const time = (iso) => (iso ? new Date(iso).toLocaleTimeString("ru-RU") : "—");
+
+  let msg = `🏁 <b>ТАБЛИЦА КВЕСТА</b> (точек всего: ${TOTAL_STATIONS})\n\n`;
+  rows.forEach((r, i) => {
+    const place = r.finishedAt ? `🏆 ${i + 1}.` : `${i + 1}.`;
+    msg += `${place} <b>№${r.teamNumber || "—"} ${escapeHtml(r.teamName || "без названия")}</b>\n`;
+    msg += `   🧩 Точек: <b>${r.solved}</b>/${TOTAL_STATIONS}`;
+    msg += r.finishedAt ? ` · 🏁 финиш в ${time(r.finishedAt)}\n` : `\n`;
+    msg += `   🕒 Последняя точка: ${time(r.lastAt)}\n`;
+    msg += `   📸 Материалов от капитана: ${r.media}\n\n`;
+  });
+  msg += `───────────────\n`;
+  msg += `Победитель — первый финишировавший. Приз выдаётся после проверки материалов от капитана.`;
 
   await fetch(API("sendMessage"), {
     method: "POST",
@@ -375,6 +602,15 @@ async function pollTelegramUpdates() {
               });
             } catch (e) {}
             await sendParticipantsListToChat(targetChatId);
+          } else if (data === "standings") {
+            try {
+              await fetch(API("answerCallbackQuery"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ callback_query_id: cb.id, text: "Считаю таблицу..." }),
+              });
+            } catch (e) {}
+            await sendStandingsToChat(targetChatId);
           } else if (data === "finish_quest") {
             try {
               await fetch(API("answerCallbackQuery"), {
@@ -407,16 +643,24 @@ async function pollTelegramUpdates() {
             text.startsWith("/список")
           ) {
             await sendParticipantsListToChat(targetChatId);
+          } else if (
+            text.startsWith("/standings") ||
+            text.startsWith("/table") ||
+            text.startsWith("/таблица")
+          ) {
+            await sendStandingsToChat(targetChatId);
           } else if (text.startsWith("/start") || text.startsWith("/help")) {
             const welcomeText =
               `👋 <b>Бот EventTomiris готов к работе!</b>\n\n` +
               `📌 <b>Доступные команды:</b>\n` +
               `• /list или /список — Показать список зарегистрированных участников со всеми данными.\n` +
+              `• /standings или /таблица — Таблица квеста: кто сколько точек взял и кто финишировал.\n` +
               `• /finish_quest или /finish — Завершить квест и очистить список участников.`;
             const reply_markup = {
               inline_keyboard: [
                 [{ text: "📋 Показать список участников", callback_data: "list_participants" }],
-                [{ text: "🏁 Завершить квест (/finish_quest)", callback_data: "finish_quest" }],
+                [{ text: "🏁 Таблица квеста", callback_data: "standings" }],
+                [{ text: "🧹 Завершить квест (/finish_quest)", callback_data: "finish_quest" }],
               ],
             };
             await fetch(API("sendMessage"), {
@@ -444,6 +688,7 @@ async function setupBotMenu() {
       body: JSON.stringify({
         commands: [
           { command: "list", description: "Показать список участников" },
+          { command: "standings", description: "Таблица квеста: точки, финиш, материалы" },
           { command: "finish_quest", description: "Завершить квест и очистить участников" },
           { command: "help", description: "Справка по боту" },
         ],

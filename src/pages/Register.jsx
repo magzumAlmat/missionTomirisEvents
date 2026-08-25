@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { registerParticipant, HAS_BACKEND } from "../lib/api.js";
 import { getPhone, setPhone, isValidPhone } from "../lib/phone.js";
-import { getTeam, setTeam, getName, setName } from "../lib/team.js";
+import { getTeam, setTeam, getName, setName, setTeamNumber } from "../lib/team.js";
 
 /** Кнопка-переключатель «Да/Нет». */
 function ChoiceButton({ active, onClick, children }) {
@@ -42,6 +42,7 @@ export default function Register() {
 
   const [status, setStatus] = useState("idle"); // idle | sending | done | error
   const [err, setErr] = useState("");
+  const [teamNumber, setTeamNumberState] = useState(null); // выдаёт сервер
 
   const phoneOk = isValidPhone(phone);
   const nameOk = name.trim().length > 0;
@@ -92,7 +93,7 @@ export default function Register() {
 
     setStatus("sending");
     try {
-      await registerParticipant({
+      const res = await registerParticipant({
         name: name.trim(),
         phone: phone.trim(),
         hasCar,
@@ -100,6 +101,12 @@ export default function Register() {
         teamName: hasTeam ? teamName.trim() : "",
         teamSize: hasTeam ? teamSizeNum : 0,
       });
+      // Номер команды — ключ на точках и в боте для видео. Запоминаем его,
+      // чтобы участнику не пришлось вводить название команды заново.
+      if (res?.teamNumber) {
+        setTeamNumberState(res.teamNumber);
+        setTeamNumber(res.teamNumber);
+      }
       setStatus("done");
     } catch (e) {
       setStatus("error");
@@ -115,6 +122,19 @@ export default function Register() {
         </div>
         <h2>Вы зарегистрированы! 🎉</h2>
         <p className="muted">Ваши данные отправлены организаторам в Telegram.</p>
+
+        {teamNumber && (
+          <div className="reveal" style={{ marginTop: 20 }}>
+            <div className="letter">
+              <span className="lbl">Номер вашей команды</span>
+              <span className="val">{teamNumber}</span>
+            </div>
+            <p className="center muted tiny">
+              Запишите его. Этот номер вводится на точках и в боте для видео —
+              название команды больше набирать не нужно.
+            </p>
+          </div>
+        )}
 
         <div className="reveal" style={{ marginTop: 20 }}>
           <p>

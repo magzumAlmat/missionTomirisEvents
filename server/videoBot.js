@@ -20,6 +20,8 @@ import "dotenv/config";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+// Команды и журнал материалов — общие с сайтом.
+import { addSubmission, findTeamByNumber, standings } from "./store.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -126,24 +128,40 @@ const HELP_TEXT =
   `Пришлите сюда видео (или фото) с точки — я передам его организаторам и ` +
   `подпишу, от какой оно команды.\n\n` +
   `<b>Команды:</b>\n` +
-  `• /start — начать / зарегистрироваться\n` +
+  `• /start — начать / назвать номер команды\n` +
   `• /reset — изменить команду или имя\n` +
+  `• /standings — таблица квеста\n` +
   `• /help — эта справка`;
 
 /* ---------- шаги регистрации капитана ---------- */
 
 function startRegistration(chatId, senders) {
-  senders[chatId] = { step: "phone" };
+  senders[chatId] = { step: "number" };
   saveSenders(senders);
   return send(
     chatId,
     `👋 <b>Здравствуйте!</b>\n\n` +
-      `Чтобы организаторы понимали, чьё видео пришло, представьтесь.\n\n` +
-      `Нажмите кнопку ниже, чтобы отправить свой номер — если вы регистрировались ` +
-      `на сайте, я подставлю команду и имя сам.\n` +
-      `Или просто напишите <b>название вашей команды</b> сообщением.`,
+      `Чтобы организаторы понимали, чьё видео пришло, назовите ` +
+      `<b>НОМЕР вашей команды</b> — его выдали при регистрации на сайте.\n\n` +
+      `Не помните номер? Нажмите кнопку ниже — найду вас по телефону.`,
     { reply_markup: ASK_PHONE_KEYBOARD }
   );
+}
+
+/**
+ * Капитан назвал номер команды — подставляем название и имя капитана из
+ * общей базы команд. Так название команды больше нигде не набирается руками.
+ */
+function applyTeamNumber(chatId, senders, number) {
+  const team = findTeamByNumber(number);
+  if (!team) return null;
+  senders[chatId] = {
+    ...(senders[chatId] || {}),
+    teamNumber: team.number,
+    teamName: team.name,
+    captainName: senders[chatId]?.captainName || team.captainName || "",
+  };
+  return team;
 }
 
 function askCaptainName(chatId, senders) {
@@ -158,10 +176,11 @@ function finishRegistration(chatId, senders) {
   const s = senders[chatId];
   s.step = "ready";
   saveSenders(senders);
+  const num = s.teamNumber ? `№${s.teamNumber} ` : "";
   return send(
     chatId,
     `✅ Готово!\n\n` +
-      `👥 <b>Команда:</b> ${escapeHtml(s.teamName)}\n` +
+      `👥 <b>Команда:</b> ${num}${escapeHtml(s.teamName)}\n` +
       `👤 <b>Капитан:</b> ${escapeHtml(s.captainName)}\n\n` +
       `Теперь просто присылайте видео — я передам их организаторам.\n` +
       `Если что-то указано неверно — команда /reset.`,
@@ -190,9 +209,10 @@ async function forwardVideo(msg, sender, kind) {
   const caption = msg.caption ? `\n💬 ${escapeHtml(msg.caption)}` : "";
   const title = kind === "photo" ? "📸 <b>ФОТО ОТ КОМАНДЫ</b>" : "🎬 <b>ВИДЕО ОТ КОМАНДЫ</b>";
 
+  const num = sender.teamNumber ? `№${sender.teamNumber} ` : "";
   const header =
     `${title}\n\n` +
-    `👥 <b>Команда:</b> ${escapeHtml(sender.teamName)}\n` +
+    `👥 <b>Команда:</b> ${num}${escapeHtml(sender.teamName)}\n` +
     `👤 <b>Капитан:</b> ${escapeHtml(sender.captainName)}\n` +
     (sender.phone ? `📞 <b>Телефон:</b> ${escapeHtml(sender.phone)}\n` : "") +
     `🕒 <b>Время:</b> ${time}` +
@@ -212,16 +232,48 @@ async function forwardVideo(msg, sender, kind) {
   if (!copy.ok) {
     return { ok: false, error: copy.description || "не удалось переслать видео" };
   }
+
+  // Записываем в журнал: по нему судья видит, сколько материалов прислала
+  // команда и когда (см. /standings).
+  addSubmission({
+    teamNumber: sender.teamNumber,
+    teamName: sender.teamName,
+    captainName: sender.captainName,
+    kind,
+  });
   return { ok: true };
 }
 
 /* ---------- обработка одного апдейта ---------- */
 
+/** Таблица квеста текстом — для судьи прямо в группе с материалами. */
+function standingsText() {
+  const rows = standings();
+  if (!rows.length) return "🏁 <b>Таблица пуста.</b> Ни одна команда не зарегистрирована.";
+
+  const time = (iso) => (iso ? new Date(iso).toLocaleTimeString("ru-RU") : "—");
+  let msg = "🏁 <b>ТАБЛИЦА КВЕСТА</b>\n\n";
+  rows.forEach((r, i) => {
+    const place = r.finishedAt ? `🏆 ${i + 1}.` : `${i + 1}.`;
+    msg += `${place} <b>№${r.teamNumber || "—"} ${escapeHtml(r.teamName || "без названия")}</b>\n`;
+    msg += `   🧩 Точек: <b>${r.solved}</b>`;
+    msg += r.finishedAt ? ` · 🏁 финиш в ${time(r.finishedAt)}\n` : `\n`;
+    msg += `   📸 Материалов: ${r.media} · 🕒 последняя точка ${time(r.lastAt)}\n\n`;
+  });
+  return msg;
+}
+
 async function handleMessage(msg) {
   const chatId = msg.chat.id;
+  const text0 = (msg.text || "").trim().toLowerCase();
 
-  // Бот работает только в личке с капитаном; в группе он лишь публикует.
-  if (msg.chat.type !== "private") return;
+  // В группе бот отвечает только на запрос таблицы — остальное там не нужно.
+  if (msg.chat.type !== "private") {
+    if (text0.startsWith("/standings") || text0.startsWith("/таблица")) {
+      return send(chatId, standingsText());
+    }
+    return;
+  }
 
   const senders = readSenders();
   const sender = senders[chatId];
@@ -231,6 +283,9 @@ async function handleMessage(msg) {
   if (text.startsWith("/start")) return startRegistration(chatId, senders);
   if (text.startsWith("/help")) return send(chatId, HELP_TEXT);
   if (text.startsWith("/reset")) return startRegistration(chatId, senders);
+  if (text.startsWith("/standings") || text.startsWith("/таблица")) {
+    return send(chatId, standingsText());
+  }
 
   // --- номер телефона через кнопку «Отправить мой номер» ---
   if (msg.contact && msg.contact.phone_number) {
@@ -241,17 +296,22 @@ async function handleMessage(msg) {
       phone,
       captainName: found?.name || sender?.captainName || msg.from?.first_name || "",
       teamName: found?.teamName || sender?.teamName || "",
+      teamNumber: found?.teamNumber || sender?.teamNumber || null,
     };
+    if (senders[chatId].teamNumber) applyTeamNumber(chatId, senders, senders[chatId].teamNumber);
 
     if (senders[chatId].teamName && senders[chatId].captainName) {
       return finishRegistration(chatId, senders);
     }
     if (!senders[chatId].teamName) {
-      senders[chatId].step = "team";
+      senders[chatId].step = "number";
       saveSenders(senders);
-      return send(chatId, `👥 Напишите <b>название вашей команды</b>.`, {
-        reply_markup: HIDE_KEYBOARD,
-      });
+      return send(
+        chatId,
+        `Не нашёл вас в списке. Напишите <b>номер команды</b> цифрами ` +
+          `(или её название, если номера пока нет).`,
+        { reply_markup: HIDE_KEYBOARD }
+      );
     }
     return askCaptainName(chatId, senders);
   }
@@ -280,8 +340,31 @@ async function handleMessage(msg) {
   }
 
   // --- шаги регистрации текстом ---
-  if (!sender || !sender.step || sender.step === "phone" || sender.step === "team") {
+  if (
+    !sender ||
+    !sender.step ||
+    sender.step === "number" ||
+    sender.step === "phone" ||
+    sender.step === "team"
+  ) {
     if (!text) return;
+
+    // Ввели цифры — считаем это номером команды и подтягиваем её название.
+    if (/^\d+$/.test(text)) {
+      const team = applyTeamNumber(chatId, senders, text);
+      if (!team) {
+        saveSenders(senders);
+        return send(
+          chatId,
+          `❌ Команды с номером <b>${escapeHtml(text)}</b> нет в списке.\n` +
+            `Проверьте номер из регистрации или напишите название команды словами.`
+        );
+      }
+      if (senders[chatId].captainName) return finishRegistration(chatId, senders);
+      return askCaptainName(chatId, senders);
+    }
+
+    // Иначе — название команды словами (запасной путь, если номера ещё нет).
     senders[chatId] = { ...(sender || {}), teamName: text };
     if (senders[chatId].captainName) return finishRegistration(chatId, senders);
     return askCaptainName(chatId, senders);
@@ -338,8 +421,9 @@ async function poll() {
 async function setupMenu() {
   await tg("setMyCommands", {
     commands: [
-      { command: "start", description: "Начать / зарегистрироваться" },
+      { command: "start", description: "Начать / назвать номер команды" },
       { command: "reset", description: "Изменить команду или имя" },
+      { command: "standings", description: "Таблица квеста" },
       { command: "help", description: "Справка" },
     ],
   }).catch(() => {});

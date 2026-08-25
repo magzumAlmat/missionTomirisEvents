@@ -8,3 +8,9 @@ qr-output
 
 # Состояние видео-бота (телефоны и имена капитанов) — не в репозиторий.
 server/videoSenders.json
+
+# Данные мероприятия: команды, прогресс по точкам, журнал материалов.
+server/teams.json
+server/progress.json
+server/submissions.json
+server/*.tmp
