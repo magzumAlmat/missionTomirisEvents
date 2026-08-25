@@ -123,8 +123,8 @@ const HIDE_KEYBOARD = { remove_keyboard: true };
 
 const HELP_TEXT =
   `🎬 <b>Бот для видео капитанов</b>\n\n` +
-  `Пришлите сюда видео с точки — я передам его организаторам и подпишу, ` +
-  `от какой оно команды.\n\n` +
+  `Пришлите сюда видео (или фото) с точки — я передам его организаторам и ` +
+  `подпишу, от какой оно команды.\n\n` +
   `<b>Команды:</b>\n` +
   `• /start — начать / зарегистрироваться\n` +
   `• /reset — изменить команду или имя\n` +
@@ -171,20 +171,27 @@ function finishRegistration(chatId, senders) {
 
 /* ---------- пересылка видео в группу ---------- */
 
-/** Есть ли в сообщении видео (обычное, кружок, гифка или файл-видео). */
-function isVideoMessage(msg) {
-  if (msg.video || msg.video_note || msg.animation) return true;
-  if (msg.document && String(msg.document.mime_type || "").startsWith("video/")) return true;
-  return false;
+/**
+ * Что за медиа в сообщении: видео (обычное, кружок, гифка, файл-видео) или фото.
+ * Возвращает null, если медиа нет.
+ */
+function mediaKind(msg) {
+  if (msg.video || msg.video_note || msg.animation) return "video";
+  if (msg.document && String(msg.document.mime_type || "").startsWith("video/")) return "video";
+  if (msg.photo || (msg.document && String(msg.document.mime_type || "").startsWith("image/"))) {
+    return "photo";
+  }
+  return null;
 }
 
-async function forwardVideo(msg, sender) {
+async function forwardVideo(msg, sender, kind) {
   const { CHAT_ID } = getEnv();
   const time = new Date().toLocaleString("ru-RU");
   const caption = msg.caption ? `\n💬 ${escapeHtml(msg.caption)}` : "";
+  const title = kind === "photo" ? "📸 <b>ФОТО ОТ КОМАНДЫ</b>" : "🎬 <b>ВИДЕО ОТ КОМАНДЫ</b>";
 
   const header =
-    `🎬 <b>ВИДЕО ОТ КОМАНДЫ</b>\n\n` +
+    `${title}\n\n` +
     `👥 <b>Команда:</b> ${escapeHtml(sender.teamName)}\n` +
     `👤 <b>Капитан:</b> ${escapeHtml(sender.captainName)}\n` +
     (sender.phone ? `📞 <b>Телефон:</b> ${escapeHtml(sender.phone)}\n` : "") +
@@ -249,12 +256,14 @@ async function handleMessage(msg) {
     return askCaptainName(chatId, senders);
   }
 
-  // --- видео ---
-  if (isVideoMessage(msg)) {
+  // --- видео или фото ---
+  const kind = mediaKind(msg);
+  if (kind) {
+    const what = kind === "photo" ? "Фото" : "Видео";
     if (!sender || sender.step !== "ready") {
       await send(
         chatId,
-        `⚠️ Сначала представьтесь, иначе организаторы не поймут, чьё это видео.`
+        `⚠️ Сначала представьтесь, иначе организаторы не поймут, чей это материал.`
       );
       return startRegistration(chatId, senders);
     }
@@ -262,12 +271,12 @@ async function handleMessage(msg) {
     if (!CHAT_ID) {
       return send(chatId, `⚠️ Не настроена группа для видео (TELEGRAM_VIDEO_CHAT_ID).`);
     }
-    const result = await forwardVideo(msg, sender);
+    const result = await forwardVideo(msg, sender, kind);
     if (!result.ok) {
-      console.error("videoBot: не удалось отправить видео в группу:", result.error);
-      return send(chatId, `❌ Не получилось отправить видео организаторам: ${escapeHtml(result.error)}`);
+      console.error("videoBot: не удалось отправить материал в группу:", result.error);
+      return send(chatId, `❌ Не получилось отправить организаторам: ${escapeHtml(result.error)}`);
     }
-    return send(chatId, `✅ Видео отправлено организаторам. Спасибо!`);
+    return send(chatId, `✅ ${what} отправлено организаторам. Спасибо!`);
   }
 
   // --- шаги регистрации текстом ---
@@ -287,7 +296,7 @@ async function handleMessage(msg) {
   // --- уже зарегистрирован, но прислал не видео ---
   return send(
     chatId,
-    `📹 Пришлите, пожалуйста, <b>видео</b>.\n` +
+    `📹 Пришлите, пожалуйста, <b>видео</b> (или фото).\n` +
       `Сейчас вы записаны как: 👥 ${escapeHtml(sender.teamName)} · 👤 ${escapeHtml(sender.captainName)}\n` +
       `Изменить — /reset`
   );
