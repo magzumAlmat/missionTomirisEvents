@@ -16,12 +16,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { startVideoBot } from "./videoBot.js";
-import {
-  ALL_DONE,
-  TOTAL_STATIONS,
-  findStation,
-  isCorrectAnswer,
-} from "./questSecret.js";
+import { ALL_DONE, TOTAL_STATIONS, findStation } from "./questSecret.js";
 import {
   findOrCreateTeam,
   findTeamByNumber,
@@ -247,11 +242,11 @@ app.post("/api/register", async (req, res) => {
 });
 
 /* =====================================================================
-   КВЕСТ: проверка ответов на сервере.
-   Раньше кнопка «Я отгадал» просто открывала букву — ответы не сверялись,
-   а всё содержимое квеста лежало в бандле сайта. Теперь участник шлёт
-   ответ сюда, сервер сверяет его с server/questSecret.js и только при
-   совпадении отдаёт букву и подсказку, попутно записывая время взятия.
+   КВЕСТ: отметка взятой точки.
+   Загадку команда разгадывает на месте — через форму на сайте ответ НЕ
+   вводится. Нажатие «Я отгадал» приходит сюда: сервер записывает время
+   взятия точки и отдаёт букву с подсказкой из server/questSecret.js
+   (в бандле сайта их нет, поэтому маршрут заранее не подсмотреть).
    ===================================================================== */
 
 /** Уведомить организаторов в Telegram (не роняем запрос, если не вышло). */
@@ -279,19 +274,16 @@ function whoText({ teamNumber, teamName, phone }) {
 }
 
 /**
- * Проверка ответа на точке.
- * body: { stationCode, answer, phone, teamNumber? }
- * ответ: { ok, correct, letter?, nextHint?, solvedCount }
+ * Отметить точку взятой (нажата кнопка «Я отгадал»).
+ * body: { stationCode, phone, teamNumber? }
+ * ответ: { ok, letter, nextHint, solvedCount, allDone }
  */
-app.post("/api/answer", async (req, res) => {
-  const { stationCode, answer, phone, teamNumber } = req.body || {};
+app.post("/api/solve", async (req, res) => {
+  const { stationCode, phone, teamNumber } = req.body || {};
 
   const station = findStation(stationCode);
   if (!station) {
     return res.status(404).json({ ok: false, error: "Точка не найдена. Проверьте QR-код." });
-  }
-  if (!answer || !String(answer).trim()) {
-    return res.status(400).json({ ok: false, error: "Введите ответ." });
   }
 
   const team = teamNumber ? findTeamByNumber(teamNumber) : null;
@@ -301,10 +293,6 @@ app.post("/api/answer", async (req, res) => {
       ok: false,
       error: "Укажите номер команды или телефон — иначе прогресс не сохранить.",
     });
-  }
-
-  if (!isCorrectAnswer(answer, station.answers)) {
-    return res.json({ ok: true, correct: false });
   }
 
   const entry = solveStation({
@@ -343,7 +331,6 @@ app.post("/api/answer", async (req, res) => {
 
   res.json({
     ok: true,
-    correct: true,
     letter: station.letter,
     nextHint: station.nextHint || "",
     solvedCount,

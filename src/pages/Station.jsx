@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
 import { useProgress } from "../useProgress.js";
-import { notify, checkAnswer, HAS_BACKEND } from "../lib/api.js";
+import { notify, solveStation, HAS_BACKEND } from "../lib/api.js";
 import { getTeamNumber, setTeamNumber, getTeam } from "../lib/team.js";
 import { getPhone, setPhone, isValidPhone } from "../lib/phone.js";
 
@@ -17,14 +17,12 @@ export default function Station() {
 
   const [phone, setPhoneState] = useState(getPhone());
   const [teamNo, setTeamNoState] = useState(getTeamNumber());
-  const [answer, setAnswer] = useState("");
   const [arrive, setArrive] = useState("idle"); // idle | sending | done | error
-  const [check, setCheck] = useState(already ? "done" : "idle"); // idle | sending | done | wrong
+  const [check, setCheck] = useState(already ? "done" : "idle"); // idle | sending | done
   const [revealed, setRevealed] = useState(already);
   const [letter, setLetter] = useState(station ? letterFor(station.id) : null);
   const [hint, setHint] = useState("");
   const [err, setErr] = useState("");
-  const [shake, setShake] = useState(false);
 
   useEffect(() => {
     const solvedAlready = station ? isSolved(station.id) : false;
@@ -33,7 +31,6 @@ export default function Station() {
     setRevealed(solvedAlready);
     setLetter(station ? letterFor(station.id) : null);
     setHint("");
-    setAnswer("");
     setErr("");
   }, [stationId, station]);
 
@@ -89,11 +86,11 @@ export default function Station() {
   }
 
   /**
-   * Ответ проверяет СЕРВЕР: в исходниках сайта ответов и букв больше нет.
-   * При верном ответе сервер отдаёт букву и подсказку и запоминает время
-   * взятия точки — по нему судья определяет победителя.
+   * Загадку команда разгадывает на месте — ответ через сайт не вводится.
+   * Кнопка «Я отгадал» отмечает точку: сервер запоминает время взятия
+   * (по нему судья определяет победителя) и отдаёт букву с подсказкой.
    */
-  async function onCheck() {
+  async function onSolved() {
     setErr("");
     if (!HAS_BACKEND) {
       setErr("Бэкенд не подключён (VITE_API_URL). Запусти `npm run server`.");
@@ -103,24 +100,13 @@ export default function Station() {
       setErr("Укажите номер команды или телефон — иначе прогресс не сохранится.");
       return;
     }
-    if (!answer.trim()) {
-      setErr("Введите ответ на загадку.");
-      return;
-    }
     setCheck("sending");
     try {
-      const res = await checkAnswer({
+      const res = await solveStation({
         stationCode: station.code || station.id,
-        answer: answer.trim(),
         phone: phone.trim(),
         teamNumber: teamNo || null,
       });
-      if (!res.correct) {
-        setCheck("wrong");
-        setShake(true);
-        setTimeout(() => setShake(false), 420);
-        return;
-      }
       setCheck("done");
       setLetter(res.letter);
       setHint(res.nextHint || "");
@@ -128,12 +114,12 @@ export default function Station() {
       solve(station.id, res.letter);
     } catch (e) {
       setCheck("idle");
-      setErr(e.message || "Не удалось проверить ответ.");
+      setErr(e.message || "Не удалось отметить точку.");
     }
   }
 
   return (
-    <div className={"card" + (shake ? " shake" : "")}>
+    <div className="card">
       {revealed && <span className="done-badge">✓ Точка разгадана</span>}
       <div className="eyebrow">
         Точка {station.id} из {QUEST.stations.length} · {station.name}
@@ -191,31 +177,23 @@ export default function Station() {
             ? "📍 Отправить «Я прибыл» повторно"
             : "📍 Я прибыл"}
         </button>
+
+        {!revealed && (
+          <button
+            className="btn green"
+            onClick={onSolved}
+            disabled={check === "sending"}
+          >
+            {check === "sending" ? "Отмечаем…" : "🧩 Я отгадал"}
+          </button>
+        )}
       </div>
 
       {!revealed && (
-        <div className="field-block mt">
-          <label className="field-label">Ваш ответ на загадку</label>
-          <input
-            type="text"
-            placeholder="Введите ответ"
-            autoComplete="off"
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && onCheck()}
-          />
-          <button
-            className="btn green mt"
-            onClick={onCheck}
-            disabled={check === "sending"}
-            style={{ width: "100%" }}
-          >
-            {check === "sending" ? "Проверяем…" : "🧩 Проверить ответ"}
-          </button>
-          {check === "wrong" && (
-            <div className="feedback err">Неверный ответ. Попробуйте ещё раз.</div>
-          )}
-        </div>
+        <p className="center muted tiny">
+          Назовите ответ организатору на точке и нажмите «Я отгадал» — откроется
+          буква и подсказка, куда идти дальше.
+        </p>
       )}
 
       {err && <div className="feedback err">{err}</div>}

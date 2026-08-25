@@ -65,13 +65,14 @@ async function post(path, body) {
 }
 
 /**
- * Проверить ответ на точке. Ответы хранятся на сервере, поэтому подсмотреть
- * их в исходниках сайта нельзя. При верном ответе возвращается буква.
- * payload: { stationCode, answer, phone, teamNumber }
- * ответ: { correct, letter?, nextHint?, solvedCount? }
+ * Отметить точку взятой (кнопка «Я отгадал»). Загадку команда разгадывает
+ * на месте — ответ через сайт не вводится. Сервер записывает время взятия
+ * и возвращает букву с подсказкой (в бандле сайта их нет).
+ * payload: { stationCode, phone, teamNumber }
+ * ответ: { letter, nextHint, solvedCount, allDone }
  */
-export async function checkAnswer({ stationCode, answer, phone, teamNumber }) {
-  return post("/api/answer", { stationCode, answer, phone, teamNumber });
+export async function solveStation({ stationCode, phone, teamNumber }) {
+  return post("/api/solve", { stationCode, phone, teamNumber });
 }
 
 /** Забрать прогресс с сервера — например, при смене телефона. */
