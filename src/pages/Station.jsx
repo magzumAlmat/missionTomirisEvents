@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
 import { useProgress } from "../useProgress.js";
-import { notify, solveStation, HAS_BACKEND } from "../lib/api.js";
+import { notify, solveStation, fetchProgress, HAS_BACKEND } from "../lib/api.js";
 import { getTeamNumber, setTeamNumber, getTeam } from "../lib/team.js";
 import { getPhone, setPhone, isValidPhone } from "../lib/phone.js";
 
@@ -32,6 +32,27 @@ export default function Station() {
     setLetter(station ? letterFor(station.id) : null);
     setHint("");
     setErr("");
+  }, [stationId, station]);
+
+  // Прибытие живёт на сервере, поэтому переживает перезагрузку страницы и
+  // смену телефона: спрашиваем его при открытии точки.
+  useEffect(() => {
+    if (!station || !HAS_BACKEND) return;
+    const teamNumber = getTeamNumber();
+    const savedPhone = getPhone();
+    if (!teamNumber && !savedPhone) return;
+    let cancelled = false;
+    fetchProgress({ teamNumber, phone: savedPhone })
+      .then((data) => {
+        if (cancelled) return;
+        if (data.arrivals && data.arrivals[String(station.id)]) setArrive("done");
+      })
+      .catch(() => {
+        /* нет связи — кнопка просто останется закрытой до «Я прибыл» */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [stationId, station]);
 
   const phoneOk = isValidPhone(phone);
@@ -76,6 +97,7 @@ export default function Station() {
         stationId: station.id,
         stationName: station.name,
         phone: phone.trim(),
+        teamNumber: teamNo || null,
         team: [getTeam(), teamNo ? `№${teamNo}` : ""].filter(Boolean).join(" "),
       });
       setArrive("done");
@@ -182,7 +204,8 @@ export default function Station() {
           <button
             className="btn green"
             onClick={onSolved}
-            disabled={check === "sending"}
+            disabled={check === "sending" || arrive !== "done"}
+            style={arrive !== "done" ? { opacity: 0.5 } : undefined}
           >
             {check === "sending" ? "Отмечаем…" : "🧩 Я отгадал"}
           </button>
@@ -191,8 +214,9 @@ export default function Station() {
 
       {!revealed && (
         <p className="center muted tiny">
-          Назовите ответ организатору на точке и нажмите «Я отгадал» — откроется
-          буква и подсказка, куда идти дальше.
+          {arrive === "done"
+            ? "Капитан: назовите ответ организатору на точке и нажмите «Я отгадал» — откроется буква и подсказка, куда идти дальше."
+            : "Обе кнопки нажимает капитан. Сначала «Я прибыл» — после этого откроется «Я отгадал»."}
         </p>
       )}
 

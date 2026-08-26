@@ -21,8 +21,12 @@ import {
   findOrCreateTeam,
   findTeamByNumber,
   getProgress,
+  hasArrived,
+  markArrival,
   markFinished,
+  participantsByTeam,
   progressKey,
+  resetAll,
   solveStation,
   standings,
 } from "./store.js";
@@ -111,9 +115,25 @@ async function handleNotify(req, res, forcedEvent) {
     return res.status(500).json({ ok: false, error: "TELEGRAM_CHAT_ID не задан в .env" });
   }
 
-  const { stationId, stationName, team, phone } = req.body || {};
+  const { stationId, stationName, team, phone, teamNumber } = req.body || {};
   const event = forcedEvent || (req.body && req.body.event) || "arrived";
   const text = buildMessage(event, stationId, stationName, team, phone);
+
+  // Прибытие запоминаем на сервере: без него нельзя нажать «Я отгадал»
+  // (порядок действий), а судья видит, сколько команда провозилась с загадкой.
+  if (event === "arrived" && stationId) {
+    const found = teamNumber ? findTeamByNumber(teamNumber) : null;
+    const key = progressKey({ teamNumber: found ? found.number : null, phone });
+    if (key) {
+      markArrival({
+        key,
+        teamNumber: found ? found.number : null,
+        teamName: found ? found.name : "",
+        phone,
+        stationId,
+      });
+    }
+  }
 
   try {
     const r = await fetch(API("sendMessage"), {
@@ -295,6 +315,14 @@ app.post("/api/solve", async (req, res) => {
     });
   }
 
+  // Точку засчитываем только после отметки «Я прибыл» на ней же.
+  if (!hasArrived(key, station.id)) {
+    return res.status(409).json({
+      ok: false,
+      error: 'Сначала нажмите «Я прибыл» на этой точке.',
+    });
+  }
+
   const entry = solveStation({
     key,
     teamNumber: team ? team.number : null,
@@ -358,6 +386,7 @@ app.get("/api/progress", (req, res) => {
     teamNumber: team ? team.number : null,
     teamName: team ? team.name : entry?.teamName || "",
     stations: entry?.stations || {},
+    arrivals: entry?.arrivals || {},
     finishedAt: entry?.finishedAt || null,
   });
 });
@@ -390,23 +419,51 @@ async function sendParticipantsListToChat(chatId) {
   const withCar = participants.filter((p) => p.hasCar).length;
   const withoutCar = participants.filter((p) => !p.hasCar).length;
 
-  let msg = `📋 <b>СПИСОК ЗАРЕГИСТРИРОВАННЫХ УЧАСТНИКОВ</b> (всего: ${participants.length} чел.)\n\n`;
+  // Список сгруппирован по командам (по алфавиту названий), в конце — те,
+  // кто зарегистрировался без команды.
+  const { groups, loners } = participantsByTeam(participants);
 
-  participants.forEach((p, idx) => {
-    const carStr = p.hasCar ? "Да 🚗 (на своей машине)" : "Нет 🚶 (без машины)";
+  /** Строки одного участника внутри карточки команды. */
+  function memberLines(p, idx) {
+    const carStr = p.hasCar ? "Да 🚗" : "Нет 🚶";
     const dateStr = p.createdAt ? new Date(p.createdAt).toLocaleString("ru-RU") : "—";
-    msg += `${idx + 1}. 👤 <b>${escapeHtml(p.name)}</b>\n`;
-    msg += `   📞 <code>${escapeHtml(p.phone)}</code>\n`;
-    msg += `   🚘 <b>За рулём:</b> ${carStr}\n`;
-    msg += `   👥 <b>Команда:</b> ${teamText(p)}\n`;
-    msg += `   📅 <b>Дата регистрации:</b> ${dateStr}\n\n`;
-  });
+    return (
+      `   ${idx}. 👤 <b>${escapeHtml(p.name)}</b>\n` +
+      `      📞 <code>${escapeHtml(p.phone)}</code>\n` +
+      `      🚘 За рулём: ${carStr}\n` +
+      `      📅 ${dateStr}\n`
+    );
+  }
 
-  const withTeam = participants.filter((p) => p.hasTeam).length;
+  let msg = `📋 <b>СПИСОК ЗАРЕГИСТРИРОВАННЫХ</b> (всего: ${participants.length} чел.)\n\n`;
+
+  for (const { team, members } of groups) {
+    const declared = team.size ? `${members.length} из ${team.size}` : `${members.length}`;
+    msg += `👥 <b>№${team.number} «${escapeHtml(team.name)}»</b> — зарегистрировано ${declared}\n`;
+    msg += `   ⭐️ Капитан: <b>${escapeHtml(team.captainName || "—")}</b> · <code>${escapeHtml(
+      team.captainPhone || "—"
+    )}</code>\n`;
+    if (members.length === 0) {
+      msg += `   <i>Пока никто не зарегистрировался под этой командой.</i>\n`;
+    } else {
+      members.forEach((p, i) => {
+        msg += memberLines(p, i + 1);
+      });
+    }
+    msg += `\n`;
+  }
+
+  if (loners.length) {
+    msg += `🙋 <b>БЕЗ КОМАНДЫ</b> — ${loners.length} чел.\n`;
+    loners.forEach((p, i) => {
+      msg += memberLines(p, i + 1);
+    });
+    msg += `\n`;
+  }
 
   msg += `───────────────\n`;
   msg += `📊 <b>Итого:</b> ${participants.length} чел. (🚘 На машине: ${withCar} | 🚶 Без авто: ${withoutCar})\n`;
-  msg += `👥 <b>В командах:</b> ${withTeam} | 🙋 Без команды: ${participants.length - withTeam}`;
+  msg += `👥 <b>Команд:</b> ${groups.length} | 🙋 Без команды: ${loners.length}`;
 
   await fetch(API("sendMessage"), {
     method: "POST",
@@ -520,12 +577,45 @@ function clearParticipants() {
   return count;
 }
 
+/**
+ * Спросить подтверждение перед очисткой. Сама очистка стирает всё
+ * мероприятие целиком, поэтому одного случайного нажатия быть не должно.
+ */
+async function askFinishConfirmation(targetChatId) {
+  const participants = readParticipants();
+  const text =
+    `⚠️ <b>ЗАВЕРШИТЬ КВЕСТ И СТЕРЕТЬ ДАННЫЕ?</b>\n\n` +
+    `Будут удалены безвозвратно:\n` +
+    `• участники — <b>${participants.length}</b>\n` +
+    `• команды и их номера\n` +
+    `• прогресс по точкам и время финиша\n` +
+    `• журнал фото и видео от капитанов\n\n` +
+    `Нумерация команд начнётся заново с №1.`;
+  const reply_markup = {
+    inline_keyboard: [
+      [{ text: "🗑 Да, стереть всё", callback_data: "finish_quest_confirm" }],
+      [{ text: "↩️ Отмена", callback_data: "finish_quest_cancel" }],
+    ],
+  };
+  await fetch(API("sendMessage"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: targetChatId, text, parse_mode: "HTML", reply_markup }),
+  });
+}
+
+/** Собственно очистка — вызывается только после подтверждения. */
 async function handleFinishQuestCommand(targetChatId) {
   const clearedCount = clearParticipants();
+  const counts = resetAll();
   const text =
-    `🏁 <b>КВЕСТ ЗАВЕРШЁН!</b>\n\n` +
-    `🗑 <b>Список участников очищен</b> (удалено записей: <b>${clearedCount}</b>).\n` +
-    `Система готова к проведению нового квеста.`;
+    `🏁 <b>КВЕСТ ЗАВЕРШЁН</b>\n\n` +
+    `🗑 Удалено:\n` +
+    `• участников: <b>${clearedCount}</b>\n` +
+    `• команд: <b>${counts.teams}</b>\n` +
+    `• записей прогресса: <b>${counts.progress}</b>\n` +
+    `• материалов от капитанов: <b>${counts.submissions}</b>\n\n` +
+    `Система готова к новому квесту, нумерация команд — с №1.`;
   const reply_markup = {
     inline_keyboard: [
       [{ text: "📋 Список участников (0)", callback_data: "list_participants" }],
@@ -585,10 +675,35 @@ async function pollTelegramUpdates() {
               await fetch(API("answerCallbackQuery"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ callback_query_id: cb.id, text: "Очищаю список..." }),
+                body: JSON.stringify({ callback_query_id: cb.id, text: "Нужно подтверждение" }),
+              });
+            } catch (e) {}
+            await askFinishConfirmation(targetChatId);
+          } else if (data === "finish_quest_confirm") {
+            try {
+              await fetch(API("answerCallbackQuery"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ callback_query_id: cb.id, text: "Стираю данные..." }),
               });
             } catch (e) {}
             await handleFinishQuestCommand(targetChatId);
+          } else if (data === "finish_quest_cancel") {
+            try {
+              await fetch(API("answerCallbackQuery"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ callback_query_id: cb.id, text: "Отменено" }),
+              });
+            } catch (e) {}
+            await fetch(API("sendMessage"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: targetChatId,
+                text: "↩️ Очистка отменена. Данные на месте.",
+              }),
+            });
           }
         }
 
@@ -605,7 +720,7 @@ async function pollTelegramUpdates() {
             text.startsWith("/finish") ||
             text.startsWith("/очистить")
           ) {
-            await handleFinishQuestCommand(targetChatId);
+            await askFinishConfirmation(targetChatId);
           } else if (
             text.startsWith("/list") ||
             text.startsWith("/participants") ||

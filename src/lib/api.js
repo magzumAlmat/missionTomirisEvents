@@ -5,7 +5,7 @@ const API_URL = import.meta.env.VITE_API_URL || "";
  * event: "arrived" | "solved"
  * payload: { stationId, stationName, phone, team? }
  */
-export async function notify(event, { stationId, stationName, phone, team }) {
+export async function notify(event, { stationId, stationName, phone, team, teamNumber }) {
   if (!API_URL) {
     throw new Error(
       "Бэкенд не подключён: не задан VITE_API_URL. Перезапусти `npm run dev` после правки .env."
@@ -14,7 +14,7 @@ export async function notify(event, { stationId, stationName, phone, team }) {
   const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/notify`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ event, stationId, stationName, phone, team }),
+    body: JSON.stringify({ event, stationId, stationName, phone, team, teamNumber }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {

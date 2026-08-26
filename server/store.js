@@ -140,10 +140,36 @@ function blankEntry({ teamNumber, teamName, phone }) {
     teamNumber: Number(teamNumber) || null,
     teamName: teamName || "",
     phone: phone || "",
+    arrivals: {},
     stations: {},
     finishedAt: null,
     startedAt: new Date().toISOString(),
   };
+}
+
+/**
+ * Отметить прибытие на точку («Я прибыл»). Точку это НЕ засчитывает, но без
+ * прибытия нельзя нажать «Я отгадал» — так задаётся порядок действий.
+ */
+export function markArrival({ key, teamNumber, teamName, phone, stationId }) {
+  if (!key) return null;
+  const all = readProgress();
+  const entry = all[key] || blankEntry({ teamNumber, teamName, phone });
+  if (!entry.arrivals) entry.arrivals = {};
+  if (teamName && !entry.teamName) entry.teamName = teamName;
+  if (phone && !entry.phone) entry.phone = phone;
+
+  const sid = String(stationId);
+  if (!entry.arrivals[sid]) entry.arrivals[sid] = { at: new Date().toISOString() };
+  all[key] = entry;
+  writeJson(PROGRESS_FILE, all);
+  return entry;
+}
+
+/** Отмечалась ли команда на этой точке кнопкой «Я прибыл». */
+export function hasArrived(key, stationId) {
+  const entry = getProgress(key);
+  return !!entry?.arrivals?.[String(stationId)];
 }
 
 /**
@@ -196,6 +222,57 @@ export function addSubmission({ teamNumber, teamName, captainName, kind }) {
   list.push(entry);
   writeJson(SUBMISSIONS_FILE, list);
   return entry;
+}
+
+/* ---------- список участников по командам ---------- */
+
+/**
+ * Разложить участников по командам для списка в Telegram.
+ * Команды идут по алфавиту названий, в конце — те, кто без команды
+ * (в том числе записи, сделанные до появления команд в форме).
+ *
+ * participants — массив из participants.json.
+ */
+export function participantsByTeam(participants) {
+  const list = Array.isArray(participants) ? participants : [];
+  const teams = listTeams();
+
+  const groups = teams
+    .map((t) => ({ team: t, members: [] }))
+    .sort((a, b) => a.team.name.localeCompare(b.team.name, "ru"));
+
+  const byNumber = new Map(groups.map((g) => [g.team.number, g]));
+  const byKey = new Map(groups.map((g) => [g.team.key, g]));
+
+  const loners = [];
+  for (const p of list) {
+    const group =
+      (p.teamNumber && byNumber.get(Number(p.teamNumber))) ||
+      (p.teamName && byKey.get(teamKey(p.teamName)));
+    if (group) group.members.push(p);
+    else loners.push(p);
+  }
+
+  return { groups, loners };
+}
+
+/* ---------- сброс перед новым мероприятием ---------- */
+
+/**
+ * Стереть данные мероприятия: команды, прогресс и журнал материалов.
+ * Участников чистит вызывающая сторона (они лежат в participants.json).
+ * Возвращает, сколько чего удалено, — чтобы показать это в подтверждении.
+ */
+export function resetAll() {
+  const counts = {
+    teams: listTeams().length,
+    submissions: listSubmissions().length,
+    progress: Object.keys(readProgress()).length,
+  };
+  writeJson(TEAMS_FILE, []);
+  writeJson(PROGRESS_FILE, {});
+  writeJson(SUBMISSIONS_FILE, []);
+  return counts;
 }
 
 /* ---------- судейская таблица ---------- */
