@@ -22,6 +22,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 // Команды и журнал материалов — общие с сайтом.
 import { addSubmission, findTeamByNumber, standings } from "./store.js";
+import { buildStandingsText, escapeHtml } from "./messages.js";
+import { TOTAL_STATIONS } from "./questSecret.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -105,9 +107,6 @@ async function tg(method, payload) {
   return data;
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-}
 
 function send(chatId, text, extra = {}) {
   return tg("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", ...extra });
@@ -248,19 +247,7 @@ async function forwardVideo(msg, sender, kind) {
 
 /** Таблица квеста текстом — для судьи прямо в группе с материалами. */
 function standingsText() {
-  const rows = standings();
-  if (!rows.length) return "🏁 <b>Таблица пуста.</b> Ни одна команда не зарегистрирована.";
-
-  const time = (iso) => (iso ? new Date(iso).toLocaleTimeString("ru-RU") : "—");
-  let msg = "🏁 <b>ТАБЛИЦА КВЕСТА</b>\n\n";
-  rows.forEach((r, i) => {
-    const place = r.finishedAt ? `🏆 ${i + 1}.` : `${i + 1}.`;
-    msg += `${place} <b>№${r.teamNumber || "—"} ${escapeHtml(r.teamName || "без названия")}</b>\n`;
-    msg += `   🧩 Точек: <b>${r.solved}</b>`;
-    msg += r.finishedAt ? ` · 🏁 финиш в ${time(r.finishedAt)}\n` : `\n`;
-    msg += `   📸 Материалов: ${r.media} · 🕒 последняя точка ${time(r.lastAt)}\n\n`;
-  });
-  return msg;
+  return buildStandingsText(standings(), TOTAL_STATIONS);
 }
 
 async function handleMessage(msg) {

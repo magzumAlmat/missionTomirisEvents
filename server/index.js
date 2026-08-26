@@ -17,6 +17,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { startVideoBot } from "./videoBot.js";
 import { ALL_DONE, TOTAL_STATIONS, findStation } from "./questSecret.js";
+import { buildParticipantsListText, buildStandingsText, escapeHtml } from "./messages.js";
 import {
   findOrCreateTeam,
   findTeamByNumber,
@@ -416,101 +417,25 @@ async function sendParticipantsListToChat(chatId) {
     return;
   }
 
-  const withCar = participants.filter((p) => p.hasCar).length;
-  const withoutCar = participants.filter((p) => !p.hasCar).length;
-
-  // Список сгруппирован по командам (по алфавиту названий), в конце — те,
-  // кто зарегистрировался без команды.
-  const { groups, loners } = participantsByTeam(participants);
-
-  /** Строки одного участника внутри карточки команды. */
-  function memberLines(p, idx) {
-    const carStr = p.hasCar ? "Да 🚗" : "Нет 🚶";
-    const dateStr = p.createdAt ? new Date(p.createdAt).toLocaleString("ru-RU") : "—";
-    return (
-      `   ${idx}. 👤 <b>${escapeHtml(p.name)}</b>\n` +
-      `      📞 <code>${escapeHtml(p.phone)}</code>\n` +
-      `      🚘 За рулём: ${carStr}\n` +
-      `      📅 ${dateStr}\n`
-    );
-  }
-
-  let msg = `📋 <b>СПИСОК ЗАРЕГИСТРИРОВАННЫХ</b> (всего: ${participants.length} чел.)\n\n`;
-
-  for (const { team, members } of groups) {
-    const declared = team.size ? `${members.length} из ${team.size}` : `${members.length}`;
-    msg += `👥 <b>№${team.number} «${escapeHtml(team.name)}»</b> — зарегистрировано ${declared}\n`;
-    msg += `   ⭐️ Капитан: <b>${escapeHtml(team.captainName || "—")}</b> · <code>${escapeHtml(
-      team.captainPhone || "—"
-    )}</code>\n`;
-    if (members.length === 0) {
-      msg += `   <i>Пока никто не зарегистрировался под этой командой.</i>\n`;
-    } else {
-      members.forEach((p, i) => {
-        msg += memberLines(p, i + 1);
-      });
-    }
-    msg += `\n`;
-  }
-
-  if (loners.length) {
-    msg += `🙋 <b>БЕЗ КОМАНДЫ</b> — ${loners.length} чел.\n`;
-    loners.forEach((p, i) => {
-      msg += memberLines(p, i + 1);
-    });
-    msg += `\n`;
-  }
-
-  msg += `───────────────\n`;
-  msg += `📊 <b>Итого:</b> ${participants.length} чел. (🚘 На машине: ${withCar} | 🚶 Без авто: ${withoutCar})\n`;
-  msg += `👥 <b>Команд:</b> ${groups.length} | 🙋 Без команды: ${loners.length}`;
+  const text = buildParticipantsListText(participants, participantsByTeam(participants));
 
   await fetch(API("sendMessage"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: "HTML", reply_markup }),
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", reply_markup }),
   });
 }
 
 /** Судейская таблица в Telegram: кто сколько точек взял и когда финишировал. */
 async function sendStandingsToChat(chatId) {
-  const rows = standings();
+  const text = buildStandingsText(standings(), TOTAL_STATIONS);
   const reply_markup = {
     inline_keyboard: [[{ text: "🔄 Обновить таблицу", callback_data: "standings" }]],
   };
-
-  if (rows.length === 0) {
-    await fetch(API("sendMessage"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: "🏁 <b>Таблица пуста.</b>\nНи одна команда ещё не зарегистрирована.",
-        parse_mode: "HTML",
-        reply_markup,
-      }),
-    });
-    return;
-  }
-
-  const time = (iso) => (iso ? new Date(iso).toLocaleTimeString("ru-RU") : "—");
-
-  let msg = `🏁 <b>ТАБЛИЦА КВЕСТА</b> (точек всего: ${TOTAL_STATIONS})\n\n`;
-  rows.forEach((r, i) => {
-    const place = r.finishedAt ? `🏆 ${i + 1}.` : `${i + 1}.`;
-    msg += `${place} <b>№${r.teamNumber || "—"} ${escapeHtml(r.teamName || "без названия")}</b>\n`;
-    msg += `   🧩 Точек: <b>${r.solved}</b>/${TOTAL_STATIONS}`;
-    msg += r.finishedAt ? ` · 🏁 финиш в ${time(r.finishedAt)}\n` : `\n`;
-    msg += `   🕒 Последняя точка: ${time(r.lastAt)}\n`;
-    msg += `   📸 Материалов от капитана: ${r.media}\n\n`;
-  });
-  msg += `───────────────\n`;
-  msg += `Победитель — первый финишировавший. Приз выдаётся после проверки материалов от капитана.`;
-
   await fetch(API("sendMessage"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: "HTML", reply_markup }),
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", reply_markup }),
   });
 }
 
@@ -566,9 +491,6 @@ app.get("/api/chat-id-helper", async (_req, res) => {
   }
 });
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-}
 
 function clearParticipants() {
   const current = readParticipants();
