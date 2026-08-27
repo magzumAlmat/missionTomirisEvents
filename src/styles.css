@@ -893,3 +893,95 @@ input[type="text"]:focus {
     font-size: 26px;
   }
 }
+
+
+/* ---------- Админская доска прогресса ---------- */
+
+/* Доска шире обычной карточки: на планшете и ноутбуке видно все восемь точек
+   без прокрутки. На телефоне остаётся горизонтальный скролл внутри таблицы. */
+.card.board-card {
+  max-width: 900px;
+  width: calc(100vw - 36px);
+  margin-left: 50%;
+  transform: translateX(-50%);
+}
+@media (max-width: 600px) {
+  .card.board-card {
+    width: auto;
+    margin-left: 0;
+    transform: none;
+  }
+}
+
+.board-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  align-items: baseline;
+  margin: 14px 0 10px;
+  font-size: 14px;
+}
+.board-summary b {
+  font-size: 18px;
+  color: var(--accent);
+}
+
+/* Таблица шире экрана — прокручиваем её саму, а не всю страницу. */
+.board-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+table.board {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+}
+table.board th,
+table.board td {
+  padding: 8px 6px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+table.board th {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  position: sticky;
+  top: 0;
+}
+table.board tr:last-child td {
+  border-bottom: none;
+}
+
+.board-team {
+  text-align: left !important;
+  padding-left: 12px !important;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.board-cup {
+  margin-right: 4px;
+}
+.board-cell {
+  width: 34px;
+}
+.board-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.board-num {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}

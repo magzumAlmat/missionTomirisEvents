@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
+import { useNavigate } from "react-router-dom";
 import { QUEST, INCLUDE_START_QR } from "../questConfig.js";
-
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "";
-const UNLOCK_KEY = "event_tomiris_admin_ok";
+import PasswordGate, { isUnlocked } from "../components/PasswordGate.jsx";
 
 /** Список точек, для которых генерируем QR. */
 function buildItems(base) {
@@ -24,49 +23,9 @@ function buildItems(base) {
   return items;
 }
 
-function PasswordGate({ onOk }) {
-  const [val, setVal] = useState("");
-  const [err, setErr] = useState(false);
-  function submit() {
-    if (val === ADMIN_PASSWORD) {
-      try {
-        sessionStorage.setItem(UNLOCK_KEY, "1");
-      } catch (e) {}
-      onOk();
-    } else {
-      setErr(true);
-    }
-  }
-  return (
-    <div className="card">
-      <div className="eyebrow">Админ</div>
-      <h2>Вход для организатора</h2>
-      <p className="muted">Введите пароль администратора.</p>
-      <input
-        type="password"
-        placeholder="Пароль"
-        value={val}
-        onChange={(e) => setVal(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && submit()}
-        autoFocus
-      />
-      <button className="btn" onClick={submit}>
-        Войти
-      </button>
-      {err && <div className="feedback err">Неверный пароль.</div>}
-    </div>
-  );
-}
-
 export default function Admin() {
-  const alreadyOk = (() => {
-    try {
-      return sessionStorage.getItem(UNLOCK_KEY) === "1";
-    } catch (e) {
-      return false;
-    }
-  })();
-  const [unlocked, setUnlocked] = useState(!ADMIN_PASSWORD || alreadyOk);
+  const navigate = useNavigate();
+  const [unlocked, setUnlocked] = useState(isUnlocked);
 
   const defaultBase = useMemo(
     () => window.location.href.split("#")[0],
@@ -117,6 +76,13 @@ export default function Admin() {
 
       <button className="btn no-print" onClick={() => window.print()}>
         🖨 Печать всех кодов
+      </button>
+      <button
+        className="btn ghost no-print"
+        style={{ marginTop: 8 }}
+        onClick={() => navigate("/admin/progress")}
+      >
+        📊 Прогресс команд
       </button>
 
       <div className="qr-grid">

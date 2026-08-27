@@ -12,7 +12,7 @@ export default function Station() {
   const station = QUEST.stations.find((s) => s.code === id || String(s.id) === id);
   const stationId = station ? station.id : parseInt(id, 10);
 
-  const { isSolved, letterFor, solve } = useProgress();
+  const { isSolved, solve } = useProgress();
   const already = station ? isSolved(station.id) : false;
 
   const [phone, setPhoneState] = useState(getPhone());
@@ -20,7 +20,6 @@ export default function Station() {
   const [arrive, setArrive] = useState("idle"); // idle | sending | done | error
   const [check, setCheck] = useState(already ? "done" : "idle"); // idle | sending | done
   const [revealed, setRevealed] = useState(already);
-  const [letter, setLetter] = useState(station ? letterFor(station.id) : null);
   const [hint, setHint] = useState("");
   const [err, setErr] = useState("");
 
@@ -29,7 +28,6 @@ export default function Station() {
     setArrive("idle");
     setCheck(solvedAlready ? "done" : "idle");
     setRevealed(solvedAlready);
-    setLetter(station ? letterFor(station.id) : null);
     setHint("");
     setErr("");
   }, [stationId, station]);
@@ -110,7 +108,7 @@ export default function Station() {
   /**
    * Загадку команда разгадывает на месте — ответ через сайт не вводится.
    * Кнопка «Я отгадал» отмечает точку: сервер запоминает время взятия
-   * (по нему судья определяет победителя) и отдаёт букву с подсказкой.
+   * (по нему судья определяет победителя) и отдаёт подсказку к следующей точке.
    */
   async function onSolved() {
     setErr("");
@@ -130,10 +128,9 @@ export default function Station() {
         teamNumber: teamNo || null,
       });
       setCheck("done");
-      setLetter(res.letter);
       setHint(res.nextHint || "");
       setRevealed(true);
-      solve(station.id, res.letter);
+      solve(station.id);
     } catch (e) {
       setCheck("idle");
       setErr(e.message || "Не удалось отметить точку.");
@@ -215,7 +212,7 @@ export default function Station() {
       {!revealed && (
         <p className="center muted tiny">
           {arrive === "done"
-            ? "Капитан: назовите ответ организатору на точке и нажмите «Я отгадал» — откроется буква и подсказка, куда идти дальше."
+            ? "Капитан: назовите ответ организатору на точке и нажмите «Я отгадал» — откроется подсказка, куда идти дальше."
             : "Обе кнопки нажимает капитан. Сначала «Я прибыл» — после этого откроется «Я отгадал»."}
         </p>
       )}
@@ -224,10 +221,6 @@ export default function Station() {
 
       {revealed && (
         <div className="reveal">
-          <div className="letter">
-            <span className="lbl">Твоя буква</span>
-            <span className="val">{letter || "?"}</span>
-          </div>
           {hint && (
             <p className="center">
               <b className="muted">Куда дальше:</b>

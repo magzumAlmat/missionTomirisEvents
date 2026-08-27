@@ -176,7 +176,7 @@ export function hasArrived(key, stationId) {
  * Отметить точку как разгаданную. Повторный верный ответ время НЕ меняет —
  * судья смотрит на первое взятие точки.
  */
-export function solveStation({ key, teamNumber, teamName, phone, stationId, letter }) {
+export function solveStation({ key, teamNumber, teamName, phone, stationId }) {
   if (!key) return null;
   const all = readProgress();
   const entry = all[key] || blankEntry({ teamNumber, teamName, phone });
@@ -185,7 +185,7 @@ export function solveStation({ key, teamNumber, teamName, phone, stationId, lett
 
   const sid = String(stationId);
   if (!entry.stations[sid]) {
-    entry.stations[sid] = { letter, at: new Date().toISOString() };
+    entry.stations[sid] = { at: new Date().toISOString() };
   }
   all[key] = entry;
   writeJson(PROGRESS_FILE, all);
@@ -336,6 +336,8 @@ export function standings() {
         lastAt: null,
         finishedAt: null,
         media: 0,
+        stations: {},
+        arrivals: {},
         ...seed,
       });
     }
@@ -353,6 +355,13 @@ export function standings() {
     row.solved = times.length;
     row.lastAt = times.sort().slice(-1)[0] || null;
     row.finishedAt = p.finishedAt || null;
+    // Времена по каждой точке — для доски прогресса в админке.
+    row.stations = Object.fromEntries(
+      Object.entries(p.stations || {}).map(([id, v]) => [id, v.at || null])
+    );
+    row.arrivals = Object.fromEntries(
+      Object.entries(p.arrivals || {}).map(([id, v]) => [id, v.at || null])
+    );
     if (!row.teamName && p.teamName) row.teamName = p.teamName;
     if (!row.teamNumber && p.teamNumber) row.teamNumber = p.teamNumber;
   }

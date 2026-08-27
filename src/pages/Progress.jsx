@@ -2,14 +2,13 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
 import { useProgress } from "../useProgress.js";
-import Slots from "../components/Slots.jsx";
 import { fetchProgress, HAS_BACKEND } from "../lib/api.js";
 import { getTeamNumber, setTeamNumber } from "../lib/team.js";
 import { getPhone } from "../lib/phone.js";
 
 export default function Progress() {
   const navigate = useNavigate();
-  const { letters, solvedCount, total, allSolved, isSolved, letterFor, applyServer, reset } =
+  const { solvedCount, total, allSolved, isSolved, applyServer, reset } =
     useProgress();
 
   const [teamNo, setTeamNo] = useState(getTeamNumber());
@@ -45,9 +44,10 @@ export default function Progress() {
   return (
     <div className="card">
       <div className="eyebrow">Прогресс</div>
-      <h2>Собранные буквы</h2>
-
-      <Slots letters={letters} solvedCount={solvedCount} total={total} />
+      <h2>Пройденные точки</h2>
+      <p className="center muted">
+        Пройдено {solvedCount} из {total}
+      </p>
 
       <ul className="list">
         {QUEST.stations.map((s) => {
@@ -57,9 +57,6 @@ export default function Progress() {
               <span>
                 {got ? "✅" : "⬜"} Точка {s.id} · {s.name}
               </span>
-              <b style={{ color: got ? "var(--accent)" : "var(--muted)" }}>
-                {got ? letterFor(s.id) || "?" : "—"}
-              </b>
             </li>
           );
         })}
@@ -108,7 +105,7 @@ export default function Progress() {
           className="btn ghost"
           style={{ marginTop: 12, opacity: 0.7, fontSize: 13 }}
           onClick={() => {
-            if (confirm("Очистить буквы на этом телефоне? На сервере прогресс останется.")) {
+            if (confirm("Очистить прогресс на этом телефоне? На сервере он останется.")) {
               reset();
             }
           }}

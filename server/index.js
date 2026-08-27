@@ -35,6 +35,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DB_FILE = path.join(__dirname, "participants.json");
+const DIST_DIR = path.resolve(__dirname, "../dist");
 
 function readParticipants() {
   try {
@@ -266,7 +267,7 @@ app.post("/api/register", async (req, res) => {
    КВЕСТ: отметка взятой точки.
    Загадку команда разгадывает на месте — через форму на сайте ответ НЕ
    вводится. Нажатие «Я отгадал» приходит сюда: сервер записывает время
-   взятия точки и отдаёт букву с подсказкой из server/questSecret.js
+   взятия точки и отдаёт подсказку из server/questSecret.js
    (в бандле сайта их нет, поэтому маршрут заранее не подсмотреть).
    ===================================================================== */
 
@@ -297,7 +298,7 @@ function whoText({ teamNumber, teamName, phone }) {
 /**
  * Отметить точку взятой (нажата кнопка «Я отгадал»).
  * body: { stationCode, phone, teamNumber? }
- * ответ: { ok, letter, nextHint, solvedCount, allDone }
+ * ответ: { ok, nextHint, solvedCount, allDone }
  */
 app.post("/api/solve", async (req, res) => {
   const { stationCode, phone, teamNumber } = req.body || {};
@@ -330,7 +331,6 @@ app.post("/api/solve", async (req, res) => {
     teamName: team ? team.name : "",
     phone,
     stationId: station.id,
-    letter: station.letter,
   });
   const solvedCount = Object.keys(entry?.stations || {}).length;
 
@@ -360,7 +360,6 @@ app.post("/api/solve", async (req, res) => {
 
   res.json({
     ok: true,
-    letter: station.letter,
     nextHint: station.nextHint || "",
     solvedCount,
     total: TOTAL_STATIONS,
@@ -489,6 +488,15 @@ app.get("/api/chat-id-helper", async (_req, res) => {
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
   }
+});
+
+// В production backend также отдаёт собранный React frontend.
+app.use(express.static(DIST_DIR));
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api/")) return next();
+  res.sendFile(path.join(DIST_DIR, "index.html"), (error) => {
+    if (error) next();
+  });
 });
 
 

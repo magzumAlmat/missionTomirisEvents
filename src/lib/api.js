@@ -67,9 +67,9 @@ async function post(path, body) {
 /**
  * Отметить точку взятой (кнопка «Я отгадал»). Загадку команда разгадывает
  * на месте — ответ через сайт не вводится. Сервер записывает время взятия
- * и возвращает букву с подсказкой (в бандле сайта их нет).
+ * и возвращает подсказку к следующей точке (в бандле сайта её нет).
  * payload: { stationCode, phone, teamNumber }
- * ответ: { letter, nextHint, solvedCount, allDone }
+ * ответ: { nextHint, solvedCount, allDone }
  */
 export async function solveStation({ stationCode, phone, teamNumber }) {
   return post("/api/solve", { stationCode, phone, teamNumber });
@@ -85,6 +85,17 @@ export async function fetchProgress({ teamNumber, phone }) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {
     throw new Error(data.error || "Не удалось получить прогресс.");
+  }
+  return data;
+}
+
+/** Сводка по всем командам для админской доски (без телефонов). */
+export async function fetchStandings() {
+  if (!API_URL) throw new Error("Бэкенд не подключён (VITE_API_URL).");
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/standings`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "Не удалось получить сводку.");
   }
   return data;
 }
