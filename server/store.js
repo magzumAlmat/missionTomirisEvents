@@ -237,22 +237,56 @@ export function participantsByTeam(participants) {
   const list = Array.isArray(participants) ? participants : [];
   const teams = listTeams();
 
-  const groups = teams
-    .map((t) => ({ team: t, members: [] }))
-    .sort((a, b) => a.team.name.localeCompare(b.team.name, "ru"));
-
+  const groups = teams.map((t) => ({ team: t, members: [] }));
   const byNumber = new Map(groups.map((g) => [g.team.number, g]));
   const byKey = new Map(groups.map((g) => [g.team.key, g]));
 
   const loners = [];
   for (const p of list) {
-    const group =
-      (p.teamNumber && byNumber.get(Number(p.teamNumber))) ||
-      (p.teamName && byKey.get(teamKey(p.teamName)));
+    // Сопоставляем ПО НАЗВАНИЮ, а не по номеру: номера переиспользуются после
+    // очистки, и участник прошлого квеста иначе прилипнет к чужой команде
+    // с тем же номером. Номер — только для записей без названия.
+    let group = p.teamName
+      ? byKey.get(teamKey(p.teamName))
+      : p.teamNumber
+      ? byNumber.get(Number(p.teamNumber))
+      : null;
+
+    // Команда прошлого мероприятия: teams.json очищен, но у участника
+    // название сохранилось. Собираем такую команду из самих записей —
+    // иначе вся история свалилась бы в «Без команды».
+    if (!group && p.teamName) {
+      const key = teamKey(p.teamName);
+      group = {
+        team: {
+          number: null,
+          key,
+          name: String(p.teamName).trim(),
+          captainName: "",
+          captainPhone: "",
+          size: p.teamSize || 0,
+          archived: true,
+        },
+        members: [],
+      };
+      groups.push(group);
+      byKey.set(key, group);
+    }
+
     if (group) group.members.push(p);
     else loners.push(p);
   }
 
+  // Капитаном архивной команды считаем того, кто зарегистрировался первым.
+  for (const g of groups) {
+    if (g.team.archived && g.members.length) {
+      const first = g.members[0];
+      g.team.captainName = first.name;
+      g.team.captainPhone = first.phone;
+    }
+  }
+
+  groups.sort((a, b) => a.team.name.localeCompare(b.team.name, "ru"));
   return { groups, loners };
 }
 

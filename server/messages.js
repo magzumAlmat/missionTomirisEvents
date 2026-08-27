@@ -35,11 +35,18 @@ export function buildParticipantsListText(participants, { groups, loners }) {
     );
   }
 
-  let msg = `📋 <b>СПИСОК ЗАРЕГИСТРИРОВАННЫХ</b> (всего: ${participants.length} чел.)\n\n`;
+  const current = groups.filter((g) => !g.team.archived).length;
+  const archived = groups.length - current;
+
+  let msg = `📋 <b>БАЗА УЧАСТНИКОВ</b> (всего: ${participants.length} чел.)\n\n`;
 
   for (const { team, members } of groups) {
     const declared = team.size ? `${members.length} из ${team.size}` : `${members.length}`;
-    msg += `👥 <b>№${team.number} «${escapeHtml(team.name)}»</b> — зарегистрировано ${declared}\n`;
+    // Команда без номера — из прошлых мероприятий: её номер уже стёрт очисткой.
+    const head = team.archived
+      ? `🗂 <b>«${escapeHtml(team.name)}»</b> <i>(прошлый квест)</i>`
+      : `👥 <b>№${team.number} «${escapeHtml(team.name)}»</b>`;
+    msg += `${head} — зарегистрировано ${declared}\n`;
     msg += `   ⭐️ Капитан: <b>${escapeHtml(team.captainName || "—")}</b> · <code>${escapeHtml(
       team.captainPhone || "—"
     )}</code>\n`;
@@ -63,7 +70,9 @@ export function buildParticipantsListText(participants, { groups, loners }) {
 
   msg += `───────────────\n`;
   msg += `📊 <b>Итого:</b> ${participants.length} чел. (🚘 На машине: ${withCar} | 🚶 Без авто: ${withoutCar})\n`;
-  msg += `👥 <b>Команд:</b> ${groups.length} | 🙋 Без команды: ${loners.length}`;
+  msg += `👥 <b>Команд в этом квесте:</b> ${current}`;
+  if (archived) msg += ` | 🗂 из прошлых: ${archived}`;
+  msg += ` | 🙋 Без команды: ${loners.length}`;
   return msg;
 }
 

@@ -492,13 +492,6 @@ app.get("/api/chat-id-helper", async (_req, res) => {
 });
 
 
-function clearParticipants() {
-  const current = readParticipants();
-  const count = current.length;
-  saveParticipants([]);
-  return count;
-}
-
 /**
  * Спросить подтверждение перед очисткой. Сама очистка стирает всё
  * мероприятие целиком, поэтому одного случайного нажатия быть не должно.
@@ -506,12 +499,13 @@ function clearParticipants() {
 async function askFinishConfirmation(targetChatId) {
   const participants = readParticipants();
   const text =
-    `⚠️ <b>ЗАВЕРШИТЬ КВЕСТ И СТЕРЕТЬ ДАННЫЕ?</b>\n\n` +
+    `⚠️ <b>ЗАВЕРШИТЬ КВЕСТ?</b>\n\n` +
     `Будут удалены безвозвратно:\n` +
-    `• участники — <b>${participants.length}</b>\n` +
     `• команды и их номера\n` +
     `• прогресс по точкам и время финиша\n` +
     `• журнал фото и видео от капитанов\n\n` +
+    `📇 <b>База участников сохранится</b> — все <b>${participants.length}</b> ` +
+    `записей останутся в /list как база клиентов.\n` +
     `Нумерация команд начнётся заново с №1.`;
   const reply_markup = {
     inline_keyboard: [
@@ -526,21 +520,25 @@ async function askFinishConfirmation(targetChatId) {
   });
 }
 
-/** Собственно очистка — вызывается только после подтверждения. */
+/**
+ * Собственно очистка — вызывается только после подтверждения.
+ * Участников НЕ трогает: participants.json — накопительная база клиентов,
+ * она живёт от мероприятия к мероприятию.
+ */
 async function handleFinishQuestCommand(targetChatId) {
-  const clearedCount = clearParticipants();
   const counts = resetAll();
+  const kept = readParticipants().length;
   const text =
     `🏁 <b>КВЕСТ ЗАВЕРШЁН</b>\n\n` +
     `🗑 Удалено:\n` +
-    `• участников: <b>${clearedCount}</b>\n` +
     `• команд: <b>${counts.teams}</b>\n` +
     `• записей прогресса: <b>${counts.progress}</b>\n` +
     `• материалов от капитанов: <b>${counts.submissions}</b>\n\n` +
+    `📇 <b>База участников сохранена:</b> ${kept} записей.\n` +
     `Система готова к новому квесту, нумерация команд — с №1.`;
   const reply_markup = {
     inline_keyboard: [
-      [{ text: "📋 Список участников (0)", callback_data: "list_participants" }],
+      [{ text: `📋 База участников (${kept})`, callback_data: "list_participants" }],
     ],
   };
   await fetch(API("sendMessage"), {
