@@ -21,9 +21,8 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 // Команды и журнал материалов — общие с сайтом.
-import { addSubmission, findTeamByNumber, standings } from "./store.js";
-import { buildStandingsText, escapeHtml } from "./messages.js";
-import { TOTAL_STATIONS } from "./questSecret.js";
+import { addSubmission, findTeamByNumber } from "./store.js";
+import { escapeHtml } from "./messages.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -129,7 +128,6 @@ const HELP_TEXT =
   `<b>Команды:</b>\n` +
   `• /start — начать / назвать номер команды\n` +
   `• /reset — изменить команду или имя\n` +
-  `• /standings — таблица квеста\n` +
   `• /help — эта справка`;
 
 /* ---------- шаги регистрации капитана ---------- */
@@ -233,7 +231,7 @@ async function forwardVideo(msg, sender, kind) {
   }
 
   // Записываем в журнал: по нему судья видит, сколько материалов прислала
-  // команда и когда (см. /standings).
+  // команда и когда — эта сводка видна в таблице у организаторов.
   addSubmission({
     teamNumber: sender.teamNumber,
     teamName: sender.teamName,
@@ -245,22 +243,13 @@ async function forwardVideo(msg, sender, kind) {
 
 /* ---------- обработка одного апдейта ---------- */
 
-/** Таблица квеста текстом — для судьи прямо в группе с материалами. */
-function standingsText() {
-  return buildStandingsText(standings(), TOTAL_STATIONS);
-}
-
 async function handleMessage(msg) {
   const chatId = msg.chat.id;
-  const text0 = (msg.text || "").trim().toLowerCase();
 
-  // В группе бот отвечает только на запрос таблицы — остальное там не нужно.
-  if (msg.chat.type !== "private") {
-    if (text0.startsWith("/standings") || text0.startsWith("/таблица")) {
-      return send(chatId, standingsText());
-    }
-    return;
-  }
+  // В группе капитанов лежат ТОЛЬКО фото и видео — вся остальная информация
+  // (регистрации, точки, таблица) идёт в чат организаторов через основного бота.
+  // Поэтому на сообщения в самой группе этот бот не отвечает вообще.
+  if (msg.chat.type !== "private") return;
 
   const senders = readSenders();
   const sender = senders[chatId];
@@ -270,9 +259,6 @@ async function handleMessage(msg) {
   if (text.startsWith("/start")) return startRegistration(chatId, senders);
   if (text.startsWith("/help")) return send(chatId, HELP_TEXT);
   if (text.startsWith("/reset")) return startRegistration(chatId, senders);
-  if (text.startsWith("/standings") || text.startsWith("/таблица")) {
-    return send(chatId, standingsText());
-  }
 
   // --- номер телефона через кнопку «Отправить мой номер» ---
   if (msg.contact && msg.contact.phone_number) {
@@ -410,7 +396,6 @@ async function setupMenu() {
     commands: [
       { command: "start", description: "Начать / назвать номер команды" },
       { command: "reset", description: "Изменить команду или имя" },
-      { command: "standings", description: "Таблица квеста" },
       { command: "help", description: "Справка" },
     ],
   }).catch(() => {});
