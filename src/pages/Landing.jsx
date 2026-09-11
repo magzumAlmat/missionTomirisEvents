@@ -232,7 +232,7 @@ export default function Landing() {
             <span className="step-num">4</span>
             <div className="step-content">
               <h3>Заберите приз!</h3>
-              <p className="muted">Пройдите все 8 точек быстрее других команд и получите заветную награду.</p>
+              <p className="muted">Пройдите все точки быстрее других команд и получите заветную награду.</p>
             </div>
           </div>
         </div>

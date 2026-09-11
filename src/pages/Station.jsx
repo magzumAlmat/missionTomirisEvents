@@ -145,7 +145,28 @@ export default function Station() {
       </div>
       <h2>{station.name}</h2>
 
-      <div className="task">{station.task}</div>
+      {(() => {
+        const text = station.task || "";
+        let riddle = text;
+        let action = "";
+        
+        if (text.includes("ЗАДАНИЕ:")) {
+          const parts = text.split("ЗАДАНИЕ:");
+          riddle = parts[0].trim();
+          action = "ЗАДАНИЕ:" + parts[1];
+        } else if (text.includes("ФИНАЛЬНОЕ ЗАДАНИЕ:")) {
+          const parts = text.split("ФИНАЛЬНОЕ ЗАДАНИЕ:");
+          riddle = parts[0].trim();
+          action = "ФИНАЛЬНОЕ ЗАДАНИЕ:" + parts[1];
+        }
+
+        return (
+          <div className="task riddle-block" style={{ whiteSpace: "pre-wrap" }}>
+            <div className="eyebrow" style={{ color: "var(--accent)", marginBottom: "8px" }}>Загадка</div>
+            {riddle.replace(/^ЗАГАДКА\s*/i, "")}
+          </div>
+        );
+      })()}
 
       {!HAS_BACKEND && (
         <div className="feedback err">
@@ -154,32 +175,22 @@ export default function Station() {
         </div>
       )}
 
-      <div className="field-block">
-        <label className="field-label">Номер вашей команды</label>
-        <input
-          type="number"
-          inputMode="numeric"
-          placeholder="Например: 7"
-          value={teamNo}
-          onChange={(e) => onTeamNoChange(e.target.value)}
-        />
-        <p className="muted tiny" style={{ marginTop: 4 }}>
-          Номер выдаётся при регистрации команды. Вводится один раз — дальше
-          подставляется сам.
-        </p>
-
-        <label className="field-label mt">Ваш номер телефона</label>
-        <input
-          type="tel"
-          inputMode="tel"
-          placeholder="+7 708 737 37 72"
-          value={phone}
-          onChange={(e) => onPhoneChange(e.target.value)}
-        />
-        {!phoneOk && phone.length > 0 && (
-          <p className="center err-text tiny">Введите корректный номер (мин. 10 цифр).</p>
-        )}
-      </div>
+      {!phoneOk && (
+        <div className="field-block">
+          <label className="field-label mt">Ваш номер телефона</label>
+          <input
+            type="tel"
+            inputMode="tel"
+            placeholder="+7 708 737 37 72"
+            value={phone}
+            onChange={(e) => onPhoneChange(e.target.value)}
+          />
+          {phone.length > 0 && (
+            <p className="center err-text tiny">Введите корректный номер (мин. 10 цифр).</p>
+          )}
+          <p className="center muted tiny">Укажите телефон, который вводили при регистрации, чтобы продолжить.</p>
+        </div>
+      )}
 
       <div className="actions">
         {arrive === "done" && (
