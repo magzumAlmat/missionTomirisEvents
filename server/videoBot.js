@@ -289,14 +289,14 @@ async function handleMessage(msg) {
     return askCaptainName(chatId, senders);
   }
 
-  // --- видео или фото ---
+  // --- видео, фото или иное медиа ---
   const kind = mediaKind(msg);
   if (kind) {
     const what = kind === "photo" ? "Фото" : "Видео";
     if (!sender || sender.step !== "ready") {
       await send(
         chatId,
-        `⚠️ Сначала представьтесь, иначе организаторы не поймут, чей это материал.`
+        `⚠️ Сначала представьтесь (назовите номер команды или телефон), чтобы организаторы знали, чьи материалы приходят.`
       );
       return startRegistration(chatId, senders);
     }
@@ -309,7 +309,7 @@ async function handleMessage(msg) {
       console.error("videoBot: не удалось отправить материал в группу:", result.error);
       return send(chatId, `❌ Не получилось отправить организаторам: ${escapeHtml(result.error)}`);
     }
-    return send(chatId, `✅ ${what} отправлено организаторам. Спасибо!`);
+    return send(chatId, `✅ ${what} успешно отправлено организаторам! Спасибо!`);
   }
 
   // --- шаги регистрации текстом ---
@@ -349,13 +349,31 @@ async function handleMessage(msg) {
     return finishRegistration(chatId, senders);
   }
 
-  // --- уже зарегистрирован, но прислал не видео ---
-  return send(
-    chatId,
-    `📹 Пришлите, пожалуйста, <b>видео</b> (или фото).\n` +
-      `Сейчас вы записаны как: 👥 ${escapeHtml(sender.teamName)} · 👤 ${escapeHtml(sender.captainName)}\n` +
-      `Изменить — /reset`
-  );
+  // --- уже зарегистрирован и прислал текстовое сообщение ---
+  if (sender.step === "ready" && text) {
+    const { CHAT_ID } = getEnv();
+    if (CHAT_ID) {
+      const time = new Date().toLocaleString("ru-RU");
+      const num = sender.teamNumber ? `№${sender.teamNumber} ` : "";
+      const header =
+        `💬 <b>СООБЩЕНИЕ ОТ КАПИТАНА</b>\n\n` +
+        `👥 <b>Команда:</b> ${num}${escapeHtml(sender.teamName)}\n` +
+        `👤 <b>Капитан:</b> ${escapeHtml(sender.captainName)}\n` +
+        (sender.phone ? `📞 <b>Телефон:</b> ${escapeHtml(sender.phone)}\n` : "") +
+        `🕒 <b>Время:</b> ${time}\n\n` +
+        `📝 <b>Текст:</b>\n${escapeHtml(text)}`;
+
+      await send(CHAT_ID, header);
+      addSubmission({
+        teamNumber: sender.teamNumber,
+        teamName: sender.teamName,
+        captainName: sender.captainName,
+        kind: "text",
+        text,
+      });
+      return send(chatId, `✅ Текстовое сообщение отправлено организаторам! Спасибо!`);
+    }
+  }
 }
 
 /* ---------- long polling ---------- */

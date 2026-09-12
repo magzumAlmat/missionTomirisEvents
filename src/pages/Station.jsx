@@ -146,24 +146,19 @@ export default function Station() {
       <h2>{station.name}</h2>
 
       {(() => {
-        const text = station.task || "";
-        let riddle = text;
-        let action = "";
-        
-        if (text.includes("ЗАДАНИЕ:")) {
-          const parts = text.split("ЗАДАНИЕ:");
-          riddle = parts[0].trim();
-          action = "ЗАДАНИЕ:" + parts[1];
-        } else if (text.includes("ФИНАЛЬНОЕ ЗАДАНИЕ:")) {
-          const parts = text.split("ФИНАЛЬНОЕ ЗАДАНИЕ:");
-          riddle = parts[0].trim();
-          action = "ФИНАЛЬНОЕ ЗАДАНИЕ:" + parts[1];
-        }
+        const riddleText = station.riddle || (station.task ? station.task.split("ЗАДАНИЕ")[0].replace(/^ЗАГАДКА\s*/i, "").trim() : "");
 
         return (
-          <div className="task riddle-block" style={{ whiteSpace: "pre-wrap" }}>
-            <div className="eyebrow" style={{ color: "var(--accent)", marginBottom: "8px" }}>Загадка</div>
-            {riddle.replace(/^ЗАГАДКА\s*/i, "")}
+          <div className="station-details">
+            {/* ЗАГАДКА */}
+            {riddleText && (
+              <div className="task riddle-block" style={{ whiteSpace: "pre-wrap" }}>
+                <div className="eyebrow" style={{ color: "var(--accent)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span>🔮</span> ЗАГАДКА
+                </div>
+                <div style={{ fontSize: "16px", lineHeight: "1.6", fontWeight: "500" }}>{riddleText}</div>
+              </div>
+            )}
           </div>
         );
       })()}
@@ -239,10 +234,25 @@ export default function Station() {
               {hint}
             </p>
           )}
-          <p className="center muted tiny">
-            Капитан, не забудьте прислать фото или видео команды с этой точки
-            боту-помощнику.
+          <p className="center muted tiny" style={{ marginTop: 12 }}>
+            📸 Капитан, отправьте фото/видео или сообщение с этой точки в Telegram-бот:
           </p>
+          {QUEST.videoBotUrl && (
+            <a
+              href={QUEST.videoBotUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="btn green"
+              style={{
+                textDecoration: "none",
+                textAlign: "center",
+                display: "block",
+                margin: "10px 0",
+              }}
+            >
+              📹 Отправить видео/сообщение боту в Telegram
+            </a>
+          )}
           <button className="btn ghost" onClick={() => navigate("/progress")}>
             Посмотреть прогресс
           </button>

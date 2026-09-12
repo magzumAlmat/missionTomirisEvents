@@ -59,6 +59,10 @@ app.use(express.json());
 const ALLOWED = process.env.ALLOWED_ORIGIN || "*";
 app.use(cors({ origin: ALLOWED }));
 
+if (fs.existsSync(DIST_DIR)) {
+  app.use(express.static(DIST_DIR));
+}
+
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -708,6 +712,15 @@ async function setupBotMenu() {
     });
   } catch (e) {}
 }
+
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api")) return next();
+  const indexPath = path.join(DIST_DIR, "index.html");
+  if (fs.existsSync(indexPath)) {
+    return res.sendFile(indexPath);
+  }
+  next();
+});
 
 app.listen(process.env.PORT || 3001, () => {
   const { TOKEN, CHAT_ID, PORT } = getEnv();
