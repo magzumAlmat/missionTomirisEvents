@@ -25,12 +25,12 @@ export async function notify(event, { stationId, stationName, phone, team, teamN
 
 /**
  * Регистрация нового участника.
- * payload: { name, phone, hasCar: boolean, hasTeam: boolean, teamName?, teamSize? }
+ * payload: { name, phone, hasCar, hasTeam, teamName?, teamSize? }
  */
 export async function registerParticipant({ name, phone, hasCar, hasTeam, teamName, teamSize }) {
   if (!API_URL) {
     throw new Error(
-      "Бэкенд не подключён: не задан VITE_API_URL. Перезапусти `npm run dev` после правки .env."
+      "Бэкенд не подключён: не задан VITE_API_URL. Перезапусти `npm run server` после правки .env."
     );
   }
   const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/register`, {
@@ -65,9 +65,7 @@ async function post(path, body) {
 }
 
 /**
- * Отметить точку взятой (кнопка «Я отгадал»). Загадку команда разгадывает
- * на месте — ответ через сайт не вводится. Сервер записывает время взятия
- * и возвращает подсказку к следующей точке (в бандле сайта её нет).
+ * Отметить точку взятой (нажата кнопка «Задание выполнено»).
  * payload: { stationCode, phone, teamNumber }
  * ответ: { nextHint, solvedCount, allDone }
  */
@@ -96,6 +94,73 @@ export async function fetchStandings() {
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {
     throw new Error(data.error || "Не удалось получить сводку.");
+  }
+  return data;
+}
+
+/* =====================================================================
+   КАПИТАНЫ: API функции
+   ===================================================================== */
+
+/** Получить список всех капитанов с оставшимися слотами */
+export async function fetchCaptains() {
+  if (!API_URL) throw new Error("Бэкенд не подключён (VITE_API_URL).");
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/captains`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "Не удалось получить список капитанов.");
+  }
+  return data;
+}
+
+/** Создать нового капитана */
+export async function createCaptain({ name, phone, slots, hasCar }) {
+  return post("/api/captains/create", { name, phone, slots, hasCar });
+}
+
+/** Подписаться на капитана */
+export async function subscribeToCaptain({ captainId, name, phone, hasCar }) {
+  return post("/api/subscribe-to-captain", { captainId, name, phone, hasCar });
+}
+
+/** Обновить количество слотов капитана (админ) */
+export async function updateCaptainSlots({ captainId, slots }) {
+  return post("/api/admin/update-slots", { captainId, slots });
+}
+
+/** Переместить пользователя между капитанами (админ) */
+export async function moveUserBetweenCaptains({ fromCaptainId, toCaptainId, phone }) {
+  return post("/api/admin/move-user", { fromCaptainId, toCaptainId, phone });
+}
+
+/** Отписать пользователя от капитана (админ) */
+export async function unsubscribeFromCaptain({ captainId, phone }) {
+  return post("/api/admin/unsubscribe", { captainId, phone });
+}
+
+/** Добавить одиночного пользователя */
+export async function addSoloUser({ name, phone, hasCar }) {
+  return post("/api/admin/add-solo", { name, phone, hasCar });
+}
+
+/** Получить сводку по капитанам (админ) */
+export async function fetchCaptainsSummary() {
+  if (!API_URL) throw new Error("Бэкенд не подключён (VITE_API_URL).");
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/captains/summary`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "Не удалось получить сводку.");
+  }
+  return data;
+}
+
+/** Получить одиночных пользователей (админ) */
+export async function fetchSoloUsers() {
+  if (!API_URL) throw new Error("Бэкенд не подключён (VITE_API_URL).");
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/admin/solo-users`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "Не удалось получить список.");
   }
   return data;
 }

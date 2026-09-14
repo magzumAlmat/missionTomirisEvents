@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { registerParticipant, HAS_BACKEND } from "../lib/api.js";
+import { registerParticipant, HAS_BACKEND, fetchCaptains, subscribeToCaptain, addSoloUser } from "../lib/api.js";
 import { getPhone, setPhone, isValidPhone } from "../lib/phone.js";
 import { getTeam, setTeam, getName, setName, setTeamNumber } from "../lib/team.js";
 
@@ -40,6 +40,12 @@ export default function Register() {
   const [teamName, setTeamNameState] = useState(getTeam());
   const [teamSize, setTeamSize] = useState("");
 
+  // Капитан-система
+  const [captains, setCaptains] = useState([]);
+  const [selectedCaptainId, setSelectedCaptainId] = useState(null);
+  const [loadingCaptains, setLoadingCaptains] = useState(false);
+  const [captainError, setCaptainError] = useState("");
+
   const [status, setStatus] = useState("idle"); // idle | sending | done | error
   const [err, setErr] = useState("");
   const [teamNumber, setTeamNumberState] = useState(null); // выдаёт сервер
@@ -50,6 +56,27 @@ export default function Register() {
   const teamSizeNum = Number(teamSize);
   const teamSizeOk = !hasTeam || (Number.isFinite(teamSizeNum) && teamSizeNum >= 1);
   const formOk = nameOk && phoneOk && teamNameOk && teamSizeOk;
+
+  // Загрузка списка капитанов
+  useEffect(() => {
+    if (!HAS_BACKEND) return;
+    let cancelled = false;
+    setLoadingCaptains(true);
+    fetchCaptains()
+      .then((data) => {
+        if (!cancelled) {
+          setCaptains(data.captains || []);
+          setLoadingCaptains(false);
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setCaptainError(e.message || "Не удалось загрузить капитанов");
+          setLoadingCaptains(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   function onPhoneChange(v) {
     setPhoneState(v);
@@ -82,17 +109,60 @@ export default function Register() {
       setErr("Введите корректный номер телефона (не менее 10 цифр).");
       return;
     }
-    if (!teamNameOk) {
-      setErr("Введите название команды.");
-      return;
-    }
-    if (!teamSizeOk) {
-      setErr("Укажите количество человек в команде (от 1).");
-      return;
-    }
 
     setStatus("sending");
+
     try {
+      // Если выбран капитан — подписываемся на него
+      if (selectedCaptainId) {
+        const result = await subscribeToCaptain({
+          captainId: selectedCaptainId,
+          name: name.trim(),
+          phone: phone.trim(),
+          hasCar,
+        });
+        // Уведомляем админов о регистрации через стандартный эндпоинт
+        await registerParticipant({
+          name: name.trim(),
+          phone: phone.trim(),
+          hasCar,
+          hasTeam: true,
+          teamName: `Капитан ${selectedCaptainId}`,
+          teamSize: 1,
+        });
+        setStatus("done");
+        setTeamNumberState(null);
+        return;
+      }
+
+      // Если нет команды — регистрируем как одиночного
+      if (!hasTeam) {
+        await addSoloUser({ name: name.trim(), phone: phone.trim(), hasCar });
+        await registerParticipant({
+          name: name.trim(),
+          phone: phone.trim(),
+          hasCar,
+          hasTeam: false,
+          teamName: "",
+          teamSize: 0,
+        });
+        setStatus("done");
+        setTeamNumberState(null);
+        return;
+      }
+
+      // Стандартная регистрация с командой
+      if (!teamNameOk) {
+        setErr("Введите название команды.");
+        setStatus("idle");
+        return;
+      }
+      if (!teamSizeOk) {
+        setErr("Укажите количество человек в команде (от 1).");
+        setStatus("idle");
+        return;
+      }
+
       const res = await registerParticipant({
         name: name.trim(),
         phone: phone.trim(),
@@ -144,8 +214,12 @@ export default function Register() {
             <br />
             <b>Своё авто:</b> {hasCar ? "Да 🚗" : "Нет 🚶"}
             <br />
-            <b>Команда:</b>{" "}
-            {hasTeam ? `«${teamName}», ${teamSizeNum} чел.` : "Нет 🙋"}
+            <b>Статус:</b>{" "}
+            {selectedCaptainId
+              ? "Подписан на капитана"
+              : hasTeam
+              ? `Команда «${teamName}», ${teamSizeNum} чел.`
+              : "Одиночный участник 🙋"}
           </p>
         </div>
 
@@ -212,14 +286,73 @@ export default function Register() {
               🚶 Нет
             </ChoiceButton>
           </div>
+        </div>
 
-          <label className="field-label mt">4. Есть команда?</label>
+        {/* Выбор капитана */}
+        {HAS_BACKEND && !loadingCaptains && captains.length > 0 && (
+          <div className="field-block" style={{ marginTop: 16 }}>
+            <label className="field-label">4. Выберите капитана</label>
+            <select
+              className="field-select"
+              value={selectedCaptainId || ""}
+              onChange={(e) => setSelectedCaptainId(e.target.value || null)}
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                borderRadius: 8,
+                border: "1px solid rgba(255,255,255,0.2)",
+                background: "rgba(255,255,255,0.05)",
+                color: "white",
+                fontSize: 14,
+              }}
+            >
+              <option value="">— Выберите капитана —</option>
+              {captains.map((cap) => {
+                const available = cap.availableSlots || 0;
+                const fullName = cap.name || cap.phone || cap.id;
+                return (
+                  <option key={cap.id} value={cap.id} disabled={available <= 0}>
+                    {fullName} — {available} / {cap.slots} мест (
+                    {available > 0 ? "свободно" : "занято"})
+                    {cap.hasCar ? " 🚗" : ""}
+                  </option>
+                );
+              })}
+            </select>
+            {captainError && (
+              <p className="err-text tiny" style={{ marginTop: 4 }}>{captainError}</p>
+            )}
+            <p className="center muted tiny" style={{ marginTop: 4 }}>
+              После выбора капитана нажмите «Зарегистрироваться»
+            </p>
+          </div>
+        )}
+
+        {loadingCaptains && (
+          <p className="center muted" style={{ marginTop: 12 }}>Загрузка капитанов...</p>
+        )}
+
+        {/* Опция без капитана */}
+        {HAS_BACKEND && (
+          <div style={{ marginTop: 12 }}>
+            <ChoiceButton
+              active={!selectedCaptainId}
+              onClick={() => setSelectedCaptainId(null)}
+            >
+              🙋 Без капитана (одиночный участник)
+            </ChoiceButton>
+          </div>
+        )}
+
+        {/* Ветка команды */}
+        <div style={{ marginTop: 16 }}>
+          <label className="field-label">Есть команда?</label>
           <div style={TWO_COLS}>
             <ChoiceButton active={hasTeam} onClick={() => setHasTeam(true)}>
               👥 Да
             </ChoiceButton>
             <ChoiceButton active={!hasTeam} onClick={() => setHasTeam(false)}>
-              🙋 Нет
+              Нет
             </ChoiceButton>
           </div>
 
@@ -259,7 +392,7 @@ export default function Register() {
         <button
           type="submit"
           className="btn green mt"
-          disabled={status === "sending" || !formOk}
+          disabled={status === "sending" || !formOk || !nameOk || !phoneOk}
           style={{ width: "100%" }}
         >
           {status === "sending" ? "Отправка..." : "📝 Зарегистрироваться"}

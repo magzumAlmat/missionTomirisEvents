@@ -31,6 +31,17 @@ import {
   solveStation,
   standings,
 } from "./store.js";
+import {
+  listCaptains,
+  createCaptain,
+  subscribeToCaptain,
+  updateCaptainSlots,
+  moveUserBetweenCaptains,
+  unsubscribeFromCaptain,
+  getCaptainsSummary,
+  addSoloUser,
+  listSoloUsers,
+} from "./captains.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -105,8 +116,24 @@ function buildMessage(event, stationId, stationName, team, phone) {
     : `точку ${escapeHtml(String(stationId))}`;
   const time = new Date().toLocaleString("ru-RU");
 
-  const head = event === "solved" ? "✅ <b>Загадка отгадана</b>" : "📍 <b>Прибытие на точку</b>";
-  const verb = event === "solved" ? "отгадал(а)" : "прибыл(а) на";
+  let head, verb;
+  switch (event) {
+    case "solved":
+      head = "✅ <b>Загадка отгадана</b>";
+      verb = "отгадал(а)";
+      break;
+    case "hint_used":
+      head = "💡 <b>ПОДСКАЗКА ИСПОЛЬЗОВАНА</b>";
+      verb = "использовал(а) подсказку на";
+      break;
+    case "not_guessed":
+      head = "❌ <b>НЕ ОТГАДАЛ</b>";
+      verb = "не отгадал на";
+      break;
+    default:
+      head = "📍 <b>Прибытие на точку</b>";
+      verb = "прибыл(а) на";
+  }
   return `${head}\n${who}\n${verb} ${point}\n🕒 ${time}`;
 }
 
@@ -265,6 +292,216 @@ app.post("/api/register", async (req, res) => {
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
   }
+});
+
+/* =====================================================================
+   КАПИТАНЫ: система подписки на капитана со слотами.
+   ===================================================================== */
+
+/** Получить список всех капитанов с оставшимися слотами */
+app.get("/api/captains", (_req, res) => {
+  const captains = getCaptainsSummary();
+  res.json({ ok: true, captains });
+});
+
+/** Алиас для сводки по капитанам (совместимость с фронтендом) */
+app.get("/api/captains/summary", (_req, res) => {
+  const captains = getCaptainsSummary();
+  res.json({ ok: true, captains });
+});
+
+/** Создать нового капитана (для организаторов) */
+app.post("/api/captains/create", async (req, res) => {
+  if (!requireToken(res)) return;
+  const { CHAT_ID } = getEnv();
+  if (!CHAT_ID) {
+    return res.status(500).json({ ok: false, error: "TELEGRAM_CHAT_ID не задан" });
+  }
+  const { name, phone, slots, hasCar } = req.body || {};
+  if (!name || !phone) {
+    return res.status(400).json({ ok: false, error: "Нужны имя и телефон капитана" });
+  }
+  const result = createCaptain({ name, phone, slots, hasCar });
+  if (result.error) {
+    return res.status(400).json({ ok: false, error: result.error });
+  }
+  // Уведомить админов
+  try {
+    const text = `👑 <b>НОВЫЙ КАПИТАН</b>\n\n` +
+      `👤 <b>Имя:</b> ${escapeHtml(result.captain.name)}\n` +
+      `📞 <b>Телефон:</b> ${escapeHtml(result.captain.phone)}\n` +
+      `🚘 <b>Машина:</b> ${result.captain.hasCar ? "Да 🚗" : "Нет 🚶"}\n` +
+      `👥 <b>Слотов:</b> ${result.captain.slots}\n` +
+      `🕒 ${new Date().toLocaleString("ru-RU")}`;
+    await fetch(API("sendMessage"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: "HTML" }),
+    });
+  } catch (e) {}
+  res.json({ ok: true, captain: result.captain });
+});
+
+/** Подписаться на капитана */
+app.post("/api/subscribe-to-captain", async (req, res) => {
+  if (!requireToken(res)) return;
+  const { CHAT_ID } = getEnv();
+  if (!CHAT_ID) {
+    return res.status(500).json({ ok: false, error: "TELEGRAM_CHAT_ID не задан" });
+  }
+  const { captainId, name, phone, hasCar } = req.body || {};
+  if (!captainId || !name || !phone) {
+    return res.status(400).json({ ok: false, error: "Нужны captainId, имя и телефон" });
+  }
+  const result = subscribeToCaptain({ captainId, name, phone, hasCar });
+  if (result.error) {
+    return res.status(400).json({ ok: false, error: result.error });
+  }
+  // Уведомить админов о подписке
+  try {
+    const text = `✅ <b>ПОДПИСКА НА КАПИТАНА</b>\n\n` +
+      `👤 <b>Участник:</b> ${escapeHtml(name)}\n` +
+      `📞 <b>Телефон:</b> ${escapeHtml(phone)}\n` +
+      `👑 <b>Капитан:</b> ${escapeHtml(result.captain.name)} (№${result.captain.currentParticipants}/${result.captain.slots})\n` +
+      `🚘 <b>Машина:</b> ${hasCar ? "Да 🚗" : "Нет 🚶"}\n` +
+      `🕒 ${new Date().toLocaleString("ru-RU")}`;
+    await fetch(API("sendMessage"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: "HTML" }),
+    });
+  } catch (e) {}
+  res.json({ ok: true, captain: result.captain });
+});
+
+/** Обновить количество слотов капитана (для админов) */
+app.post("/api/admin/update-slots", async (req, res) => {
+  if (!requireToken(res)) return;
+  const { CHAT_ID } = getEnv();
+  if (!CHAT_ID) {
+    return res.status(500).json({ ok: false, error: "TELEGRAM_CHAT_ID не задан" });
+  }
+  const { captainId, slots } = req.body || {};
+  if (!captainId || !slots) {
+    return res.status(400).json({ ok: false, error: "Нужны captainId и slots" });
+  }
+  const result = updateCaptainSlots(captainId, slots);
+  if (result.error) {
+    return res.status(400).json({ ok: false, error: result.error });
+  }
+  // Уведомить админов
+  try {
+    const text = `🔧 <b>ОБНОВЛЕНИЕ СЛОТОВ</b>\n\n` +
+      `👑 <b>Капитан:</b> ${escapeHtml(result.captain.name)}\n` +
+      `👥 <b>Слоты:</b> ${result.captain.slots} (текущих: ${result.captain.currentParticipants})\n` +
+      `🕒 ${new Date().toLocaleString("ru-RU")}`;
+    await fetch(API("sendMessage"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: "HTML" }),
+    });
+  } catch (e) {}
+  res.json({ ok: true, captain: result.captain });
+});
+
+/** Переместить пользователя между капитанами (для админов) */
+app.post("/api/admin/move-user", async (req, res) => {
+  if (!requireToken(res)) return;
+  const { CHAT_ID } = getEnv();
+  if (!CHAT_ID) {
+    return res.status(500).json({ ok: false, error: "TELEGRAM_CHAT_ID не задан" });
+  }
+  const { fromCaptainId, toCaptainId, phone } = req.body || {};
+  if (!fromCaptainId || !toCaptainId || !phone) {
+    return res.status(400).json({ ok: false, error: "Нужны fromCaptainId, toCaptainId и phone" });
+  }
+  const result = moveUserBetweenCaptains({ fromCaptainId, toCaptainId, phone });
+  if (result.error) {
+    return res.status(400).json({ ok: false, error: result.error });
+  }
+  // Уведомить админов
+  try {
+    const text = `🔄 <b>ПЕРЕМЕЩЕНИЕ МЕЖДУ КАПИТАНАМИ</b>\n\n` +
+      `👤 <b>Пользователь:</b> ${escapeHtml(result.moved.name)}\n` +
+      `📞 <b>Телефон:</b> ${escapeHtml(result.moved.phone)}\n` +
+      `👑 Из: ${escapeHtml(result.fromCaptain.name)}\n` +
+      `👑 В: ${escapeHtml(result.toCaptain.name)}\n` +
+      `🕒 ${new Date().toLocaleString("ru-RU")}`;
+    await fetch(API("sendMessage"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: "HTML" }),
+    });
+  } catch (e) {}
+  res.json({ ok: true, fromCaptain: result.fromCaptain, toCaptain: result.toCaptain, moved: result.moved });
+});
+
+/** Отписать пользователя от капитана (для админов) */
+app.post("/api/admin/unsubscribe", async (req, res) => {
+  if (!requireToken(res)) return;
+  const { CHAT_ID } = getEnv();
+  if (!CHAT_ID) {
+    return res.status(500).json({ ok: false, error: "TELEGRAM_CHAT_ID не задан" });
+  }
+  const { captainId, phone } = req.body || {};
+  if (!captainId || !phone) {
+    return res.status(400).json({ ok: false, error: "Нужны captainId и phone" });
+  }
+  const result = unsubscribeFromCaptain({ captainId, phone });
+  if (result.error) {
+    return res.status(400).json({ ok: false, error: result.error });
+  }
+  // Уведомить админов
+  try {
+    const text = `❌ <b>ОТПИСКА ОТ КАПИТАНА</b>\n\n` +
+      `👤 <b>Пользователь:</b> ${escapeHtml(result.removed.name)}\n` +
+      `📞 <b>Телефон:</b> ${escapeHtml(result.removed.phone)}\n` +
+      `👑 Капитан: ${escapeHtml(result.captain.name)}\n` +
+      `🕒 ${new Date().toLocaleString("ru-RU")}`;
+    await fetch(API("sendMessage"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: "HTML" }),
+    });
+  } catch (e) {}
+  res.json({ ok: true, captain: result.captain, removed: result.removed });
+});
+
+/** Добавить одиночного пользователя (для админов) */
+app.post("/api/admin/add-solo", async (req, res) => {
+  if (!requireToken(res)) return;
+  const { CHAT_ID } = getEnv();
+  if (!CHAT_ID) {
+    return res.status(500).json({ ok: false, error: "TELEGRAM_CHAT_ID не задан" });
+  }
+  const { name, phone, hasCar } = req.body || {};
+  if (!name || !phone) {
+    return res.status(400).json({ ok: false, error: "Нужны имя и телефон" });
+  }
+  const result = addSoloUser({ name, phone, hasCar });
+  if (result.error) {
+    return res.status(400).json({ ok: false, error: result.error });
+  }
+  // Уведомить админов
+  try {
+    const text = `🙋 <b>ОДИНОЧНЫЙ УЧАСТНИК</b>\n\n` +
+      `👤 <b>Имя:</b> ${escapeHtml(name)}\n` +
+      `📞 <b>Телефон:</b> ${escapeHtml(phone)}\n` +
+      `🚘 <b>Машина:</b> ${hasCar ? "Да 🚗" : "Нет 🚶"}\n` +
+      `🕒 ${new Date().toLocaleString("ru-RU")}`;
+    await fetch(API("sendMessage"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: "HTML" }),
+    });
+  } catch (e) {}
+  res.json({ ok: true });
+});
+
+/** Получить список одиночных пользователей (для админов) */
+app.get("/api/admin/solo-users", (_req, res) => {
+  const users = listSoloUsers();
+  res.json({ ok: true, users });
 });
 
 /* =====================================================================
@@ -722,7 +959,7 @@ app.get("*", (req, res, next) => {
   next();
 });
 
-app.listen(process.env.PORT || 3001, () => {
+app.listen(process.env.PORT || 3001, '0.0.0.0', () => {
   const { TOKEN, CHAT_ID, PORT } = getEnv();
   console.log(`\n🤖 Telegram-бэкенд запущен: http://localhost:${PORT}`);
   console.log(`   Токен: ${TOKEN ? "задан ✅" : "НЕ задан ❌ (заполни .env)"}`);

@@ -22,6 +22,13 @@ export default function Station() {
   const [revealed, setRevealed] = useState(already);
   const [hint, setHint] = useState("");
   const [err, setErr] = useState("");
+  
+  // Подсказка
+  const [showHintModal, setShowHintModal] = useState(false);
+  const [hintLoading, setHintLoading] = useState(false);
+  
+  // Подтверждение выполнения
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     const solvedAlready = station ? isSolved(station.id) : false;
@@ -30,6 +37,8 @@ export default function Station() {
     setRevealed(solvedAlready);
     setHint("");
     setErr("");
+    setShowHintModal(false);
+    setShowConfirm(false);
   }, [stationId, station]);
 
   // Прибытие живёт на сервере, поэтому переживает перезагрузку страницы и
@@ -107,8 +116,7 @@ export default function Station() {
 
   /**
    * Загадку команда разгадывает на месте — ответ через сайт не вводится.
-   * Кнопка «Я отгадал» отмечает точку: сервер запоминает время взятия
-   * (по нему судья определяет победителя) и отдаёт подсказку к следующей точке.
+   * Кнопка «Задание выполнено» отмечает точку с подтверждением.
    */
   async function onSolved() {
     setErr("");
@@ -135,6 +143,73 @@ export default function Station() {
       setCheck("idle");
       setErr(e.message || "Не удалось отметить точку.");
     }
+  }
+
+  /** Получить подсказку (-3 балла) */
+  async function onGetHint() {
+    setErr("");
+    if (!HAS_BACKEND) {
+      setErr("Бэкенд не подключён.");
+      return;
+    }
+    setHintLoading(true);
+    try {
+      // Отправляем уведомление админам о использовании подсказки
+      const text = `💡 <b>ПОДСКАЗКА ИСПОЛЬЗОВАНА</b>\n\n` +
+        `👤 Телефон: ${phone.trim()}\n` +
+        `👥 Команда: ${teamNo ? `№${teamNo}` : "не указана"}\n` +
+        `📍 Точка: ${station.id} - ${station.name}\n` +
+        `⚠️ Штраф: -3 балла\n` +
+        `🕒 ${new Date().toLocaleString("ru-RU")}`;
+      
+      // Отправляем уведомление через стандартный notify
+      await notify("hint_used", {
+        stationId: station.id,
+        stationName: station.name,
+        phone: phone.trim(),
+        teamNumber: teamNo || null,
+      });
+      
+      // Получаем подсказку из questConfig
+      const hint = station.hint || "Подсказка отсутствует.";
+      setHint(hint);
+      setRevealed(true);
+      setShowHintModal(false);
+    } catch (e) {
+      setErr(e.message || "Не удалось получить подсказку.");
+    } finally {
+      setHintLoading(false);
+    }
+  }
+
+  /** Не отгадал — отправляем информацию капитану и админу */
+  async function onNotGuessed() {
+    setErr("");
+    if (!HAS_BACKEND) {
+      setErr("Бэкенд не подключён.");
+      return;
+    }
+    
+    // Формируем ссылку на WhatsApp для капитана
+    const nextStation = QUEST.stations.find((s) => s.id === station.id + 1);
+    const nextLink = nextStation 
+      ? `https://wa.me/?text=Команда ${teamNo || 'не указана'}: не отгадали на точке ${station.name}. Следующая локация: ${nextStation.nextLocation || nextStation.name}. Ссылка: ${window.location.href.split('#')[0]}#/s/${nextStation.code || nextStation.id}`
+      : `https://wa.me/?text=Команда ${teamNo || 'не указана'}: не отгадали на точке ${station.name}. Конец квеста.`;
+
+    // Уведомляем админов
+    try {
+      await notify("not_guessed", {
+        stationId: station.id,
+        stationName: station.name,
+        phone: phone.trim(),
+        teamNumber: teamNo || null,
+      });
+    } catch (e) {}
+
+    // Открываем WhatsApp
+    window.open(nextLink, "_blank");
+    
+    setErr("✅ Ссылка на WhatsApp открыта. Баллы: 0.");
   }
 
   return (
@@ -203,25 +278,41 @@ export default function Station() {
             : "📍 Я прибыл"}
         </button>
 
-        {!revealed && (
-          <button
-            className="btn green"
-            onClick={onSolved}
-            disabled={check === "sending" || arrive !== "done"}
-            style={arrive !== "done" ? { opacity: 0.5 } : undefined}
-          >
-            {check === "sending" ? "Отмечаем…" : "🧩 Я отгадал"}
-          </button>
+        {!revealed && arrive === "done" && (
+          <>
+            <button
+              className="btn green"
+              onClick={() => setShowConfirm(true)}
+              disabled={check === "sending"}
+            >
+              {check === "sending" ? "Отмечаем…" : "✅ Задание выполнено"}
+            </button>
+
+            <button
+              className="btn ghost"
+              onClick={() => setShowHintModal(true)}
+              disabled={hintLoading}
+              style={{ marginTop: 8 }}
+            >
+              {hintLoading ? "Загружаем…" : "💡 Прошу подсказку"}
+            </button>
+
+            <button
+              className="btn ghost"
+              onClick={onNotGuessed}
+              style={{ marginTop: 8, borderColor: "#ff6b6b", color: "#ff6b6b" }}
+            >
+              ❌ Не отгадал
+            </button>
+          </>
+        )}
+
+        {!revealed && arrive !== "done" && (
+          <p className="center muted tiny">
+            Сначала нажмите «Я прибыл» — после этого откроется «Задание выполнено».
+          </p>
         )}
       </div>
-
-      {!revealed && (
-        <p className="center muted tiny">
-          {arrive === "done"
-            ? "Капитан: назовите ответ организатору на точке и нажмите «Я отгадал» — откроется подсказка, куда идти дальше."
-            : "Обе кнопки нажимает капитан. Сначала «Я прибыл» — после этого откроется «Я отгадал»."}
-        </p>
-      )}
 
       {err && <div className="feedback err">{err}</div>}
 
@@ -229,7 +320,7 @@ export default function Station() {
         <div className="reveal">
           {hint && (
             <p className="center">
-              <b className="muted">Куда дальше:</b>
+              <b className="muted">Подсказка:</b>
               <br />
               {hint}
             </p>
@@ -256,6 +347,55 @@ export default function Station() {
           <button className="btn ghost" onClick={() => navigate("/progress")}>
             Посмотреть прогресс
           </button>
+        </div>
+      )}
+
+      {/* Модальное окно подтверждения */}
+      {showConfirm && (
+        <div className="modal-overlay" onClick={() => setShowConfirm(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>Вы уверены?</h3>
+            <p>Вы хотите отметить точку «{station.name}» как выполненную?</p>
+            <div className="modal-actions">
+              <button className="btn green" onClick={() => { setShowConfirm(false); onSolved(); }}>
+                Да, отметить
+              </button>
+              <button className="btn ghost" onClick={() => setShowConfirm(false)}>
+                Нет, отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модальное окно подсказки */}
+      {showHintModal && (
+        <div className="modal-overlay" onClick={() => setShowHintModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>💡 Подсказка</h3>
+            <p style={{ color: "#ff6b6b", fontSize: 14 }}>
+              ⚠️ Использование подсказки: -3 балла. Уведомление отправлено админам.
+            </p>
+            {hint ? (
+              <div style={{ marginTop: 12, padding: 12, background: "rgba(255,255,255,0.1)", borderRadius: 8 }}>
+                <p style={{ whiteSpace: "pre-wrap" }}>{hint}</p>
+              </div>
+            ) : (
+              <p>Получаем подсказку...</p>
+            )}
+            <div className="modal-actions" style={{ marginTop: 16 }}>
+              <button 
+                className="btn green" 
+                onClick={onGetHint}
+                disabled={hintLoading}
+              >
+                {hintLoading ? "Отправляем…" : "Получить подсказку"}
+              </button>
+              <button className="btn ghost" onClick={() => setShowHintModal(false)}>
+                Закрыть
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
