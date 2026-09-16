@@ -100,10 +100,6 @@ export default function Start() {
         ✨ Презентация квеста и таймер
       </button>
 
-      <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => navigate("/progress")}>
-        {started ? "Мой прогресс" : "Открыть прогресс"}
-      </button>
-
       <p className="center muted small-note">
         Чтобы начать, отсканируйте первый QR-код на точке сбора. Каждый код
         открывает свою точку.

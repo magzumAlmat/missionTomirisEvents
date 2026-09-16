@@ -344,9 +344,6 @@ export default function Station() {
               📹 Отправить видео/сообщение боту в Telegram
             </a>
           )}
-          <button className="btn ghost" onClick={() => navigate("/progress")}>
-            Посмотреть прогресс
-          </button>
         </div>
       )}
 

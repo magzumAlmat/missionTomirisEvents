@@ -38,10 +38,6 @@ export default function App() {
           📝 Регистрация
         </Link>{" "}
         · {" "}
-        <Link className="small" to="/progress">
-          Мой прогресс
-        </Link>{" "}
-        · {" "}
         <Link className="small" to="/">
           В начало
         </Link>
