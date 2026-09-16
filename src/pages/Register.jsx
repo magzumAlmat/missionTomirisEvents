@@ -277,7 +277,7 @@ export default function Register() {
             </p>
           )}
 
-          <label className="field-label mt">3. Есть ли у вас машина?</label>
+          <label className="field-label mt">3. В команде должен быть хотя бы один автомобиль:</label>
           <div style={TWO_COLS}>
             <ChoiceButton active={hasCar} onClick={() => setHasCar(true)}>
               🚗 Да
