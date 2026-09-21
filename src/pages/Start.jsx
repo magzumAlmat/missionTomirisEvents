@@ -70,7 +70,7 @@ export default function Start() {
 
       {HAS_BACKEND && (
         <div className="field-block">
-          <label className="field-label">Ваш номер телефона</label>
+          {/* <label className="field-label">Ваш номер телефона</label>
           <input
             type="tel"
             inputMode="tel"
@@ -88,7 +88,7 @@ export default function Start() {
           <p className="center muted tiny">
             Телефон и название команды увидят организаторы, когда вы нажмёте
             «Я прибыл» на точке.
-          </p>
+          </p> */}
         </div>
       )}
 

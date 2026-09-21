@@ -30,6 +30,7 @@ import {
   resetAll,
   solveStation,
   standings,
+  listTeams,
 } from "./store.js";
 import {
   listCaptains,
@@ -196,6 +197,12 @@ function teamText(p) {
   const num = p.teamNumber ? `№${p.teamNumber} ` : "";
   return `Да 👥 ${num}«${escapeHtml(p.teamName || "—")}»${size}`;
 }
+
+/** Получить список всех команд (для выпадающего списка при регистрации) */
+app.get("/api/teams", (_req, res) => {
+  const teams = listTeams().map(t => ({ name: t.name, size: t.size }));
+  res.json({ ok: true, teams });
+});
 
 /**
  * Регистрация нового участника.
@@ -415,6 +422,51 @@ app.post("/api/admin/move-user", async (req, res) => {
   if (!fromCaptainId || !toCaptainId || !phone) {
     return res.status(400).json({ ok: false, error: "Нужны fromCaptainId, toCaptainId и phone" });
   }
+
+  // Перемещение из «без капитана» (solo) в капитана
+  if (fromCaptainId === "__solo__") {
+    const phoneClean = String(phone).replace(/\D/g, "").slice(-10);
+    // Найти пользователя среди solo
+    const soloFile = path.join(__dirname, "solo_users.json");
+    let soloUsers = [];
+    try { soloUsers = JSON.parse(fs.readFileSync(soloFile, "utf8")); } catch {}
+    const idx = soloUsers.findIndex(u => (u.phone || "").replace(/\D/g, "").slice(-10) === phoneClean);
+    // Также проверим participants.json
+    const partFile = path.join(__dirname, "participants.json");
+    let participants = [];
+    try { participants = JSON.parse(fs.readFileSync(partFile, "utf8")); } catch {}
+    const pUser = participants.find(u => (u.phone || "").replace(/\D/g, "").slice(-10) === phoneClean);
+
+    const userName = idx >= 0 ? soloUsers[idx].name : (pUser ? pUser.name : phone);
+    const userHasCar = idx >= 0 ? soloUsers[idx].hasCar : (pUser ? pUser.hasCar : false);
+
+    // Удалить из solo
+    if (idx >= 0) {
+      soloUsers.splice(idx, 1);
+      fs.writeFileSync(soloFile, JSON.stringify(soloUsers, null, 2), "utf8");
+    }
+
+    // Подписать на капитана
+    const subResult = subscribeToCaptain({ captainId: toCaptainId, name: userName, phone, hasCar: userHasCar });
+    if (subResult.error) {
+      return res.status(400).json({ ok: false, error: subResult.error });
+    }
+
+    try {
+      const text = `🔄 <b>ПОДПИСКА НА КАПИТАНА</b>\n\n` +
+        `👤 <b>Пользователь:</b> ${escapeHtml(userName)}\n` +
+        `📞 <b>Телефон:</b> ${escapeHtml(phone)}\n` +
+        `👑 В: ${escapeHtml(subResult.captain.name)}\n` +
+        `🕒 ${new Date().toLocaleString("ru-RU")}`;
+      await fetch(API("sendMessage"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: "HTML" }),
+      });
+    } catch (e) {}
+    return res.json({ ok: true, moved: { name: userName, phone }, toCaptain: subResult.captain });
+  }
+
   const result = moveUserBetweenCaptains({ fromCaptainId, toCaptainId, phone });
   if (result.error) {
     return res.status(400).json({ ok: false, error: result.error });
@@ -498,9 +550,45 @@ app.post("/api/admin/add-solo", async (req, res) => {
   res.json({ ok: true });
 });
 
-/** Получить список одиночных пользователей (для админов) */
+/** Получить список всех участников (кроме капитанов) (для админов) */
 app.get("/api/admin/solo-users", (_req, res) => {
-  const users = listSoloUsers();
+  const participants = readParticipants();
+  const captains = listCaptains();
+  const captainPhones = new Set(captains.map(c => (c.phone || "").replace(/\D/g, "").slice(-10)));
+  const subscribedPhones = new Set();
+  captains.forEach(c => {
+    (c.participants || []).forEach(p => {
+      subscribedPhones.add((p.phone || "").replace(/\D/g, "").slice(-10));
+    });
+  });
+  
+  const soloUsersData = listSoloUsers(); // из solo_users.json
+  
+  // Объединяем и дедуплицируем по телефону
+  const uniqueUsers = new Map();
+  
+  soloUsersData.forEach(u => {
+    const phoneClean = (u.phone || "").replace(/\D/g, "").slice(-10);
+    if (!captainPhones.has(phoneClean) && !subscribedPhones.has(phoneClean)) {
+      uniqueUsers.set(phoneClean, u);
+    }
+  });
+
+  participants.forEach(p => {
+    const phoneClean = (p.phone || "").replace(/\D/g, "").slice(-10);
+    if (!captainPhones.has(phoneClean) && !subscribedPhones.has(phoneClean)) {
+      uniqueUsers.set(phoneClean, {
+        name: p.name,
+        phone: p.phone,
+        hasCar: p.hasCar,
+        hasTeam: p.hasTeam,
+        teamName: p.teamName,
+        registeredAt: p.createdAt || new Date().toISOString(),
+      });
+    }
+  });
+
+  const users = Array.from(uniqueUsers.values());
   res.json({ ok: true, users });
 });
 

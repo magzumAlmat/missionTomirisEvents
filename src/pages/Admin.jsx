@@ -102,11 +102,11 @@ export default function Admin() {
 
   // Загрузка одиночных пользователей
   useEffect(() => {
-    if (!unlocked || activeTab !== "solo") return;
+    if (!unlocked) return;
     fetchSoloUsers()
       .then((data) => setSoloUsers(data.users || []))
       .catch(() => {});
-  }, [unlocked, activeTab, captains]);
+  }, [unlocked, captains]);
 
   // Создание капитана
   async function onCreateCaptain() {
@@ -192,7 +192,7 @@ export default function Admin() {
         {[
           { key: "qr", label: "📱 QR-коды" },
           { key: "captains", label: "👑 Капитаны" },
-          { key: "solo", label: "🙋 Одиночные" },
+          { key: "solo", label: "🙋 Участники" },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -394,10 +394,14 @@ export default function Admin() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
             <select
               value={moveFromId}
-              onChange={(e) => setMoveFromId(e.target.value)}
+              onChange={(e) => {
+                setMoveFromId(e.target.value);
+                setMovePhone("");
+              }}
               style={{ padding: 10, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", color: "white" }}
             >
               <option value="">Откуда</option>
+              <option value="__solo__">Без капитана</option>
               {captains.map((cap) => (
                 <option key={cap.id} value={cap.id}>{cap.name || cap.phone}</option>
               ))}
@@ -412,13 +416,23 @@ export default function Admin() {
                 <option key={cap.id} value={cap.id}>{cap.name || cap.phone}</option>
               ))}
             </select>
-            <input
-              type="tel"
-              placeholder="Телефон пользователя"
+            <select
               value={movePhone}
               onChange={(e) => setMovePhone(e.target.value)}
               style={{ padding: 10, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", color: "white" }}
-            />
+            >
+              <option value="">Пользователь</option>
+              {moveFromId === "__solo__" && soloUsers.map((u, i) => (
+                 <option key={"solo-" + i} value={u.phone}>
+                   {u.name} ({u.phone})
+                 </option>
+              ))}
+              {moveFromId && moveFromId !== "__solo__" && captains.find(c => c.id === moveFromId)?.participants?.map(p => (
+                 <option key={moveFromId + "-" + p.phone} value={p.phone}>
+                   {p.name} ({p.phone})
+                 </option>
+              ))}
+            </select>
           </div>
           <button className="btn mt" onClick={onMoveUser} style={{ width: "100%" }}>
             Переместить
@@ -426,18 +440,23 @@ export default function Admin() {
         </div>
       )}
 
-      {/* Одиночные пользователи */}
+      {/* Одиночные пользователи (и участники) */}
       {activeTab === "solo" && (
         <div>
-          <h3>🙋 Одиночные пользователи</h3>
+          <h3>🙋 Участники (не капитаны)</h3>
           {soloUsers.length === 0 ? (
-            <p className="muted">Пока нет одиночных пользователей.</p>
+            <p className="muted">Пока нет участников.</p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {soloUsers.map((u, i) => (
                 <div key={i} style={{ padding: 10, background: "rgba(255,255,255,0.05)", borderRadius: 8 }}>
                   <strong>{u.name}</strong> ({u.phone})
                   {u.hasCar ? " 🚗" : " 🚶"}
+                  {u.hasTeam && u.teamName && (
+                    <span style={{ marginLeft: 8, color: "#f39c12", fontSize: 13 }}>
+                      👥 Команда: {u.teamName}
+                    </span>
+                  )}
                   <span style={{ marginLeft: 12, color: "#aaa", fontSize: 12 }}>
                     {new Date(u.registeredAt).toLocaleString("ru-RU")}
                   </span>

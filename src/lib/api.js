@@ -165,5 +165,16 @@ export async function fetchSoloUsers() {
   return data;
 }
 
+/** Получить список команд */
+export async function fetchTeams() {
+  if (!API_URL) throw new Error("Бэкенд не подключён (VITE_API_URL).");
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/teams`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "Не удалось получить список команд.");
+  }
+  return data;
+}
+
 export const HAS_BACKEND = !!API_URL;
 export const API_BASE = API_URL;
