@@ -600,19 +600,50 @@ app.get("/api/admin/solo-users", (_req, res) => {
    (в бандле сайта их нет, поэтому маршрут заранее не подсмотреть).
    ===================================================================== */
 
-/** Уведомить организаторов в Telegram (не роняем запрос, если не вышло). */
-async function notifyOrganizers(text) {
+/** Очередь сообщений для Telegram (обход лимита 1 msg/sec). */
+let _tgQueue = Promise.resolve();
+
+/**
+ * Отправить одно сообщение в Telegram с ретраями при 429 Too Many Requests.
+ * @param {string} text
+ * @param {number} [attempt=0]
+ */
+async function _sendTgMessage(text, attempt = 0) {
   const { TOKEN, CHAT_ID } = getEnv();
   if (!TOKEN || !CHAT_ID) return;
   try {
-    await fetch(API("sendMessage"), {
+    const res = await fetch(API("sendMessage"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: "HTML" }),
     });
+    const data = await res.json();
+    if (!data.ok) {
+      if (data.error_code === 429 && attempt < 5) {
+        // Telegram сообщает retry_after в секундах
+        const waitSec = (data.parameters && data.parameters.retry_after) || 5;
+        console.warn(`[TG] 429 Too Many Requests — ждём ${waitSec}с (попытка ${attempt + 1})`);
+        await new Promise((r) => setTimeout(r, waitSec * 1000));
+        return _sendTgMessage(text, attempt + 1);
+      }
+      console.error("[TG] Ошибка sendMessage:", JSON.stringify(data));
+    }
   } catch (e) {
-    console.error("Не удалось отправить уведомление организаторам:", e.message);
+    console.error("[TG] Не удалось отправить уведомление организаторам:", e.message);
   }
+}
+
+/**
+ * Уведомить организаторов в Telegram.
+ * Сообщения ставятся в очередь — они гарантированно будут доставлены
+ * даже при быстром взятии нескольких точек подряд.
+ */
+function notifyOrganizers(text) {
+  // Добавляем в очередь + минимальная пауза 1.1с между сообщениями
+  _tgQueue = _tgQueue
+    .then(() => _sendTgMessage(text))
+    .then(() => new Promise((r) => setTimeout(r, 1100)))
+    .catch((e) => console.error("[TG Queue] Необработанная ошибка:", e.message));
 }
 
 /** Как подписать участника в уведомлении. */
