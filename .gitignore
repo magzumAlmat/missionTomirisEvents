@@ -14,3 +14,6 @@ server/teams.json
 server/progress.json
 server/submissions.json
 server/*.tmp
+server/captains.json
+server/participants.json
+server/solo_users.json
