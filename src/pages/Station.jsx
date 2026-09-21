@@ -192,9 +192,12 @@ export default function Station() {
     
     // Формируем ссылку на WhatsApp для капитана
     const nextStation = QUEST.stations.find((s) => s.id === station.id + 1);
-    const nextLink = nextStation 
-      ? `https://wa.me/?text=Команда ${teamNo || 'не указана'}: не отгадали на точке ${station.name}. Следующая локация: ${nextStation.nextLocation || nextStation.name}. Ссылка: ${window.location.href.split('#')[0]}#/s/${nextStation.code || nextStation.id}`
-      : `https://wa.me/?text=Команда ${teamNo || 'не указана'}: не отгадали на точке ${station.name}. Конец квеста.`;
+    const base = window.location.href.split('#')[0].replace(/\/+$/, '') + '/';
+    const nextUrl = nextStation ? `${base}#/s/${nextStation.code || nextStation.id}` : '';
+    const text = nextStation 
+      ? `Команда ${teamNo || 'не указана'}: не отгадали на точке ${station.name}. Следующая локация: ${nextStation.nextLocation || nextStation.name}. Ссылка: ${nextUrl}`
+      : `Команда ${teamNo || 'не указана'}: не отгадали на точке ${station.name}. Конец квеста.`;
+    const nextLink = `https://wa.me/?text=${encodeURIComponent(text)}`;
 
     // Уведомляем админов
     try {

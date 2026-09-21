@@ -155,7 +155,7 @@ async function handleNotify(req, res, forcedEvent) {
 
   // Прибытие запоминаем на сервере: без него нельзя нажать «Я отгадал»
   // (порядок действий), а судья видит, сколько команда провозилась с загадкой.
-  if (event === "arrived" && stationId) {
+  if (event === "arrived" && stationId != null) {
     const found = teamNumber ? findTeamByNumber(teamNumber) : null;
     const key = progressKey({ teamNumber: found ? found.number : null, phone });
     if (key) {
@@ -648,10 +648,20 @@ app.post("/api/solve", async (req, res) => {
 
   // Точку засчитываем только после отметки «Я прибыл» на ней же.
   if (!hasArrived(key, station.id)) {
-    return res.status(409).json({
-      ok: false,
-      error: 'Сначала нажмите «Я прибыл» на этой точке.',
-    });
+    if (station.id === 0) {
+      markArrival({
+        key,
+        teamNumber: team ? team.number : null,
+        teamName: team ? team.name : "",
+        phone,
+        stationId: station.id,
+      });
+    } else {
+      return res.status(409).json({
+        ok: false,
+        error: 'Сначала нажмите «Я прибыл» на этой точке.',
+      });
+    }
   }
 
   const entry = solveStation({

@@ -140,7 +140,7 @@ export default function Landing() {
       <div className="landing-stats-grid">
         <div className="stat-card">
           <span className="stat-icon">🗺️</span>
-          <span className="stat-value">8</span>
+          <span className="stat-value">{QUEST.stations?.length || 11}</span>
           <span className="stat-label">Секретных локаций</span>
         </div>
         <div className="stat-card">
@@ -191,7 +191,7 @@ export default function Landing() {
             <div>
               <h3>Настоящие призы на финише</h3>
               <p className="muted">
-                Каждая отгаданная точка открывает дорогу к следующей. Пройдите все восемь и заберите реальный приз!
+                Каждая отгаданная точка открывает дорогу к следующей. Пройдите все локации и заберите реальный приз!
               </p>
             </div>
           </div>
