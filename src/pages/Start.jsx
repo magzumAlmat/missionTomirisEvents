@@ -2,8 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
 import { useProgress } from "../useProgress.js";
-import { getTeam, setTeam } from "../lib/team.js";
-import { getPhone, setPhone } from "../lib/phone.js";
 import { HAS_BACKEND } from "../lib/api.js";
 
 export default function Start() {
@@ -13,15 +11,6 @@ export default function Start() {
   const [phone, setPhoneState] = useState(getPhone());
   const poster = QUEST.poster || {};
   const started = solvedCount > 0;
-
-  function onTeamChange(v) {
-    setTeamState(v);
-    setTeam(v);
-  }
-  function onPhoneChange(v) {
-    setPhoneState(v);
-    setPhone(v);
-  }
 
   return (
     <div className="card poster">
@@ -68,36 +57,14 @@ export default function Start() {
         </div>
       )}
 
-      {HAS_BACKEND && (
-        <div className="field-block">
-          {/* <label className="field-label">Ваш номер телефона</label>
-          <input
-            type="tel"
-            inputMode="tel"
-            placeholder="+7 708 737 37 72"
-            value={phone}
-            onChange={(e) => onPhoneChange(e.target.value)}
-          />
-          <label className="field-label mt">Название команды</label>
-          <input
-            type="text"
-            placeholder="Например: Барсы"
-            value={team}
-            onChange={(e) => onTeamChange(e.target.value)}
-          />
-          <p className="center muted tiny">
-            Телефон и название команды увидят организаторы, когда вы нажмёте
-            «Я прибыл» на точке.
-          </p> */}
-        </div>
-      )}
+      {HAS_BACKEND && null}
 
       <button className="btn green" onClick={() => navigate("/register")}>
         📝 Зарегистрироваться на квест
       </button>
 
-      <button className="btn ghost mt" onClick={() => navigate("/landing")}>
-        ✨ Презентация квеста и таймер
+      <button className="btn ghost mt" onClick={() => navigate("/profile")}>
+        ✨ Личный кабинет
       </button>
 
       <p className="center muted small-note">

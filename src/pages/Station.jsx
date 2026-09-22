@@ -80,8 +80,8 @@ export default function Station() {
       <div className="card">
         <h2>Точка не найдена</h2>
         <p className="muted">Проверь QR-код.</p>
-        <button className="btn ghost" onClick={() => navigate("/")}>
-          В начало
+        <button className="btn ghost" onClick={() => navigate("/profile")}>
+          На главную
         </button>
       </div>
     );
@@ -219,9 +219,9 @@ export default function Station() {
     <div className="card">
       {revealed && <span className="done-badge">✓ Точка разгадана</span>}
       <div className="eyebrow">
-        Точка {station.id} из {QUEST.stations.length} · {station.name}
+        Точка {station.id} из {QUEST.stations.length}
       </div>
-      <h2>{station.name}</h2>
+      <h2 style={{ display: 'none' }}>{station.name}</h2>
 
       {(() => {
         const riddleText = station.riddle || (station.task ? station.task.split("ЗАДАНИЕ")[0].replace(/^ЗАГАДКА\s*/i, "").trim() : "");
@@ -249,19 +249,10 @@ export default function Station() {
       )}
 
       {!phoneOk && (
-        <div className="field-block">
-          <label className="field-label mt">Ваш номер телефона</label>
-          <input
-            type="tel"
-            inputMode="tel"
-            placeholder="+7 708 737 37 72"
-            value={phone}
-            onChange={(e) => onPhoneChange(e.target.value)}
-          />
-          {phone.length > 0 && (
-            <p className="center err-text tiny">Введите корректный номер (мин. 10 цифр).</p>
-          )}
-          <p className="center muted tiny">Укажите телефон, который вводили при регистрации, чтобы продолжить.</p>
+        <div className="feedback err">
+          ⚠️ Вы не зарегистрированы или номер телефона не найден. Пожалуйста, зарегистрируйтесь.
+          <br />
+          <a href="/#/register" style={{ color: "var(--accent)", textDecoration: "underline" }}>Перейти к регистрации</a>
         </div>
       )}
 
@@ -280,6 +271,24 @@ export default function Station() {
             ? "📍 Отправить «Я прибыл» повторно"
             : "📍 Я прибыл"}
         </button>
+        <button
+          className="btn ghost"
+          onClick={() => navigate("/profile")}
+          style={{ marginTop: 8, width: "100%" }}
+        >
+          🏠 В профиль
+        </button>
+
+        {station.id < QUEST.stations.length - 1 && (
+          <button
+            className="btn green"
+            onClick={() => navigate(`/s/${QUEST.stations[station.id + 1]?.code || station.id + 1}`)}
+            disabled={!revealed}
+            style={{ marginTop: 8, width: "100%" }}
+          >
+            🚀 Перейти к следующей точке
+          </button>
+        )}
 
         {!revealed && arrive === "done" && (
           <>
@@ -290,23 +299,25 @@ export default function Station() {
             >
               {check === "sending" ? "Отмечаем…" : "✅ Задание выполнено"}
             </button>
-
-            <button
-              className="btn ghost"
-              onClick={() => setShowHintModal(true)}
-              disabled={hintLoading}
-              style={{ marginTop: 8 }}
-            >
-              {hintLoading ? "Загружаем…" : "💡 Прошу подсказку"}
-            </button>
-
-            <button
-              className="btn ghost"
-              onClick={onNotGuessed}
-              style={{ marginTop: 8, borderColor: "#ff6b6b", color: "#ff6b6b" }}
-            >
-              ❌ Не отгадал
-            </button>
+            {stationId !== 0 && (
+              <>
+                <button
+                  className="btn ghost"
+                  onClick={() => setShowHintModal(true)}
+                  disabled={hintLoading}
+                  style={{ marginTop: 8 }}
+                >
+                  {hintLoading ? "Загружаем…" : "💡 Прошу подсказку"}
+                </button>
+                <button
+                  className="btn ghost"
+                  onClick={onNotGuessed}
+                  style={{ marginTop: 8, borderColor: "#ff6b6b", color: "#ff6b6b" }}
+                >
+                  ❌ Не отгадал
+                </button>
+              </>
+            )}
           </>
         )}
 
@@ -321,31 +332,19 @@ export default function Station() {
 
       {revealed && (
         <div className="reveal">
-          {hint && (
-            <p className="center">
-              <b className="muted">Подсказка:</b>
-              <br />
-              {hint}
-            </p>
-          )}
-          <p className="center muted tiny" style={{ marginTop: 12 }}>
-            📸 Капитан, отправьте фото/видео или сообщение с этой точки в Telegram-бот:
-          </p>
-          {QUEST.videoBotUrl && (
-            <a
-              href={QUEST.videoBotUrl}
-              target="_blank"
-              rel="noreferrer"
+          {station.id < QUEST.stations.length - 1 && (
+            <button
               className="btn green"
-              style={{
-                textDecoration: "none",
-                textAlign: "center",
-                display: "block",
-                margin: "10px 0",
-              }}
+              onClick={() => navigate(`/s/${QUEST.stations[station.id + 1]?.code || station.id + 1}`)}
+              style={{ width: "100%", marginBottom: 20 }}
             >
-              📹 Отправить видео/сообщение боту в Telegram
-            </a>
+              🚀 Перейти к следующей точке
+            </button>
+          )}
+          {stationId !== 0 && (
+            <>
+              {/* Hint text and Telegram link are removed when revealed is true */}
+            </>
           )}
         </div>
       )}
@@ -355,7 +354,7 @@ export default function Station() {
         <div className="modal-overlay" onClick={() => setShowConfirm(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h3>Вы уверены?</h3>
-            <p>Вы хотите отметить точку «{station.name}» как выполненную?</p>
+            <p>Вы хотите отметить текущую точку как выполненную?</p>
             <div className="modal-actions">
               <button className="btn green" onClick={() => { setShowConfirm(false); onSolved(); }}>
                 Да, отметить
