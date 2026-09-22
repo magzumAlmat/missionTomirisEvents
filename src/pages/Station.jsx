@@ -197,7 +197,8 @@ export default function Station() {
     const text = nextStation 
       ? `Команда ${teamNo || 'не указана'}: не отгадали на точке ${station.name}. Следующая локация: ${nextStation.nextLocation || nextStation.name}. Ссылка: ${nextUrl}`
       : `Команда ${teamNo || 'не указана'}: не отгадали на точке ${station.name}. Конец квеста.`;
-    const nextLink = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    
+      const nextLink = `https://wa.me/?text=Не отгадал точку`;
 
     // Уведомляем админов
     try {
