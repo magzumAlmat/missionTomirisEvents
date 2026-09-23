@@ -985,3 +985,66 @@ table.board tr:last-child td {
   font-variant-numeric: tabular-nums;
   color: var(--muted);
 }
+
+/* ===== ФИНАЛЬНЫЙ ЭКРАН ===== */
+.finale-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 8px 0 4px;
+  animation: fade 0.5s ease;
+}
+
+.finale-emoji {
+  font-size: 72px;
+  margin-bottom: 8px;
+  animation: trophy-bounce 1s ease 0.2s both;
+}
+
+@keyframes trophy-bounce {
+  0%   { transform: scale(0.4) rotate(-10deg); opacity: 0; }
+  60%  { transform: scale(1.2) rotate(4deg);  opacity: 1; }
+  80%  { transform: scale(0.95) rotate(-2deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+.finale-title {
+  font-size: 26px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #4cd964 0%, #ffcc4d 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0 0 10px;
+  animation: fade 0.6s ease 0.3s both;
+}
+
+.finale-subtitle {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0 0 16px;
+  animation: fade 0.6s ease 0.4s both;
+}
+
+.finale-subtitle strong {
+  color: #ffcc4d;
+  font-weight: 800;
+}
+
+.finale-tagline {
+  font-size: 20px;
+  font-weight: 800;
+  color: #ff6b9d;
+  letter-spacing: 0.02em;
+  padding: 12px 20px;
+  border-radius: 12px;
+  background: rgba(255, 107, 157, 0.12);
+  border: 1px solid rgba(255, 107, 157, 0.3);
+  animation: fade 0.6s ease 0.5s both, tagline-glow 2.5s ease 1s infinite;
+}
+
+@keyframes tagline-glow {
+  0%, 100% { box-shadow: 0 0 0px rgba(255, 107, 157, 0); }
+  50%       { box-shadow: 0 0 18px rgba(255, 107, 157, 0.4); }
+}

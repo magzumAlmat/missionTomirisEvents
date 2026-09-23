@@ -182,38 +182,28 @@ export default function Station() {
     }
   }
 
-  /** Не отгадал — отправляем информацию капитану и админу */
+  /** Не отгадал — уведомляем администраторов через бота (0 баллов за точку) */
   async function onNotGuessed() {
     setErr("");
     if (!HAS_BACKEND) {
       setErr("Бэкенд не подключён.");
       return;
     }
-    
-    // Формируем ссылку на WhatsApp для капитана
-    const nextStation = QUEST.stations.find((s) => s.id === station.id + 1);
-    const base = window.location.href.split('#')[0].replace(/\/+$/, '') + '/';
-    const nextUrl = nextStation ? `${base}#/s/${nextStation.code || nextStation.id}` : '';
-    const text = nextStation 
-      ? `Команда ${teamNo || 'не указана'}: не отгадали на точке ${station.name}. Следующая локация: ${nextStation.nextLocation || nextStation.name}. Ссылка: ${nextUrl}`
-      : `Команда ${teamNo || 'не указана'}: не отгадали на точке ${station.name}. Конец квеста.`;
-    
-      const nextLink = `https://wa.me/?text=Не отгадал точку`;
 
-    // Уведомляем админов
+    const teamLabel = [getTeam(), teamNo ? `№${teamNo}` : ""].filter(Boolean).join(" ");
+
     try {
       await notify("not_guessed", {
         stationId: station.id,
         stationName: station.name,
         phone: phone.trim(),
         teamNumber: teamNo || null,
+        team: teamLabel || undefined,
       });
-    } catch (e) {}
-
-    // Открываем WhatsApp
-    window.open(nextLink, "_blank");
-    
-    setErr("✅ Ссылка на WhatsApp открыта. Баллы: 0.");
+      setErr(`✅ Отправлено организаторам. Команда «${teamLabel || phone}» получает 0 баллов за точку ${station.id}.`);
+    } catch (e) {
+      setErr(e.message || "Не удалось отправить уведомление.");
+    }
   }
 
   return (
@@ -333,7 +323,7 @@ export default function Station() {
 
       {revealed && (
         <div className="reveal">
-          {station.id < QUEST.stations.length - 1 && (
+          {station.id < QUEST.stations.length - 1 ? (
             <button
               className="btn green"
               onClick={() => navigate(`/s/${QUEST.stations[station.id + 1]?.code || station.id + 1}`)}
@@ -341,11 +331,28 @@ export default function Station() {
             >
               🚀 Перейти к следующей точке
             </button>
-          )}
-          {stationId !== 0 && (
-            <>
-              {/* Hint text and Telegram link are removed when revealed is true */}
-            </>
+          ) : (
+            /* ===== ФИНАЛЬНЫЙ ЭКРАН (последняя точка) ===== */
+            <div className="finale-screen">
+              <div className="finale-emoji">🏆</div>
+              <h2 className="finale-title">Миссия выполнена!</h2>
+              <p className="finale-subtitle">
+                Команда{" "}
+                <strong>{getTeam() || `№${teamNo}` || ""}</strong>{" "}
+                прошла все точки квеста
+              </p>
+              <div className="finale-tagline">❤️ Алматы — моя первая любовь!</div>
+              <p className="muted" style={{ fontSize: 14, marginTop: 12, textAlign: "center" }}>
+                Организаторы уже получили уведомление. Ждите объявления победителей!
+              </p>
+              <button
+                className="btn green mt"
+                style={{ width: "100%", marginTop: 24 }}
+                onClick={() => navigate("/profile")}
+              >
+                🏠 На главную
+              </button>
+            </div>
           )}
         </div>
       )}
