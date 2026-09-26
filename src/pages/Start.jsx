@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
 import { useProgress } from "../useProgress.js";
 import { HAS_BACKEND } from "../lib/api.js";
+import { getTeam } from "../lib/team.js";
+import { getPhone } from "../lib/phone.js";
 
 export default function Start() {
   const navigate = useNavigate();
