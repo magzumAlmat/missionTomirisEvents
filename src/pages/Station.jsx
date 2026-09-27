@@ -173,7 +173,6 @@ export default function Station() {
       // Получаем подсказку из questConfig
       const hint = station.hint || "Подсказка отсутствует.";
       setHint(hint);
-      setRevealed(true);
       setShowHintModal(false);
     } catch (e) {
       setErr(e.message || "Не удалось получить подсказку.");
@@ -251,17 +250,19 @@ export default function Station() {
         {arrive === "done" && (
           <div className="feedback ok">✓ «Я прибыл» отправлено организаторам</div>
         )}
-        <button
-          className="btn arrive"
-          onClick={onArrived}
-          disabled={arrive === "sending" || !phoneOk}
-        >
-          {arrive === "sending"
-            ? "Отправляем…"
-            : arrive === "done"
-            ? "📍 Отправить «Я прибыл» повторно"
-            : "📍 Я прибыл"}
-        </button>
+        {!revealed && (
+          <button
+            className="btn arrive"
+            onClick={onArrived}
+            disabled={arrive === "sending" || !phoneOk}
+          >
+            {arrive === "sending"
+              ? "Отправляем…"
+              : arrive === "done"
+              ? "📍 Отправить «Я прибыл» повторно"
+              : "📍 Я прибыл"}
+          </button>
+        )}
         <button
           className="btn ghost"
           onClick={() => navigate("/profile")}
