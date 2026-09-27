@@ -270,17 +270,6 @@ export default function Station() {
           🏠 В профиль
         </button>
 
-        {station.id < QUEST.stations.length - 1 && (
-          <button
-            className="btn green"
-            onClick={() => navigate(`/s/${QUEST.stations[station.id + 1]?.code || station.id + 1}`)}
-            disabled={!revealed}
-            style={{ marginTop: 8, width: "100%" }}
-          >
-            🚀 Перейти к следующей точке
-          </button>
-        )}
-
         {!revealed && arrive === "done" && (
           <>
             <button
