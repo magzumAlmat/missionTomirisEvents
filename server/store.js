@@ -290,6 +290,48 @@ export function participantsByTeam(participants) {
   return { groups, loners };
 }
 
+/* ---------- удаление одной команды ---------- */
+
+/**
+ * Удалить команду: запись в teams.json, её прогресс (t{number}) и
+ * материалы капитана. Возвращает, сколько чего удалено.
+ */
+export function deleteTeam(number) {
+  const n = Number(number);
+  if (!Number.isFinite(n) || n <= 0) {
+    return { ok: false, error: "Некорректный номер команды." };
+  }
+
+  const teams = listTeams();
+  const team = teams.find((t) => t.number === n);
+  if (!team) {
+    return { ok: false, error: `Команда №${n} не найдена.` };
+  }
+
+  const key = `t${n}`;
+  const progress = readProgress();
+  const hadProgress = !!progress[key];
+  delete progress[key];
+  writeJson(PROGRESS_FILE, progress);
+
+  const submissions = listSubmissions();
+  const keptSubmissions = submissions.filter(
+    (s) => Number(s.teamNumber) !== n
+  );
+  const removedSubmissions = submissions.length - keptSubmissions.length;
+  writeJson(SUBMISSIONS_FILE, keptSubmissions);
+
+  writeJson(
+    TEAMS_FILE,
+    teams.filter((t) => t.number !== n)
+  );
+
+  return {
+    ok: true,
+    removed: { team: team.name, progress: hadProgress, submissions: removedSubmissions },
+  };
+}
+
 /* ---------- сброс перед новым мероприятием ---------- */
 
 /**

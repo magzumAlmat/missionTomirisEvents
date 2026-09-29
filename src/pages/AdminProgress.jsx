@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
-import { fetchStandings, HAS_BACKEND } from "../lib/api.js";
+import { fetchStandings, deleteTeam, HAS_BACKEND } from "../lib/api.js";
 import PasswordGate, { isUnlocked } from "../components/PasswordGate.jsx";
 
 const REFRESH_MS = 15000;
@@ -35,6 +35,24 @@ export default function AdminProgress() {
   const [total, setTotal] = useState(QUEST.stations.length);
   const [updatedAt, setUpdatedAt] = useState(null);
   const [err, setErr] = useState("");
+  const [deleting, setDeleting] = useState(null);
+
+  async function handleDelete(row) {
+    if (!row.teamNumber) return;
+    const label = `№${row.teamNumber} ${row.teamName || "без названия"}`;
+    if (!window.confirm(`Удалить команду ${label}?\nПрогресс и материалы капитана тоже будут удалены.`)) return;
+    setDeleting(row.key);
+    try {
+      await deleteTeam(row.teamNumber);
+      const data = await fetchStandings();
+      setRows(data.rows || []);
+      setErr("");
+    } catch (e) {
+      setErr(e.message || "Не удалось удалить команду.");
+    } finally {
+      setDeleting(null);
+    }
+  }
 
   useEffect(() => {
     if (!unlocked || !HAS_BACKEND) return;
@@ -112,6 +130,7 @@ export default function AdminProgress() {
                 ))}
                 <th>Итог</th>
                 <th>Последняя</th>
+                <th className="no-print">Действия</th>
               </tr>
             </thead>
             <tbody>
@@ -142,6 +161,18 @@ export default function AdminProgress() {
                   </td>
                   <td className="board-num">
                     {r.finishedAt ? `🏁 ${time(r.finishedAt)}` : time(r.lastAt) || "—"}
+                  </td>
+                  <td className="board-num no-print">
+                    {r.teamNumber && r.solved === 0 && !Object.keys(r.arrivals || {}).length && (
+                      <button
+                        className="btn btn-del-team"
+                        disabled={deleting === r.key}
+                        onClick={() => handleDelete(r)}
+                        title="Удалить неактивную команду"
+                      >
+                        {deleting === r.key ? "…" : "🗑️"}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

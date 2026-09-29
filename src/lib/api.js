@@ -165,6 +165,19 @@ export async function fetchSoloUsers() {
   return data;
 }
 
+/** Удалить команду (админ): команда + прогресс + материалы капитана. */
+export async function deleteTeam(number) {
+  if (!API_URL) throw new Error("Бэкенд не подключён (VITE_API_URL).");
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/teams/${number}`, {
+    method: "DELETE",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "Не удалось удалить команду.");
+  }
+  return data;
+}
+
 /** Получить список команд */
 export async function fetchTeams() {
   if (!API_URL) throw new Error("Бэкенд не подключён (VITE_API_URL).");

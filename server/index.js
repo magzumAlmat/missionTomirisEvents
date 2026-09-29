@@ -31,6 +31,7 @@ import {
   solveStation,
   standings,
   listTeams,
+  deleteTeam,
 } from "./store.js";
 import {
   listCaptains,
@@ -202,6 +203,15 @@ function teamText(p) {
 app.get("/api/teams", (_req, res) => {
   const teams = listTeams().map(t => ({ name: t.name, size: t.size }));
   res.json({ ok: true, teams });
+});
+
+/** Удалить команду (админ): команда + её прогресс + материалы капитана. */
+app.delete("/api/teams/:number", (req, res) => {
+  const result = deleteTeam(req.params.number);
+  if (!result.ok) {
+    return res.status(404).json({ ok: false, error: result.error });
+  }
+  res.json({ ok: true, removed: result.removed });
 });
 
 /**

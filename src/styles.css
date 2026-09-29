@@ -985,6 +985,23 @@ table.board tr:last-child td {
   font-variant-numeric: tabular-nums;
   color: var(--muted);
 }
+.btn-del-team {
+  background: rgba(255, 69, 58, 0.15);
+  color: #ff453a;
+  border: 1px solid rgba(255, 69, 58, 0.4);
+  padding: 4px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+.btn-del-team:hover:not(:disabled) {
+  background: rgba(255, 69, 58, 0.3);
+}
+.btn-del-team:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
 
 /* ===== ФИНАЛЬНЫЙ ЭКРАН ===== */
 .finale-screen {
