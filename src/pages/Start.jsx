@@ -23,29 +23,6 @@ export default function Start() {
         {poster.tagline && <p className="poster-tagline">{poster.tagline}</p>}
       </div>
 
-      {(poster.date || poster.time || poster.place) && (
-        <div className="poster-meta">
-          {poster.date && (
-            <div className="meta-item">
-              <span className="meta-ico">📅</span>
-              <span>{poster.date}</span>
-            </div>
-          )}
-          {poster.time && (
-            <div className="meta-item">
-              <span className="meta-ico">🕒</span>
-              <span>{poster.time}</span>
-            </div>
-          )}
-          {poster.place && (
-            <div className="meta-item">
-              <span className="meta-ico">📍</span>
-              <span>{poster.place}</span>
-            </div>
-          )}
-        </div>
-      )}
-
       <p className="muted poster-intro">{QUEST.intro}</p>
 
       {Array.isArray(poster.howTo) && poster.howTo.length > 0 && (
@@ -61,13 +38,14 @@ export default function Start() {
 
       {HAS_BACKEND && null}
 
-      <button className="btn green" onClick={() => navigate("/register")}>
-        📝 Зарегистрироваться на квест
-      </button>
-
-      <button className="btn ghost mt" onClick={() => navigate("/profile")}>
-        ✨ Личный кабинет
-      </button>
+      <div className="btn-row">
+        <button className="btn green" onClick={() => navigate("/register")}>
+          📝 Зарегистрироваться на квест
+        </button>
+        <button className="btn ghost" onClick={() => navigate("/landing")}>
+          ℹ️ Информация
+        </button>
+      </div>
 
       <p className="center muted small-note">
         Чтобы начать, отсканируйте первый QR-код на точке сбора. Каждый код

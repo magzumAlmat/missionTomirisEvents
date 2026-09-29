@@ -1048,3 +1048,15 @@ table.board tr:last-child td {
   0%, 100% { box-shadow: 0 0 0px rgba(255, 107, 157, 0); }
   50%       { box-shadow: 0 0 18px rgba(255, 107, 157, 0.4); }
 }
+
+/* Ряд кнопок на главной */
+.btn-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+.btn-row .btn {
+  flex: 1;
+  min-width: 140px;
+}
