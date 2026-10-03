@@ -16,8 +16,8 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { startVideoBot } from "./videoBot.js";
-import { ALL_DONE, TOTAL_STATIONS, findStation } from "./questSecret.js";
-import { buildParticipantsListText, buildStandingsText, escapeHtml } from "./messages.js";
+import { ALL_DONE, STATION_SECRETS, TOTAL_STATIONS, findStation } from "./questSecret.js";
+import { buildParticipantsListText, buildStandingsText, durationText, escapeHtml } from "./messages.js";
 import {
   findOrCreateTeam,
   findTeamByNumber,
@@ -32,6 +32,7 @@ import {
   standings,
   listTeams,
   deleteTeam,
+  listSubmissions,
 } from "./store.js";
 import {
   listCaptains,
@@ -106,9 +107,12 @@ function requireToken(res) {
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 // Тексты для разных событий.
-function buildMessage(event, stationId, stationName, team, phone) {
-  // Кто: телефон (если есть) + имя/команда (если есть).
+// progressEntry — запись из progress.json (arrivals/stations/finishedAt),
+// если доступна: позволяет показать время на точке и текущий прогресс.
+function buildMessage({ event, stationId, stationName, team, phone, teamNumber, progressEntry }) {
+  // Кто: № команды (если есть) + телефон (если есть) + имя/команда (если есть).
   const parts = [];
+  if (teamNumber) parts.push(`👥 <b>№${teamNumber}</b>`);
   if (phone) parts.push(`📞 <b>${escapeHtml(phone)}</b>`);
   if (team) parts.push(`👥 ${escapeHtml(team)}`);
   const who = parts.length ? parts.join(" · ") : "👤 Участник";
@@ -135,8 +139,45 @@ function buildMessage(event, stationId, stationName, team, phone) {
     default:
       head = "📍 <b>Прибытие на точку</b>";
       verb = "прибыл(а) на";
+      break;
   }
-  return `${head}\n${who}\n${verb} ${point}\n🕒 ${time}`;
+
+  let msg = `${head}\n${who}\n${verb} ${point}\n`;
+
+  // Время на точке (прибытие → сейчас) — видно, сколько команда думала.
+  if (progressEntry && event !== "arrived") {
+    const sid = String(stationId);
+    const arrivalAt = progressEntry.arrivals?.[sid]?.at || null;
+    if (arrivalAt) {
+      const elapsed = durationText(arrivalAt, new Date().toISOString());
+      if (elapsed !== "—") msg += `⏱ <b>Время на точке:</b> ${elapsed}\n`;
+    }
+  }
+
+  // Текущий прогресс: сколько точек уже взято.
+  if (progressEntry) {
+    const solved = Object.keys(progressEntry.stations || {}).length;
+    if (solved > 0) {
+      msg += `🧩 <b>Точек взято:</b> ${solved} из ${TOTAL_STATIONS}\n`;
+    }
+    // Следующая точка (если ещё не финиш).
+    const nextId = Number(stationId) + 1;
+    const nextStation = Object.values(STATION_SECRETS).find((s) => s.id === nextId);
+    if (nextStation && solved < TOTAL_STATIONS) {
+      msg += `➡️ <b>Следующая:</b> ${escapeHtml(nextStation.name)}\n`;
+    }
+    // Если команда уже финишировала — показываем общее время.
+    if (progressEntry.finishedAt) {
+      const firstArrival = Object.values(progressEntry.arrivals || {}).filter(Boolean).sort()[0];
+      const totalTime = durationText(firstArrival, progressEntry.finishedAt);
+      if (totalTime !== "—") {
+        msg += `🏁 <b>Финиш:</b> ${totalTime}\n`;
+      }
+    }
+  }
+
+  msg += `🕒 ${time}`;
+  return msg;
 }
 
 /**
@@ -152,23 +193,37 @@ async function handleNotify(req, res, forcedEvent) {
 
   const { stationId, stationName, team, phone, teamNumber } = req.body || {};
   const event = forcedEvent || (req.body && req.body.event) || "arrived";
-  const text = buildMessage(event, stationId, stationName, team, phone);
 
   // Прибытие запоминаем на сервере: без него нельзя нажать «Я отгадал»
   // (порядок действий), а судья видит, сколько команда провозилась с загадкой.
-  if (event === "arrived" && stationId != null) {
+  let progressKeyVal = null;
+  let progressEntry = null;
+  if (stationId != null) {
     const found = teamNumber ? findTeamByNumber(teamNumber) : null;
-    const key = progressKey({ teamNumber: found ? found.number : null, phone });
-    if (key) {
-      markArrival({
-        key,
-        teamNumber: found ? found.number : null,
-        teamName: found ? found.name : "",
-        phone,
-        stationId,
-      });
+    progressKeyVal = progressKey({ teamNumber: found ? found.number : null, phone });
+    if (progressKeyVal) {
+      if (event === "arrived") {
+        markArrival({
+          key: progressKeyVal,
+          teamNumber: found ? found.number : null,
+          teamName: found ? found.name : "",
+          phone,
+          stationId,
+        });
+      }
+      progressEntry = getProgress(progressKeyVal);
     }
   }
+
+  const text = buildMessage({
+    event,
+    stationId,
+    stationName,
+    team,
+    phone,
+    teamNumber,
+    progressEntry,
+  });
 
   try {
     const r = await fetch(API("sendMessage"), {
@@ -246,6 +301,7 @@ app.post("/api/register", async (req, res) => {
 
   const carText = hasCar ? "Да 🚗 (на своей машине)" : "Нет 🚶 (без машины)";
   const participants = readParticipants();
+  const registrationNumber = participants.length + 1; // N-я регистрация в текущем потоке
 
   // Команде выдаётся НОМЕР — он же ключ на точках и в боте для видео.
   // Одинаковое название = одна команда, повторная заявка номер не плодит.
@@ -275,15 +331,28 @@ app.post("/api/register", async (req, res) => {
 
   const driversCount = participants.filter((p) => p.hasCar).length;
   const totalCount = participants.length;
+  const teamsCount = listTeams().length;
+
+  // Сколько человек уже в этой команде (без текущего) — видно, не первый ли это.
+  const teamMembersBefore = team
+    ? participants.filter((p) => p.teamNumber === team.number).length
+    : 0;
+  const teamMembersAfter = teamMembersBefore + 1;
+
+  const teamLine = team
+    ? `👥 <b>Команда:</b> №${team.number} «${escapeHtml(team.name)}» (${newEntry.teamSize} чел.)\n` +
+      `   👤 В команде сейчас: <b>${teamMembersAfter}</b> чел.\n`
+    : `👥 <b>Команда:</b> Нет 🙋 (без команды)\n`;
 
   const text =
-    `📝 <b>НОВАЯ РЕГИСТРАЦИЯ УЧАСТНИКА</b>\n\n` +
+    `📝 <b>НОВАЯ РЕГИСТРАЦИЯ УЧАСТНИКА</b> (№${registrationNumber})\n\n` +
     `👤 <b>Имя:</b> ${escapeHtml(newEntry.name)}\n` +
     `📞 <b>Телефон:</b> ${escapeHtml(newEntry.phone)}\n` +
     `🚘 <b>За рулём на своей машине:</b> ${carText}\n` +
-    `👥 <b>Команда:</b> ${teamText(newEntry)}\n` +
+    teamLine +
     `🕒 <b>Время:</b> ${new Date().toLocaleString("ru-RU")}\n\n` +
-    `📊 <b>Всего зарегистрировано:</b> ${totalCount} чел. (на машине: ${driversCount})`;
+    `📊 <b>Всего зарегистрировано:</b> ${totalCount} чел. (на машине: ${driversCount})\n` +
+    `👥 <b>Команд в квесте:</b> ${teamsCount}`;
 
   try {
     const reply_markup = {
@@ -344,11 +413,14 @@ app.post("/api/captains/create", async (req, res) => {
   }
   // Уведомить админов
   try {
+    const free = Math.max(0, result.captain.slots - result.captain.currentParticipants);
+    const totalCaptains = listCaptains().length;
     const text = `👑 <b>НОВЫЙ КАПИТАН</b>\n\n` +
       `👤 <b>Имя:</b> ${escapeHtml(result.captain.name)}\n` +
       `📞 <b>Телефон:</b> ${escapeHtml(result.captain.phone)}\n` +
       `🚘 <b>Машина:</b> ${result.captain.hasCar ? "Да 🚗" : "Нет 🚶"}\n` +
-      `👥 <b>Слотов:</b> ${result.captain.slots}\n` +
+      `👥 <b>Слотов:</b> ${result.captain.slots} (занято: ${result.captain.currentParticipants}, свободно: ${free})\n` +
+      `📊 <b>Всего капитанов:</b> ${totalCaptains}\n` +
       `🕒 ${new Date().toLocaleString("ru-RU")}`;
     await fetch(API("sendMessage"), {
       method: "POST",
@@ -376,10 +448,12 @@ app.post("/api/subscribe-to-captain", async (req, res) => {
   }
   // Уведомить админов о подписке
   try {
+    const free = Math.max(0, result.captain.slots - result.captain.currentParticipants);
     const text = `✅ <b>ПОДПИСКА НА КАПИТАНА</b>\n\n` +
       `👤 <b>Участник:</b> ${escapeHtml(name)}\n` +
       `📞 <b>Телефон:</b> ${escapeHtml(phone)}\n` +
-      `👑 <b>Капитан:</b> ${escapeHtml(result.captain.name)} (№${result.captain.currentParticipants}/${result.captain.slots})\n` +
+      `👑 <b>Капитан:</b> ${escapeHtml(result.captain.name)}\n` +
+      `👥 <b>Слоты:</b> ${result.captain.currentParticipants}/${result.captain.slots} (свободно: ${free})\n` +
       `🚘 <b>Машина:</b> ${hasCar ? "Да 🚗" : "Нет 🚶"}\n` +
       `🕒 ${new Date().toLocaleString("ru-RU")}`;
     await fetch(API("sendMessage"), {
@@ -408,9 +482,10 @@ app.post("/api/admin/update-slots", async (req, res) => {
   }
   // Уведомить админов
   try {
+    const free = Math.max(0, result.captain.slots - result.captain.currentParticipants);
     const text = `🔧 <b>ОБНОВЛЕНИЕ СЛОТОВ</b>\n\n` +
       `👑 <b>Капитан:</b> ${escapeHtml(result.captain.name)}\n` +
-      `👥 <b>Слоты:</b> ${result.captain.slots} (текущих: ${result.captain.currentParticipants})\n` +
+      `👥 <b>Слоты:</b> ${result.captain.slots} (занято: ${result.captain.currentParticipants}, свободно: ${free})\n` +
       `🕒 ${new Date().toLocaleString("ru-RU")}`;
     await fetch(API("sendMessage"), {
       method: "POST",
@@ -463,10 +538,12 @@ app.post("/api/admin/move-user", async (req, res) => {
     }
 
     try {
+      const free = Math.max(0, subResult.captain.slots - subResult.captain.currentParticipants);
       const text = `🔄 <b>ПОДПИСКА НА КАПИТАНА</b>\n\n` +
         `👤 <b>Пользователь:</b> ${escapeHtml(userName)}\n` +
         `📞 <b>Телефон:</b> ${escapeHtml(phone)}\n` +
-        `👑 В: ${escapeHtml(subResult.captain.name)}\n` +
+        `👑 <b>В:</b> ${escapeHtml(subResult.captain.name)}\n` +
+        `👥 <b>Слоты:</b> ${subResult.captain.currentParticipants}/${subResult.captain.slots} (свободно: ${free})\n` +
         `🕒 ${new Date().toLocaleString("ru-RU")}`;
       await fetch(API("sendMessage"), {
         method: "POST",
@@ -483,11 +560,13 @@ app.post("/api/admin/move-user", async (req, res) => {
   }
   // Уведомить админов
   try {
+    const free = Math.max(0, result.toCaptain.slots - result.toCaptain.currentParticipants);
     const text = `🔄 <b>ПЕРЕМЕЩЕНИЕ МЕЖДУ КАПИТАНАМИ</b>\n\n` +
       `👤 <b>Пользователь:</b> ${escapeHtml(result.moved.name)}\n` +
       `📞 <b>Телефон:</b> ${escapeHtml(result.moved.phone)}\n` +
-      `👑 Из: ${escapeHtml(result.fromCaptain.name)}\n` +
-      `👑 В: ${escapeHtml(result.toCaptain.name)}\n` +
+      `👑 <b>Из:</b> ${escapeHtml(result.fromCaptain.name)}\n` +
+      `👑 <b>В:</b> ${escapeHtml(result.toCaptain.name)}\n` +
+      `👥 <b>Слоты:</b> ${result.toCaptain.currentParticipants}/${result.toCaptain.slots} (свободно: ${free})\n` +
       `🕒 ${new Date().toLocaleString("ru-RU")}`;
     await fetch(API("sendMessage"), {
       method: "POST",
@@ -515,10 +594,12 @@ app.post("/api/admin/unsubscribe", async (req, res) => {
   }
   // Уведомить админов
   try {
+    const free = Math.max(0, result.captain.slots - result.captain.currentParticipants);
     const text = `❌ <b>ОТПИСКА ОТ КАПИТАНА</b>\n\n` +
       `👤 <b>Пользователь:</b> ${escapeHtml(result.removed.name)}\n` +
       `📞 <b>Телефон:</b> ${escapeHtml(result.removed.phone)}\n` +
-      `👑 Капитан: ${escapeHtml(result.captain.name)}\n` +
+      `👑 <b>Капитан:</b> ${escapeHtml(result.captain.name)}\n` +
+      `👥 <b>Слоты:</b> ${result.captain.currentParticipants}/${result.captain.slots} (свободно: ${free})\n` +
       `🕒 ${new Date().toLocaleString("ru-RU")}`;
     await fetch(API("sendMessage"), {
       method: "POST",
@@ -727,16 +808,50 @@ app.post("/api/solve", async (req, res) => {
   }
 
   const who = whoText({ teamNumber: team?.number, teamName: team?.name, phone });
-  notifyOrganizers(
-    allDone
-      ? `🏆 <b>КОМАНДА ПРОШЛА ВСЕ ТОЧКИ</b>\n${who}\n` +
-          `Взято точек: ${solvedCount} из ${TOTAL_STATIONS}\n` +
-          `🕒 ${new Date().toLocaleString("ru-RU")}`
-      : `🧩 <b>Точка взята</b>\n${who}\n` +
-          `точка ${station.id} · ${escapeHtml(station.name || "")}\n` +
-          `Взято точек: ${solvedCount} из ${TOTAL_STATIONS}\n` +
-          `🕒 ${new Date().toLocaleString("ru-RU")}`
-  );
+
+  // Время на точке: прибытие → решение (если прибытие было отмечено).
+  const arrivalAt = entry?.arrivals?.[String(station.id)]?.at || null;
+  const solveAt = entry?.stations?.[String(station.id)]?.at || new Date().toISOString();
+  const stationTime = durationText(arrivalAt, solveAt);
+
+  // Место в таблице: считаем по standings() — финишировавшие выше, затем по числу точек.
+  const rows = standings();
+  const myIdx = rows.findIndex((r) => r.key === key);
+  const rank = myIdx >= 0 ? myIdx + 1 : null;
+  const totalTeams = rows.length;
+
+  // Следующая точка (если ещё не финиш).
+  const nextStation = !allDone
+    ? Object.values(STATION_SECRETS).find((s) => s.id === station.id + 1)
+    : null;
+
+  if (allDone) {
+    // Общее время квеста: первое прибытие → финиш.
+    const firstArrival = Object.values(entry?.arrivals || {}).filter(Boolean).sort()[0];
+    const totalTime = durationText(firstArrival, entry?.finishedAt || solveAt);
+    const mediaCount = (listSubmissions().filter((s) => Number(s.teamNumber) === (team?.number || 0))).length;
+    // Сколько команд уже финишировало (включая текущую) — видно, не первый ли финиш.
+    const finishedCount = rows.filter((r) => r.finishedAt).length;
+    notifyOrganizers(
+      `🏆 <b>КОМАНДА ПРОШЛА ВСЕ ТОЧКИ</b>\n${who}\n` +
+        `Взято точек: ${solvedCount} из ${TOTAL_STATIONS}\n` +
+        (rank ? `📊 <b>Место:</b> ${rank} из ${totalTeams}\n` : "") +
+        (totalTime !== "—" ? `⏱ <b>Общее время:</b> ${totalTime}\n` : "") +
+        `🏁 <b>Финишировало:</b> ${finishedCount} из ${totalTeams} команд\n` +
+        `📸 <b>Материалов от капитана:</b> ${mediaCount}\n` +
+        `🕒 ${new Date().toLocaleString("ru-RU")}`
+    );
+  } else {
+    notifyOrganizers(
+      `🧩 <b>Точка взята</b>\n${who}\n` +
+        `точка ${station.id} · ${escapeHtml(station.name || "")}\n` +
+        `Взято точек: ${solvedCount} из ${TOTAL_STATIONS}\n` +
+        (stationTime !== "—" ? `⏱ <b>Время на точке:</b> ${stationTime}\n` : "") +
+        (rank ? `📊 <b>Место:</b> ${rank} из ${totalTeams}\n` : "") +
+        (nextStation ? `➡️ <b>Следующая:</b> ${escapeHtml(nextStation.name)}\n` : "") +
+        `🕒 ${new Date().toLocaleString("ru-RU")}`
+    );
+  }
 
   res.json({
     ok: true,
@@ -796,7 +911,7 @@ async function sendParticipantsListToChat(chatId) {
     return;
   }
 
-  const text = buildParticipantsListText(participants, participantsByTeam(participants));
+  const text = buildParticipantsListText(participants, participantsByTeam(participants), standings());
 
   await fetch(API("sendMessage"), {
     method: "POST",
@@ -870,15 +985,14 @@ app.get("/api/chat-id-helper", async (_req, res) => {
   }
 });
 
-// В production backend также отдаёт собранный React frontend.
-app.use(express.static(DIST_DIR));
+// Fallback: все пути, которые не попали в /api/* и не отдались статикой,
+// уходят на index.html (SPA routing). express.static(DIST_DIR) уже выше.
 app.get("*", (req, res, next) => {
   if (req.path.startsWith("/api/")) return next();
   res.sendFile(path.join(DIST_DIR, "index.html"), (error) => {
     if (error) next();
   });
 });
-
 
 /**
  * Спросить подтверждение перед очисткой. Сама очистка стирает всё
@@ -1042,8 +1156,28 @@ async function pollTelegramUpdates() {
           ) {
             await sendStandingsToChat(targetChatId);
           } else if (text.startsWith("/start") || text.startsWith("/help")) {
+            // Живая статистика для приветствия.
+            const participants = readParticipants();
+            const teams = listTeams();
+            const rows = standings();
+            const finishedCount = rows.filter((r) => r.finishedAt).length;
+            const questStatus = finishedCount > 0
+              ? `🏆 Финишировало: ${finishedCount} из ${rows.length}`
+              : rows.some((r) => r.solved > 0)
+                ? `🏃 В процессе: ${rows.filter((r) => r.solved > 0).length} команд(ы) в игре`
+                : `⏳ Квест ещё не начался`;
+
+            const inProgressCount = rows.filter((r) => r.solved > 0 && !r.finishedAt).length;
+            const mediaTotal = listSubmissions().length;
+
             const welcomeText =
               `👋 <b>Бот EventTomiris готов к работе!</b>\n\n` +
+              `📊 <b>Текущая статистика:</b>\n` +
+              `• 👥 Команд: ${teams.length}\n` +
+              `• 👤 Участников: ${participants.length}\n` +
+              `• 🧩 В игре: ${inProgressCount} команд(ы)\n` +
+              `• 📸 Материалов от капитанов: ${mediaTotal}\n` +
+              `• ${questStatus}\n\n` +
               `📌 <b>Доступные команды:</b>\n` +
               `• /list или /список — Показать список зарегистрированных участников со всеми данными.\n` +
               `• /standings или /таблица — Таблица квеста: кто сколько точек взял и кто финишировал.\n` +
@@ -1088,15 +1222,6 @@ async function setupBotMenu() {
     });
   } catch (e) {}
 }
-
-app.get("*", (req, res, next) => {
-  if (req.path.startsWith("/api")) return next();
-  const indexPath = path.join(DIST_DIR, "index.html");
-  if (fs.existsSync(indexPath)) {
-    return res.sendFile(indexPath);
-  }
-  next();
-});
 
 app.listen(process.env.PORT || 3001, '0.0.0.0', () => {
   const { TOKEN, CHAT_ID, PORT } = getEnv();

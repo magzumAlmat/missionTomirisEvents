@@ -21,7 +21,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 // Команды и журнал материалов — общие с сайтом.
-import { addSubmission, findTeamByNumber } from "./store.js";
+import { addSubmission, findTeamByNumber, listSubmissions } from "./store.js";
 import { escapeHtml } from "./messages.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -125,6 +125,9 @@ const HELP_TEXT =
   `🎬 <b>Бот для видео капитанов</b>\n\n` +
   `Пришлите сюда видео (или фото) с точки — я передам его организаторам и ` +
   `подпишу, от какой оно команды.\n\n` +
+  `💡 <b>Совет:</b> напишите в подписи к видео номер точки ` +
+  `(например, «точка 3») — организаторам будет проще проверить материалы.\n` +
+  `Если в подписи нет номера, я спрошу его отдельно — можно пропустить.\n\n` +
   `<b>Команды:</b>\n` +
   `• /start — начать / назвать номер команды\n` +
   `• /reset — изменить команду или имя\n` +
@@ -156,6 +159,7 @@ function applyTeamNumber(chatId, senders, number) {
     ...(senders[chatId] || {}),
     teamNumber: team.number,
     teamName: team.name,
+    teamSize: team.size || 0,
     captainName: senders[chatId]?.captainName || team.captainName || "",
   };
   return team;
@@ -174,12 +178,21 @@ function finishRegistration(chatId, senders) {
   s.step = "ready";
   saveSenders(senders);
   const num = s.teamNumber ? `№${s.teamNumber} ` : "";
+  const phoneLine = s.phone ? `\n📞 <b>Телефон:</b> ${escapeHtml(s.phone)}` : "";
+  const teamSize = s.teamSize ? ` (${s.teamSize} чел.)` : "";
+  // Сколько материалов уже прислала эта команда — видно, не первый ли это.
+  const prevCount = listSubmissions().filter(
+    (sub) => Number(sub.teamNumber) === Number(s.teamNumber || 0)
+  ).length;
+  const countLine = prevCount > 0 ? `\n📸 <b>Уже прислано:</b> ${prevCount} материал(ов)` : "";
   return send(
     chatId,
     `✅ Готово!\n\n` +
-      `👥 <b>Команда:</b> ${num}${escapeHtml(s.teamName)}\n` +
-      `👤 <b>Капитан:</b> ${escapeHtml(s.captainName)}\n\n` +
+      `👥 <b>Команда:</b> ${num}${escapeHtml(s.teamName)}${teamSize}\n` +
+      `👤 <b>Капитан:</b> ${escapeHtml(s.captainName)}${phoneLine}${countLine}\n\n` +
       `Теперь просто присылайте видео — я передам их организаторам.\n` +
+      `💡 Напишите в подписи к видео номер точки (например, «точка 3»).\n` +
+      `Если в подписи нет номера — я спрошу отдельно, можно пропустить.\n` +
       `Если что-то указано неверно — команда /reset.`,
     { reply_markup: HIDE_KEYBOARD }
   );
@@ -200,18 +213,32 @@ function mediaKind(msg) {
   return null;
 }
 
-async function forwardVideo(msg, sender, kind) {
+async function forwardVideo(msg, sender, kind, stationNumOverride = null) {
   const { CHAT_ID } = getEnv();
   const time = new Date().toLocaleString("ru-RU");
   const caption = msg.caption ? `\n💬 ${escapeHtml(msg.caption)}` : "";
   const title = kind === "photo" ? "📸 <b>ФОТО ОТ КОМАНДЫ</b>" : "🎬 <b>ВИДЕО ОТ КОМАНДЫ</b>";
 
+  // Номер точки: приоритет у явно переданного значения (из промпта),
+  // иначе — парсим из подписи к видео.
+  const stationMatch = (msg.caption || "").match(/(?:точка|station)\s*(\d+)/i);
+  const stationNum = stationNumOverride || (stationMatch ? stationMatch[1] : null);
+
+  // Сколько материалов уже прислала эта команда.
+  const prevCount = listSubmissions().filter(
+    (s) => Number(s.teamNumber) === Number(sender.teamNumber || 0)
+  ).length;
+  const submissionNum = prevCount + 1;
+
   const num = sender.teamNumber ? `№${sender.teamNumber} ` : "";
+  const teamSize = sender.teamSize ? ` (${sender.teamSize} чел.)` : "";
   const header =
     `${title}\n\n` +
-    `👥 <b>Команда:</b> ${num}${escapeHtml(sender.teamName)}\n` +
+    `👥 <b>Команда:</b> ${num}${escapeHtml(sender.teamName)}${teamSize}\n` +
     `👤 <b>Капитан:</b> ${escapeHtml(sender.captainName)}\n` +
     (sender.phone ? `📞 <b>Телефон:</b> ${escapeHtml(sender.phone)}\n` : "") +
+    (stationNum ? `📍 <b>Точка:</b> ${stationNum}\n` : `📍 <b>Точка:</b> не указана\n`) +
+    `📎 <b>Материал №:</b> ${submissionNum} от этой команды\n` +
     `🕒 <b>Время:</b> ${time}` +
     caption;
 
@@ -260,6 +287,52 @@ async function handleMessage(msg) {
   if (text.startsWith("/help")) return send(chatId, HELP_TEXT);
   if (text.startsWith("/reset")) return startRegistration(chatId, senders);
 
+  // --- ответ на вопрос «с какой точки?» (после получения медиа) ---
+  if (sender && sender.step === "ask_station" && sender.pendingMsg) {
+    const pendingMsg = sender.pendingMsg;
+    const pendingKind = sender.pendingKind || "video";
+    const what = pendingKind === "photo" ? "Фото" : "Видео";
+    const { CHAT_ID } = getEnv();
+
+    // Пропуск — отправляем без номера точки.
+    if (text.toLowerCase() === "пропустить" || text.toLowerCase() === "skip") {
+      senders[chatId] = { ...(sender || {}), step: "ready" };
+      delete senders[chatId].pendingMsg;
+      delete senders[chatId].pendingKind;
+      saveSenders(senders);
+      if (!CHAT_ID) return send(chatId, `⚠️ Не настроена группа для видео.`);
+      const result = await forwardVideo(pendingMsg, sender, pendingKind, null);
+      if (!result.ok) return send(chatId, `❌ Не получилось отправить: ${escapeHtml(result.error)}`);
+      return send(chatId, `✅ ${what} отправлено организаторам (без номера точки). Спасибо!`);
+    }
+
+    // Числовой ответ — считаем номером точки.
+    if (/^\d+$/.test(text)) {
+      senders[chatId] = { ...(sender || {}), step: "ready" };
+      delete senders[chatId].pendingMsg;
+      delete senders[chatId].pendingKind;
+      saveSenders(senders);
+      if (!CHAT_ID) return send(chatId, `⚠️ Не настроена группа для видео.`);
+      const result = await forwardVideo(pendingMsg, sender, pendingKind, text);
+      if (!result.ok) {
+        return send(chatId, `❌ Не получилось отправить: ${escapeHtml(result.error)}`);
+      }
+      return send(chatId, `✅ ${what} отправлено организаторам (точка ${text}). Спасибо!`);
+    }
+
+    // Не число — считаем названием точки (например, «театр»). 
+    senders[chatId] = { ...(sender || {}), step: "ready" };
+    delete senders[chatId].pendingMsg;
+    delete senders[chatId].pendingKind;
+    saveSenders(senders);
+    if (!CHAT_ID) return send(chatId, `⚠️ Не настроена группа для видео.`);
+    const result = await forwardVideo(pendingMsg, sender, pendingKind, text);
+    if (!result.ok) {
+      return send(chatId, `❌ Не получилось отправить: ${escapeHtml(result.error)}`);
+    }
+    return send(chatId, `✅ ${what} отправлено организаторам (точка: ${escapeHtml(text)}). Спасибо!`);
+  }
+
   // --- номер телефона через кнопку «Отправить мой номер» ---
   if (msg.contact && msg.contact.phone_number) {
     const phone = msg.contact.phone_number;
@@ -270,6 +343,7 @@ async function handleMessage(msg) {
       captainName: found?.name || sender?.captainName || msg.from?.first_name || "",
       teamName: found?.teamName || sender?.teamName || "",
       teamNumber: found?.teamNumber || sender?.teamNumber || null,
+      teamSize: found?.teamSize || sender?.teamSize || 0,
     };
     if (senders[chatId].teamNumber) applyTeamNumber(chatId, senders, senders[chatId].teamNumber);
 
@@ -304,6 +378,20 @@ async function handleMessage(msg) {
     if (!CHAT_ID) {
       return send(chatId, `⚠️ Не настроена группа для видео (TELEGRAM_VIDEO_CHAT_ID).`);
     }
+
+    // Если в подписи нет номера точки — спросим отдельно (можно пропустить).
+    const captionHasStation = /(?:точка|station)\s*\d+/i.test(msg.caption || "");
+    if (!captionHasStation) {
+      senders[chatId] = { ...(sender || {}), step: "ask_station", pendingMsg: msg, pendingKind: kind };
+      saveSenders(senders);
+      return send(
+        chatId,
+        `📍 <b>С какой точки этот материал?</b>\n` +
+          `Напишите номер точки (например, «3») или слово «пропустить».`,
+        { reply_markup: HIDE_KEYBOARD }
+      );
+    }
+
     const result = await forwardVideo(msg, sender, kind);
     if (!result.ok) {
       console.error("videoBot: не удалось отправить материал в группу:", result.error);
@@ -355,11 +443,24 @@ async function handleMessage(msg) {
     if (CHAT_ID) {
       const time = new Date().toLocaleString("ru-RU");
       const num = sender.teamNumber ? `№${sender.teamNumber} ` : "";
+
+      // Номер точки из текста (если капитан указал).
+      const stationMatch = text.match(/(?:точка|station)\s*(\d+)/i);
+      const stationNum = stationMatch ? stationMatch[1] : null;
+
+      // Сколько материалов уже прислала эта команда (включая текстовые).
+      const prevCount = listSubmissions().filter(
+        (sub) => Number(sub.teamNumber) === Number(sender.teamNumber || 0)
+      ).length;
+      const submissionNum = prevCount + 1;
+
       const header =
         `💬 <b>СООБЩЕНИЕ ОТ КАПИТАНА</b>\n\n` +
         `👥 <b>Команда:</b> ${num}${escapeHtml(sender.teamName)}\n` +
         `👤 <b>Капитан:</b> ${escapeHtml(sender.captainName)}\n` +
         (sender.phone ? `📞 <b>Телефон:</b> ${escapeHtml(sender.phone)}\n` : "") +
+        (stationNum ? `📍 <b>Точка:</b> ${stationNum}\n` : "") +
+        `📎 <b>Материал №:</b> ${submissionNum} от этой команды\n` +
         `🕒 <b>Время:</b> ${time}\n\n` +
         `📝 <b>Текст:</b>\n${escapeHtml(text)}`;
 
