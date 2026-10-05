@@ -23,9 +23,13 @@ export default function Station() {
   const [hint, setHint] = useState("");
   const [err, setErr] = useState("");
   
-  // Подсказка
+  // Подсказка (только после нажатия "Получить подсказку")
   const [showHintModal, setShowHintModal] = useState(false);
   const [hintLoading, setHintLoading] = useState(false);
+  const [hintReceived, setHintReceived] = useState(false); // true только после onGetHint()
+  
+  // Загадка на следующую локацию (появляется после "Задание выполнено")
+  const [nextRiddle, setNextRiddle] = useState("");
   
   // Подтверждение выполнения
   const [showConfirm, setShowConfirm] = useState(false);
@@ -36,6 +40,8 @@ export default function Station() {
     setCheck(solvedAlready ? "done" : "idle");
     setRevealed(solvedAlready);
     setHint("");
+    setHintReceived(false);
+    setNextRiddle("");
     setErr("");
     setShowHintModal(false);
     setShowConfirm(false);
@@ -136,7 +142,7 @@ export default function Station() {
         teamNumber: teamNo || null,
       });
       setCheck("done");
-      setHint(res.nextHint || "");
+      setNextRiddle(res.nextHint || "");
       setRevealed(true);
       solve(station.id);
     } catch (e) {
@@ -173,6 +179,7 @@ export default function Station() {
       // Получаем подсказку из questConfig
       const hint = station.hint || "Подсказка отсутствует.";
       setHint(hint);
+      setHintReceived(true);
       setShowHintModal(false);
     } catch (e) {
       setErr(e.message || "Не удалось получить подсказку.");
@@ -313,6 +320,14 @@ export default function Station() {
 
       {revealed && (
         <div className="reveal">
+          {nextRiddle && station.id < QUEST.stations.length - 1 && (
+            <div style={{ marginBottom: 20, padding: 16, background: "rgba(255,255,255,0.05)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)" }}>
+              <div className="eyebrow" style={{ color: "var(--accent)", marginBottom: 8 }}>
+                🔮 ЗАГАДКА НА СЛЕД. ЛОКАЦИЮ
+              </div>
+              <p style={{ whiteSpace: "pre-wrap", fontSize: 15, lineHeight: 1.6 }}>{nextRiddle}</p>
+            </div>
+          )}
           {station.id < QUEST.stations.length - 1 ? (
             <button
               className="btn green"
