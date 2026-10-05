@@ -178,6 +178,11 @@ export async function deleteTeam(number) {
   return data;
 }
 
+/** Удалить весь квест (админ): все команды + прогресс + материалы. Участники остаются. */
+export async function resetQuest() {
+  return post("/api/admin/reset-quest", {});
+}
+
 /** Получить список команд */
 export async function fetchTeams() {
   if (!API_URL) throw new Error("Бэкенд не подключён (VITE_API_URL).");

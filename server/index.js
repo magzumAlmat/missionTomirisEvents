@@ -270,6 +270,22 @@ app.delete("/api/teams/:number", (req, res) => {
 });
 
 /**
+ * Удалить весь квест (админ): все команды + весь прогресс + все материалы.
+ * База участников (participants.json) НЕ трогается — она накопительная.
+ * То же самое делает команда /finish_quest в Telegram, но из админки.
+ */
+app.post("/api/admin/reset-quest", (req, res) => {
+  if (!requireToken(res)) return;
+  const counts = resetAll();
+  const kept = readParticipants().length;
+  res.json({
+    ok: true,
+    removed: counts,
+    keptParticipants: kept,
+  });
+});
+
+/**
  * Регистрация нового участника.
  * body: { name, phone, hasCar, hasTeam, teamName?, teamSize? }
  */

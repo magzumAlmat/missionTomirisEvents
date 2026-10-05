@@ -144,6 +144,18 @@ input[type="text"]:focus {
   background: linear-gradient(180deg, #63e6a5, #2fbf7c);
   color: #06371f;
 }
+.btn-danger {
+  background: linear-gradient(180deg, #ff6b5e, #e0392b);
+  color: #fff;
+  border: 1px solid rgba(255, 69, 58, 0.5);
+}
+.btn-danger:hover:not(:disabled) {
+  background: linear-gradient(180deg, #ff8578, #f04a3c);
+}
+.btn-danger:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
 
 .feedback {
   min-height: 22px;

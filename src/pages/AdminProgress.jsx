@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
-import { fetchStandings, deleteTeam, HAS_BACKEND } from "../lib/api.js";
+import { fetchStandings, deleteTeam, resetQuest, HAS_BACKEND } from "../lib/api.js";
 import PasswordGate, { isUnlocked } from "../components/PasswordGate.jsx";
 
 const REFRESH_MS = 15000;
@@ -36,11 +36,16 @@ export default function AdminProgress() {
   const [updatedAt, setUpdatedAt] = useState(null);
   const [err, setErr] = useState("");
   const [deleting, setDeleting] = useState(null);
+  const [resetting, setResetting] = useState(false);
 
   async function handleDelete(row) {
     if (!row.teamNumber) return;
     const label = `№${row.teamNumber} ${row.teamName || "без названия"}`;
-    if (!window.confirm(`Удалить команду ${label}?\nПрогресс и материалы капитана тоже будут удалены.`)) return;
+    const hasProgress = row.solved > 0 || Object.keys(row.arrivals || {}).length > 0;
+    const extra = hasProgress
+      ? `\n⚠️ У команды есть прогресс (${row.solved}/${total} точек) — он будет удалён.`
+      : "";
+    if (!window.confirm(`Удалить команду ${label}?\nПрогресс и материалы капитана тоже будут удалены.${extra}`)) return;
     setDeleting(row.key);
     try {
       await deleteTeam(row.teamNumber);
@@ -51,6 +56,40 @@ export default function AdminProgress() {
       setErr(e.message || "Не удалось удалить команду.");
     } finally {
       setDeleting(null);
+    }
+  }
+
+  async function handleResetQuest() {
+    if (!rows.length) return;
+    if (!window.confirm(
+      `Удалить ВЕСЬ квест?\n\n` +
+      `Будут удалены безвозвратно:\n` +
+      `• все команды (${rows.length})\n` +
+      `• весь прогресс по точкам\n` +
+      `• все материалы от капитанов\n\n` +
+      `📇 База участников сохранится.\n` +
+      `Нумерация команд начнётся заново с №1.\n\n` +
+      `Продолжить?`
+    )) return;
+    setResetting(true);
+    try {
+      const data = await resetQuest();
+      const removed = data.removed || {};
+      alert(
+        `✅ Квест удалён.\n\n` +
+        `Удалено:\n` +
+        `• команд: ${removed.teams ?? 0}\n` +
+        `• записей прогресса: ${removed.progress ?? 0}\n` +
+        `• материалов: ${removed.submissions ?? 0}\n\n` +
+        `📇 Сохранено участников: ${data.keptParticipants ?? 0}`
+      );
+      const fresh = await fetchStandings();
+      setRows(fresh.rows || []);
+      setErr("");
+    } catch (e) {
+      setErr(e.message || "Не удалось удалить квест.");
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -163,12 +202,12 @@ export default function AdminProgress() {
                     {r.finishedAt ? `🏁 ${time(r.finishedAt)}` : time(r.lastAt) || "—"}
                   </td>
                   <td className="board-num no-print">
-                    {r.teamNumber && r.solved === 0 && !Object.keys(r.arrivals || {}).length && (
+                    {r.teamNumber && (
                       <button
                         className="btn btn-del-team"
                         disabled={deleting === r.key}
                         onClick={() => handleDelete(r)}
-                        title="Удалить неактивную команду"
+                        title="Удалить команду (вместе с прогрессом и материалами)"
                       >
                         {deleting === r.key ? "…" : "🗑️"}
                       </button>
@@ -181,12 +220,24 @@ export default function AdminProgress() {
         </div>
       )}
 
-      <button className="btn ghost mt no-print" onClick={() => navigate("/admin")}>
-        🔲 К генерации QR-кодов
-      </button>
-      <button className="btn ghost no-print" onClick={() => navigate("/")}>
-        На главную
-      </button>
+      <div className="mt" style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+        <button className="btn ghost no-print" onClick={() => navigate("/admin")}>
+          🔲 К генерации QR-кодов
+        </button>
+        <button className="btn ghost no-print" onClick={() => navigate("/")}>
+          На главную
+        </button>
+        {rows.length > 0 && (
+          <button
+            className="btn btn-danger no-print"
+            disabled={resetting}
+            onClick={handleResetQuest}
+            title="Удалить все команды, прогресс и материалы. База участников сохранится."
+          >
+            {resetting ? "Удаляю…" : "🗑 Удалить весь квест"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
