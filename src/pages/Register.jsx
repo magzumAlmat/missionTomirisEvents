@@ -170,6 +170,7 @@ export default function Register() {
           break;
 
         case "JOIN_CAPTAIN":
+          const selectedCap = captains.find(c => c.id === selectedCaptainId);
           await subscribeToCaptain({
             captainId: selectedCaptainId,
             name: trimmedName,
@@ -181,8 +182,8 @@ export default function Register() {
             phone: trimmedPhone,
             hasCar,
             hasTeam: true,
-            teamName: `Капитан ${selectedCaptainId}`,
-            teamSize: 1,
+            teamName: selectedCap?.teamName || `Команда ${selectedCap?.name || selectedCaptainId}`,
+            teamSize: 0,
           });
           break;
 

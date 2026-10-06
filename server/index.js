@@ -403,12 +403,28 @@ app.post("/api/register", async (req, res) => {
 /** Получить список всех капитанов с оставшимися слотами */
 app.get("/api/captains", (_req, res) => {
   const captains = getCaptainsSummary();
+  const participants = readParticipants();
+  captains.forEach(c => {
+    const p = participants.find(part => (part.phone||"").replace(/\D/g,"").slice(-10) === (c.phone||"").replace(/\D/g,"").slice(-10));
+    if (p) {
+      c.teamName = p.teamName;
+      c.teamNumber = p.teamNumber;
+    }
+  });
   res.json({ ok: true, captains });
 });
 
 /** Алиас для сводки по капитанам (совместимость с фронтендом) */
 app.get("/api/captains/summary", (_req, res) => {
   const captains = getCaptainsSummary();
+  const participants = readParticipants();
+  captains.forEach(c => {
+    const p = participants.find(part => (part.phone||"").replace(/\D/g,"").slice(-10) === (c.phone||"").replace(/\D/g,"").slice(-10));
+    if (p) {
+      c.teamName = p.teamName;
+      c.teamNumber = p.teamNumber;
+    }
+  });
   res.json({ ok: true, captains });
 });
 
