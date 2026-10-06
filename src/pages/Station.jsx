@@ -320,14 +320,7 @@ export default function Station() {
 
       {revealed && (
         <div className="reveal">
-          {/* {nextRiddle && station.id < QUEST.stations.length - 1 && (
-            <div style={{ marginBottom: 20, padding: 16, background: "rgba(255,255,255,0.05)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)" }}>
-              <div className="eyebrow" style={{ color: "var(--accent)", marginBottom: 8 }}>
-                🔮 ЗАГАДКА НА СЛЕД. ЛОКАЦИЮ
-              </div>
-              <p style={{ whiteSpace: "pre-wrap", fontSize: 15, lineHeight: 1.6 }}>{nextRiddle}</p>
-            </div>
-          )} */}
+
           {station.id < QUEST.stations.length - 1 ? (
             <button
               className="btn green"
