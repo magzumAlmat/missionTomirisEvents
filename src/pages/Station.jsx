@@ -242,6 +242,9 @@ export default function Station() {
                   style={{ fontSize: "15px", lineHeight: "1.6" }} 
                   dangerouslySetInnerHTML={{ __html: station.detailedTask.replace(/\n/g, "<br/>") }} 
                 />
+                <div style={{ marginTop: "16px", fontSize: "14px", color: "var(--accent)", fontWeight: "bold" }}>
+                  Воспользуйтесь телеграм ботом <a href="https://t.me/thisMirrorbot" target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "underline" }}>https://t.me/thisMirrorbot</a> чтобы отправлять видео и фото результаты Хранительнице
+                </div>
               </div>
             )}
           </div>
@@ -264,19 +267,14 @@ export default function Station() {
       )}
 
       <div className="actions">
-        {arrive === "done" && (
-          <div className="feedback ok">✓ «Я прибыл» отправлено организаторам</div>
-        )}
         {!revealed && (
           <button
             className="btn arrive"
             onClick={onArrived}
-            disabled={arrive === "sending" || !phoneOk}
+            disabled={arrive === "sending" || arrive === "done" || !phoneOk}
           >
             {arrive === "sending"
               ? "Отправляем…"
-              : arrive === "done"
-              ? "📍 Отправить «Я прибыл» повторно"
               : "📍 Я прибыл"}
           </button>
         )}
@@ -294,28 +292,25 @@ export default function Station() {
               className="btn green"
               onClick={() => setShowConfirm(true)}
               disabled={check === "sending"}
+              style={{ marginTop: 8 }}
             >
-              {check === "sending" ? "Отмечаем…" : "✅ Задание выполнено"}
+              {check === "sending" ? "Отмечаем…" : "✅ Задание отправлено"}
             </button>
-            {stationId !== 0 && (
-              <>
-                <button
-                  className="btn ghost"
-                  onClick={() => setShowHintModal(true)}
-                  disabled={hintLoading}
-                  style={{ marginTop: 8 }}
-                >
-                  {hintLoading ? "Загружаем…" : "💡 Прошу подсказку"}
-                </button>
-                <button
-                  className="btn ghost"
-                  onClick={onNotGuessed}
-                  style={{ marginTop: 8, borderColor: "#ff6b6b", color: "#ff6b6b" }}
-                >
-                  ❌ Не отгадал
-                </button>
-              </>
-            )}
+            <button
+              className="btn ghost"
+              onClick={() => setShowHintModal(true)}
+              disabled={hintLoading}
+              style={{ marginTop: 8 }}
+            >
+              {hintLoading ? "Загружаем…" : "💡 Прошу подсказку"}
+            </button>
+            <button
+              className="btn ghost"
+              onClick={onNotGuessed}
+              style={{ marginTop: 8, borderColor: "#ff6b6b", color: "#ff6b6b" }}
+            >
+              ❌ Я не отгадал загадку
+            </button>
           </>
         )}
 
