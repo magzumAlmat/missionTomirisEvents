@@ -234,6 +234,16 @@ export default function Station() {
                 <div style={{ fontSize: "16px", lineHeight: "1.6", fontWeight: "500" }}>{riddleText}</div>
               </div>
             )}
+
+            {/* ЗАДАНИЕ (показывается только после "Я прибыл") */}
+            {arrive === "done" && station.detailedTask && (
+              <div className="task assignment-block" style={{ marginTop: "16px", backgroundColor: "rgba(255, 255, 255, 0.05)", padding: "16px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.1)" }}>
+                <div 
+                  style={{ fontSize: "15px", lineHeight: "1.6" }} 
+                  dangerouslySetInnerHTML={{ __html: station.detailedTask.replace(/\n/g, "<br/>") }} 
+                />
+              </div>
+            )}
           </div>
         );
       })()}
