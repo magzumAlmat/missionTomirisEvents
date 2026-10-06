@@ -676,23 +676,25 @@ app.get("/api/admin/solo-users", (_req, res) => {
   
   soloUsersData.forEach(u => {
     const phoneClean = (u.phone || "").replace(/\D/g, "").slice(-10);
-    if (!captainPhones.has(phoneClean) && !subscribedPhones.has(phoneClean)) {
-      uniqueUsers.set(phoneClean, u);
-    }
+    uniqueUsers.set(phoneClean, {
+      ...u,
+      isCaptain: captainPhones.has(phoneClean),
+      isSubscribed: subscribedPhones.has(phoneClean)
+    });
   });
 
   participants.forEach(p => {
     const phoneClean = (p.phone || "").replace(/\D/g, "").slice(-10);
-    if (!captainPhones.has(phoneClean) && !subscribedPhones.has(phoneClean)) {
-      uniqueUsers.set(phoneClean, {
-        name: p.name,
-        phone: p.phone,
-        hasCar: p.hasCar,
-        hasTeam: p.hasTeam,
-        teamName: p.teamName,
-        registeredAt: p.createdAt || new Date().toISOString(),
-      });
-    }
+    uniqueUsers.set(phoneClean, {
+      name: p.name,
+      phone: p.phone,
+      hasCar: p.hasCar,
+      hasTeam: p.hasTeam,
+      teamName: p.teamName,
+      registeredAt: p.createdAt || new Date().toISOString(),
+      isCaptain: captainPhones.has(phoneClean),
+      isSubscribed: subscribedPhones.has(phoneClean)
+    });
   });
 
   const users = Array.from(uniqueUsers.values());

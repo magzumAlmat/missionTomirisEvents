@@ -422,7 +422,7 @@ export default function Admin() {
               style={{ padding: 10, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", color: "white" }}
             >
               <option value="">Пользователь</option>
-              {moveFromId === "__solo__" && soloUsers.map((u, i) => (
+              {moveFromId === "__solo__" && soloUsers.filter(u => !u.isCaptain && !u.isSubscribed).map((u, i) => (
                  <option key={"solo-" + i} value={u.phone}>
                    {u.name} ({u.phone})
                  </option>
@@ -443,7 +443,7 @@ export default function Admin() {
       {/* Одиночные пользователи (и участники) */}
       {activeTab === "solo" && (
         <div>
-          <h3>🙋 Участники (не капитаны)</h3>
+          <h3>🙋 Все участники</h3>
           {soloUsers.length === 0 ? (
             <p className="muted">Пока нет участников.</p>
           ) : (
@@ -452,6 +452,16 @@ export default function Admin() {
                 <div key={i} style={{ padding: 10, background: "rgba(255,255,255,0.05)", borderRadius: 8 }}>
                   <strong>{u.name}</strong> ({u.phone})
                   {u.hasCar ? " 🚗" : " 🚶"}
+                  {u.isCaptain && (
+                    <span style={{ marginLeft: 8, color: "#e74c3c", fontSize: 13, fontWeight: "bold" }}>
+                      👑 Капитан
+                    </span>
+                  )}
+                  {u.isSubscribed && !u.isCaptain && (
+                    <span style={{ marginLeft: 8, color: "#2ecc71", fontSize: 13 }}>
+                      ✔️ В команде
+                    </span>
+                  )}
                   {u.hasTeam && u.teamName && (
                     <span style={{ marginLeft: 8, color: "#f39c12", fontSize: 13 }}>
                       👥 Команда: {u.teamName}
