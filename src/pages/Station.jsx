@@ -275,11 +275,11 @@ export default function Station() {
           <button
             className="btn arrive"
             onClick={onArrived}
-            disabled={arrive === "sending" || arrive === "done"}
+            disabled={arrive === "sending" || arrive === "done" || revealed}
           >
             {arrive === "sending"
               ? "Отправляем…"
-              : arrive === "done"
+              : (arrive === "done" || revealed)
                 ? "✓ Я прибыл (отгадал загадку)"
                 : "📍 Я прибыл (отгадал загадку)"}
           </button>
