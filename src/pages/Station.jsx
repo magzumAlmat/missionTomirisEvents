@@ -213,8 +213,8 @@ export default function Station() {
     }
   }
 
-  // Показать задание если: arrive === done ИЛИ hintReceived ИЛИ notGuessed
-  const taskVisible = (arrive === "done" || hintReceived || notGuessed) && station.detailedTask;
+  // Показать задание если: arrive === done ИЛИ hintReceived ИЛИ notGuessed ИЛИ уже решено
+  const taskVisible = (arrive === "done" || hintReceived || notGuessed || revealed) && station.detailedTask;
 
   return (
     <div className="card">
@@ -271,47 +271,47 @@ export default function Station() {
       )}
 
       <div className="actions">
-        {!revealed && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <button
-              className="btn arrive"
-              onClick={onArrived}
-              disabled={arrive === "sending" || arrive === "done" || !phoneOk}
-            >
-              {arrive === "sending"
-                ? "Отправляем…"
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button
+            className="btn arrive"
+            onClick={onArrived}
+            disabled={arrive === "sending" || arrive === "done"}
+          >
+            {arrive === "sending"
+              ? "Отправляем…"
+              : arrive === "done"
+                ? "✓ Я прибыл (отгадал загадку)"
                 : "📍 Я прибыл (отгадал загадку)"}
-            </button>
+          </button>
 
+          <button
+            className="btn ghost"
+            onClick={() => setShowHintModal(true)}
+            disabled={hintLoading || hintReceived}
+          >
+            {hintLoading ? "Загружаем…" : hintReceived ? "✓ Подсказка получена" : "💡 Прошу подсказку к загадке"}
+          </button>
+
+          <button
+            className="btn ghost"
+            onClick={onNotGuessed}
+            disabled={notGuessed}
+            style={{ borderColor: "#ff6b6b", color: notGuessed ? "#888" : "#ff6b6b" }}
+          >
+            {notGuessed ? "✓ Я не отгадал загадку" : "❌ Я не отгадал загадку"}
+          </button>
+
+          {taskVisible && !notGuessed && (
             <button
-              className="btn ghost"
-              onClick={() => setShowHintModal(true)}
-              disabled={hintLoading || hintReceived || !phoneOk}
+              className="btn green"
+              onClick={() => setShowConfirm(true)}
+              disabled={check === "sending" || check === "done"}
+              style={{ marginTop: 8 }}
             >
-              {hintLoading ? "Загружаем…" : "💡 Прошу подсказку к загадке"}
+              {check === "sending" ? "Отмечаем…" : check === "done" ? "✓ Задание отправлено" : "✅ Задание отправлено"}
             </button>
-
-            <button
-              className="btn ghost"
-              onClick={onNotGuessed}
-              disabled={notGuessed || !phoneOk}
-              style={{ borderColor: "#ff6b6b", color: "#ff6b6b" }}
-            >
-              ❌ Я не отгадал загадку
-            </button>
-
-            {taskVisible && !notGuessed && (
-              <button
-                className="btn green"
-                onClick={() => setShowConfirm(true)}
-                disabled={check === "sending"}
-                style={{ marginTop: 8 }}
-              >
-                {check === "sending" ? "Отмечаем…" : "✅ Задание отправлено"}
-              </button>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Кнопка "Перейти к следующей точке" после "Не отгадал" */}
