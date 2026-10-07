@@ -30,6 +30,7 @@ export default function Station() {
   
   // Показать задание (после "Не отгадал" или "Подсказка")
   const [showTaskFromNotGuessed, setShowTaskFromNotGuessed] = useState(false);
+  const [notGuessed, setNotGuessed] = useState(false);
   
   // Загадка на следующую локацию (появляется после "Задание выполнено")
   const [nextRiddle, setNextRiddle] = useState("");
@@ -45,6 +46,7 @@ export default function Station() {
     setHint("");
     setHintReceived(false);
     setShowTaskFromNotGuessed(false);
+    setNotGuessed(false);
     setNextRiddle("");
     setErr("");
     setShowHintModal(false);
@@ -178,7 +180,7 @@ export default function Station() {
       setHintReceived(true);
       setShowHintModal(false);
       // После подсказки также показываем задание
-      setShowTaskFromNotGuessed(true);
+      setHintReceived(true);
     } catch (e) {
       setErr(e.message || "Не удалось получить подсказку.");
     } finally {
@@ -205,14 +207,14 @@ export default function Station() {
         team: teamLabel || undefined,
       });
       // Показываем задание и кнопку перехода к следующей точке
-      setShowTaskFromNotGuessed(true);
+      setNotGuessed(true);
     } catch (e) {
       setErr(e.message || "Не удалось отправить уведомление.");
     }
   }
 
-  // Показать задание если: arrive === done ИЛИ showTaskFromNotGuessed
-  const taskVisible = (arrive === "done" || showTaskFromNotGuessed) && station.detailedTask;
+  // Показать задание если: arrive === done ИЛИ hintReceived ИЛИ notGuessed
+  const taskVisible = (arrive === "done" || hintReceived || notGuessed) && station.detailedTask;
 
   return (
     <div className="card">
@@ -270,54 +272,50 @@ export default function Station() {
 
       <div className="actions">
         {!revealed && (
-          <button
-            className="btn arrive"
-            onClick={onArrived}
-            disabled={arrive === "sending" || arrive === "done" || !phoneOk}
-          >
-            {arrive === "sending"
-              ? "Отправляем…"
-              : "📍 Я прибыл (отгадал загадку)"}
-          </button>
-        )}
-
-        {!revealed && arrive === "done" && (
-          <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <button
-              className="btn green"
-              onClick={() => setShowConfirm(true)}
-              disabled={check === "sending" || !taskVisible}
-              style={{ marginTop: 8 }}
+              className="btn arrive"
+              onClick={onArrived}
+              disabled={arrive === "sending" || arrive === "done" || !phoneOk}
             >
-              {check === "sending" ? "Отмечаем…" : "✅ Задание отправлено"}
+              {arrive === "sending"
+                ? "Отправляем…"
+                : "📍 Я прибыл (отгадал загадку)"}
             </button>
+
             <button
               className="btn ghost"
               onClick={() => setShowHintModal(true)}
-              disabled={hintLoading}
-              style={{ marginTop: 8 }}
+              disabled={hintLoading || hintReceived || !phoneOk}
             >
               {hintLoading ? "Загружаем…" : "💡 Прошу подсказку к загадке"}
             </button>
+
             <button
               className="btn ghost"
               onClick={onNotGuessed}
-              style={{ marginTop: 8, borderColor: "#ff6b6b", color: "#ff6b6b" }}
+              disabled={notGuessed || !phoneOk}
+              style={{ borderColor: "#ff6b6b", color: "#ff6b6b" }}
             >
               ❌ Я не отгадал загадку
             </button>
-          </>
-        )}
 
-        {!revealed && arrive !== "done" && (
-          <p className="center muted tiny">
-            Сначала нажмите «Я прибыл (отгадал загадку)» — после этого откроются остальные кнопки.
-          </p>
+            {taskVisible && !notGuessed && (
+              <button
+                className="btn green"
+                onClick={() => setShowConfirm(true)}
+                disabled={check === "sending"}
+                style={{ marginTop: 8 }}
+              >
+                {check === "sending" ? "Отмечаем…" : "✅ Задание отправлено"}
+              </button>
+            )}
+          </div>
         )}
       </div>
 
       {/* Кнопка "Перейти к следующей точке" после "Не отгадал" */}
-      {!revealed && showTaskFromNotGuessed && (
+      {!revealed && notGuessed && (
         <div style={{ marginTop: 16 }}>
           {station.id < QUEST.stations.length - 1 ? (
             <button

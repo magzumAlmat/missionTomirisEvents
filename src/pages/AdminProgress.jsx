@@ -196,7 +196,10 @@ export default function AdminProgress() {
                       label = time(typeof arrivalAt === "object" ? arrivalAt.at : arrivalAt);
                     }
                     if (state === "hinted" && hintAt) {
-                      label = "💡" + (hintAt ? " " + time(hintAt) : "");
+                      label = "💡 " + time(hintAt);
+                    }
+                    if (state === "not_guessed" && notGuessedAt) {
+                      label = "❌ " + time(notGuessedAt);
                     }
                     const titleParts = [s.name];
                     if (arrivalAt) titleParts.push(`Прибытие: ${time(typeof arrivalAt === "object" ? arrivalAt.at : arrivalAt)}`);

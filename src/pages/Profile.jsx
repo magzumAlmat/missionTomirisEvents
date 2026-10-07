@@ -117,7 +117,7 @@ export default function Profile() {
           )}
         </div>
 
-        {solvedCount < QUEST.stations.length && (
+        {profile.teamNumber && solvedCount < QUEST.stations.length && (
           <button
             className="btn green mt"
             style={{ width: "100%", marginTop: 32 }}

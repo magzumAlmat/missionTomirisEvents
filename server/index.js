@@ -33,6 +33,8 @@ import {
   listTeams,
   deleteTeam,
   listSubmissions,
+  markHint,
+  markNotGuessed,
 } from "./store.js";
 import {
   listCaptains,
@@ -236,6 +238,22 @@ async function handleNotify(req, res, forcedEvent) {
     if (progressKeyVal) {
       if (event === "arrived") {
         markArrival({
+          key: progressKeyVal,
+          teamNumber: found ? found.number : null,
+          teamName: found ? found.name : "",
+          phone,
+          stationId,
+        });
+      } else if (event === "hint_used") {
+        markHint({
+          key: progressKeyVal,
+          teamNumber: found ? found.number : null,
+          teamName: found ? found.name : "",
+          phone,
+          stationId,
+        });
+      } else if (event === "not_guessed") {
+        markNotGuessed({
           key: progressKeyVal,
           teamNumber: found ? found.number : null,
           teamName: found ? found.name : "",

@@ -166,6 +166,36 @@ export function markArrival({ key, teamNumber, teamName, phone, stationId }) {
   return entry;
 }
 
+export function markHint({ key, teamNumber, teamName, phone, stationId }) {
+  if (!key) return null;
+  const all = readProgress();
+  const entry = all[key] || blankEntry({ teamNumber, teamName, phone });
+  if (!entry.hints) entry.hints = {};
+  if (teamName && !entry.teamName) entry.teamName = teamName;
+  if (phone && !entry.phone) entry.phone = phone;
+
+  const sid = String(stationId);
+  if (!entry.hints[sid]) entry.hints[sid] = { at: new Date().toISOString() };
+  all[key] = entry;
+  writeJson(PROGRESS_FILE, all);
+  return entry;
+}
+
+export function markNotGuessed({ key, teamNumber, teamName, phone, stationId }) {
+  if (!key) return null;
+  const all = readProgress();
+  const entry = all[key] || blankEntry({ teamNumber, teamName, phone });
+  if (!entry.notGuessed) entry.notGuessed = {};
+  if (teamName && !entry.teamName) entry.teamName = teamName;
+  if (phone && !entry.phone) entry.phone = phone;
+
+  const sid = String(stationId);
+  if (!entry.notGuessed[sid]) entry.notGuessed[sid] = { at: new Date().toISOString() };
+  all[key] = entry;
+  writeJson(PROGRESS_FILE, all);
+  return entry;
+}
+
 /** Отмечалась ли команда на этой точке кнопкой «Я прибыл». */
 export function hasArrived(key, stationId) {
   const entry = getProgress(key);
@@ -380,6 +410,8 @@ export function standings() {
         media: 0,
         stations: {},
         arrivals: {},
+        hints: {},
+        notGuessed: {},
         ...seed,
       });
     }
@@ -403,6 +435,12 @@ export function standings() {
     );
     row.arrivals = Object.fromEntries(
       Object.entries(p.arrivals || {}).map(([id, v]) => [id, v.at || null])
+    );
+    row.hints = Object.fromEntries(
+      Object.entries(p.hints || {}).map(([id, v]) => [id, v.at || null])
+    );
+    row.notGuessed = Object.fromEntries(
+      Object.entries(p.notGuessed || {}).map(([id, v]) => [id, v.at || null])
     );
     if (!row.teamName && p.teamName) row.teamName = p.teamName;
     if (!row.teamNumber && p.teamNumber) row.teamNumber = p.teamNumber;
