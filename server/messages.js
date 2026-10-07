@@ -11,8 +11,8 @@ export function escapeHtml(s) {
   return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 }
 
-const time = (iso) => (iso ? new Date(iso).toLocaleTimeString("ru-RU") : "—");
-const dateTime = (iso) => (iso ? new Date(iso).toLocaleString("ru-RU") : "—");
+const time = (iso) => (iso ? new Date(iso).toLocaleTimeString("ru-RU", { timeZone: "Asia/Almaty" }) : "—");
+const dateTime = (iso) => (iso ? new Date(iso).toLocaleString("ru-RU", { timeZone: "Asia/Almaty" }) : "—");
 
 /**
  * Длительность в человекочитаемом виде: «12 мин», «1 ч 05 мин», «2 ч 30 мин».

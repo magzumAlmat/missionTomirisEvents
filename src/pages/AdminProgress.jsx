@@ -7,7 +7,7 @@ import PasswordGate, { isUnlocked } from "../components/PasswordGate.jsx";
 const REFRESH_MS = 15000;
 
 function time(iso) {
-  return iso ? new Date(iso).toLocaleTimeString("ru-RU") : "";
+  return iso ? new Date(iso).toLocaleTimeString("ru-RU", { timeZone: "Asia/Almaty" }) : "";
 }
 
 /** Состояние точки у команды: взята / подсказка / не отгадал / команда пришла / ещё не была. */

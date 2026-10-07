@@ -152,7 +152,7 @@ function buildMessage({ event, stationId, stationName, team, phone, teamNumber, 
   const point = stationName
     ? `точку ${escapeHtml(String(stationId))} · ${escapeHtml(stationName)}`
     : `точку ${escapeHtml(String(stationId))}`;
-  const time = new Date().toLocaleString("ru-RU");
+  const time = new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" });
 
   let head, verb;
   switch (event) {
@@ -398,7 +398,7 @@ app.post("/api/register", async (req, res) => {
     `📞 <b>Телефон:</b> ${escapeHtml(newEntry.phone)}\n` +
     `🚘 <b>За рулём на своей машине:</b> ${carText}\n` +
     teamLine +
-    `🕒 <b>Время:</b> ${new Date().toLocaleString("ru-RU")}\n\n` +
+    `🕒 <b>Время:</b> ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}\n\n` +
     `📊 <b>Всего зарегистрировано:</b> ${totalCount} чел. (на машине: ${driversCount})\n` +
     `👥 <b>Команд в квесте:</b> ${teamsCount}`;
 
@@ -485,7 +485,7 @@ app.post("/api/captains/create", async (req, res) => {
       `🚘 <b>Машина:</b> ${result.captain.hasCar ? "Да 🚗" : "Нет 🚶"}\n` +
       `👥 <b>Слотов:</b> ${result.captain.slots} (занято: ${result.captain.currentParticipants}, свободно: ${free})\n` +
       `📊 <b>Всего капитанов:</b> ${totalCaptains}\n` +
-      `🕒 ${new Date().toLocaleString("ru-RU")}`;
+      `🕒 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}`;
     await fetch(API("sendMessage"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -519,7 +519,7 @@ app.post("/api/subscribe-to-captain", async (req, res) => {
       `👑 <b>Капитан:</b> ${escapeHtml(result.captain.name)}\n` +
       `👥 <b>Слоты:</b> ${result.captain.currentParticipants}/${result.captain.slots} (свободно: ${free})\n` +
       `🚘 <b>Машина:</b> ${hasCar ? "Да 🚗" : "Нет 🚶"}\n` +
-      `🕒 ${new Date().toLocaleString("ru-RU")}`;
+      `🕒 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}`;
     await fetch(API("sendMessage"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -550,7 +550,7 @@ app.post("/api/admin/update-slots", async (req, res) => {
     const text = `🔧 <b>ОБНОВЛЕНИЕ СЛОТОВ</b>\n\n` +
       `👑 <b>Капитан:</b> ${escapeHtml(result.captain.name)}\n` +
       `👥 <b>Слоты:</b> ${result.captain.slots} (занято: ${result.captain.currentParticipants}, свободно: ${free})\n` +
-      `🕒 ${new Date().toLocaleString("ru-RU")}`;
+      `🕒 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}`;
     await fetch(API("sendMessage"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -608,7 +608,7 @@ app.post("/api/admin/move-user", async (req, res) => {
         `📞 <b>Телефон:</b> ${escapeHtml(phone)}\n` +
         `👑 <b>В:</b> ${escapeHtml(subResult.captain.name)}\n` +
         `👥 <b>Слоты:</b> ${subResult.captain.currentParticipants}/${subResult.captain.slots} (свободно: ${free})\n` +
-        `🕒 ${new Date().toLocaleString("ru-RU")}`;
+        `🕒 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}`;
       await fetch(API("sendMessage"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -631,7 +631,7 @@ app.post("/api/admin/move-user", async (req, res) => {
       `👑 <b>Из:</b> ${escapeHtml(result.fromCaptain.name)}\n` +
       `👑 <b>В:</b> ${escapeHtml(result.toCaptain.name)}\n` +
       `👥 <b>Слоты:</b> ${result.toCaptain.currentParticipants}/${result.toCaptain.slots} (свободно: ${free})\n` +
-      `🕒 ${new Date().toLocaleString("ru-RU")}`;
+      `🕒 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}`;
     await fetch(API("sendMessage"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -664,7 +664,7 @@ app.post("/api/admin/unsubscribe", async (req, res) => {
       `📞 <b>Телефон:</b> ${escapeHtml(result.removed.phone)}\n` +
       `👑 <b>Капитан:</b> ${escapeHtml(result.captain.name)}\n` +
       `👥 <b>Слоты:</b> ${result.captain.currentParticipants}/${result.captain.slots} (свободно: ${free})\n` +
-      `🕒 ${new Date().toLocaleString("ru-RU")}`;
+      `🕒 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}`;
     await fetch(API("sendMessage"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -695,7 +695,7 @@ app.post("/api/admin/add-solo", async (req, res) => {
       `👤 <b>Имя:</b> ${escapeHtml(name)}\n` +
       `📞 <b>Телефон:</b> ${escapeHtml(phone)}\n` +
       `🚘 <b>Машина:</b> ${hasCar ? "Да 🚗" : "Нет 🚶"}\n` +
-      `🕒 ${new Date().toLocaleString("ru-RU")}`;
+      `🕒 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}`;
     await fetch(API("sendMessage"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -905,7 +905,7 @@ app.post("/api/solve", async (req, res) => {
         (totalTime !== "—" ? `⏱ <b>Общее время:</b> ${totalTime}\n` : "") +
         `🏁 <b>Финишировало:</b> ${finishedCount} из ${totalTeams} команд\n` +
         `📸 <b>Материалов от капитана:</b> ${mediaCount}\n` +
-        `🕒 ${new Date().toLocaleString("ru-RU")}`
+        `🕒 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}`
     );
   } else {
     notifyOrganizers(
@@ -915,7 +915,7 @@ app.post("/api/solve", async (req, res) => {
         (stationTime !== "—" ? `⏱ <b>Время на точке:</b> ${stationTime}\n` : "") +
         (rank ? `📊 <b>Место:</b> ${rank} из ${totalTeams}\n` : "") +
         (nextStation ? `➡️ <b>Следующая:</b> ${escapeHtml(nextStation.name)}\n` : "") +
-        `🕒 ${new Date().toLocaleString("ru-RU")}`
+        `🕒 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}`
     );
   }
 

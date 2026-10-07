@@ -215,7 +215,7 @@ function mediaKind(msg) {
 
 async function forwardVideo(msg, sender, kind, stationNumOverride = null) {
   const { CHAT_ID } = getEnv();
-  const time = new Date().toLocaleString("ru-RU");
+  const time = new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" });
   const caption = msg.caption ? `\n💬 ${escapeHtml(msg.caption)}` : "";
   const title = kind === "photo" ? "📸 <b>ФОТО ОТ КОМАНДЫ</b>" : "🎬 <b>ВИДЕО ОТ КОМАНДЫ</b>";
 
@@ -441,7 +441,7 @@ async function handleMessage(msg) {
   if (sender.step === "ready" && text) {
     const { CHAT_ID } = getEnv();
     if (CHAT_ID) {
-      const time = new Date().toLocaleString("ru-RU");
+      const time = new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" });
       const num = sender.teamNumber ? `№${sender.teamNumber} ` : "";
 
       // Номер точки из текста (если капитан указал).

@@ -1,4 +1,4 @@
-import { Routes, Route, Link, Navigate } from "react-router-dom";
+import { Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
 import { QUEST } from "./questConfig.js";
 import Start from "./pages/Start.jsx";
 import Station from "./pages/Station.jsx";
@@ -10,6 +10,12 @@ import Landing from "./pages/Landing.jsx";
 import Profile from "./pages/Profile.jsx";
 
 export default function App() {
+  const location = useLocation();
+  // Во время игры (на страницах станций) скрываем Презентация/Регистрация/В начало
+  const isStationPage = location.pathname.startsWith("/s/");
+  const isAdminPage = location.pathname.startsWith("/admin");
+  const isProfilePage = location.pathname === "/profile";
+
   return (
     <div className="wrap">
       <div className="brand">
@@ -31,8 +37,22 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      <div className="footer">
-      </div>
+      {!isAdminPage && (
+        <div className="footer">
+          {!isStationPage && (
+            <>
+              <Link className="small" to="/landing">✨ Презентация</Link>
+              {" · "}
+              <Link className="small" to="/register">📝 Регистрация</Link>
+              {" · "}
+            </>
+          )}
+          {!isProfilePage && (
+            <Link className="small" to="/profile">👤 Профиль</Link>
+          )}
+        </div>
+      )}
     </div>
   );
 }
+
