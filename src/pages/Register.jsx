@@ -219,8 +219,17 @@ export default function Register() {
         <div className="eyebrow" style={{ color: "#4cd964" }}>
           ✓ Успешно
         </div>
-        <h2>Вы зарегистрированы! 🎉</h2>
-        <p className="muted">Ваши данные отправлены организаторам в Telegram.</p>
+        {registrationType === "SOLO" ? (
+          <>
+            <h2>Вы зарегистрировались. Ожидайте распределение по командам!</h2>
+            <p className="muted">Ваши данные отправлены организаторам в Telegram.</p>
+          </>
+        ) : (
+          <>
+            <h2>Вы зарегистрированы! 🎉</h2>
+            <p className="muted">Ваши данные отправлены организаторам в Telegram.</p>
+          </>
+        )}
 
         {teamNumber && (
           <div className="reveal" style={{ marginTop: 20 }}>
@@ -313,7 +322,7 @@ export default function Register() {
               </p>
             )}
 
-            <label className="field-label mt">3. В команде должен быть хотя бы один автомобиль:</label>
+            <label className="field-label mt">3. Ваш автомобиль участвует в игре?</label>
             <div style={TWO_COLS}>
               <ChoiceButton active={hasCar} onClick={() => setHasCar(true)}>
                 🚗 Да

@@ -110,12 +110,44 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 // progressEntry — запись из progress.json (arrivals/stations/finishedAt),
 // если доступна: позволяет показать время на точке и текущий прогресс.
 function buildMessage({ event, stationId, stationName, team, phone, teamNumber, progressEntry }) {
-  // Кто: № команды (если есть) + телефон (если есть) + имя/команда (если есть).
+  // Ищем данные участника по телефону для показа имени, команды, капитана
+  let userName = "";
+  let userTeamName = "";
+  let userCaptainName = "";
+  if (phone) {
+    const phoneClean = String(phone).replace(/\D/g, "").slice(-10);
+    const participants = readParticipants();
+    const participant = participants.find(p => (p.phone || "").replace(/\D/g, "").slice(-10) === phoneClean);
+    if (participant) {
+      userName = participant.name || "";
+      userTeamName = participant.teamName || "";
+    }
+    // Ищем капитана этого участника
+    const allCaptains = listCaptains();
+    for (const cap of allCaptains) {
+      const subs = (cap.participants || []);
+      const found = subs.find(s => (s.phone || "").replace(/\D/g, "").slice(-10) === phoneClean);
+      if (found) {
+        userCaptainName = cap.name || "";
+        break;
+      }
+    }
+    // Может сам участник — капитан
+    if (!userCaptainName) {
+      const selfCap = allCaptains.find(c => (c.phone || "").replace(/\D/g, "").slice(-10) === phoneClean);
+      if (selfCap) userCaptainName = selfCap.name + " (капитан)";
+    }
+  }
+
+  // Кто: имя + № команды + телефон + название команды + капитан
   const parts = [];
+  if (userName) parts.push(`👤 <b>${escapeHtml(userName)}</b>`);
   if (teamNumber) parts.push(`👥 <b>№${teamNumber}</b>`);
-  if (phone) parts.push(`📞 <b>${escapeHtml(phone)}</b>`);
-  if (team) parts.push(`👥 ${escapeHtml(team)}`);
-  const who = parts.length ? parts.join(" · ") : "👤 Участник";
+  if (userTeamName) parts.push(`🏷 «${escapeHtml(userTeamName)}»`);
+  if (phone) parts.push(`📞 ${escapeHtml(phone)}`);
+  if (userCaptainName) parts.push(`👑 Капитан: ${escapeHtml(userCaptainName)}`);
+  if (team && !userTeamName) parts.push(`👥 ${escapeHtml(team)}`);
+  const who = parts.length ? parts.join("\n") : "👤 Участник";
 
   const point = stationName
     ? `точку ${escapeHtml(String(stationId))} · ${escapeHtml(stationName)}`

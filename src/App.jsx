@@ -32,17 +32,6 @@ export default function App() {
       </Routes>
 
       <div className="footer">
-        <Link className="small" to="/landing">
-          ✨ Презентация
-        </Link>{" "}
-        · {" "}
-        <Link className="small" to="/register">
-          📝 Регистрация
-        </Link>{" "}
-        · {" "}
-        <Link className="small" to="/profile">
-          В начало
-        </Link>
       </div>
     </div>
   );

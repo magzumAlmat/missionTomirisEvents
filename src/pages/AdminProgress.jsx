@@ -10,17 +10,21 @@ function time(iso) {
   return iso ? new Date(iso).toLocaleTimeString("ru-RU") : "";
 }
 
-/** Состояние точки у команды: взята / команда пришла / ещё не была. */
+/** Состояние точки у команды: взята / подсказка / не отгадал / команда пришла / ещё не была. */
 function cellState(row, stationId) {
   const id = String(stationId);
   if (row.stations?.[id]) return "solved";
+  if (row.hints?.[id]) return "hinted";
+  if (row.notGuessed?.[id]) return "not_guessed";
   if (row.arrivals?.[id]) return "arrived";
   return "empty";
 }
 
 const CELL_STYLE = {
   solved: { background: "rgba(76, 217, 100, 0.22)", color: "#4cd964", label: "✓" },
-  arrived: { background: "rgba(255, 193, 7, 0.18)", color: "var(--accent)", label: "•" },
+  hinted: { background: "rgba(255, 193, 7, 0.25)", color: "#ffc107", label: "💡" },
+  not_guessed: { background: "rgba(255, 107, 107, 0.2)", color: "#ff6b6b", label: "❌" },
+  arrived: { background: "rgba(255, 193, 7, 0.18)", color: "var(--accent)", label: "" },
   empty: { background: "rgba(255,255,255,0.04)", color: "var(--muted)", label: "" },
 };
 
@@ -182,15 +186,31 @@ export default function AdminProgress() {
                   {QUEST.stations.map((s) => {
                     const state = cellState(r, s.id);
                     const style = CELL_STYLE[state];
-                    const at = r.stations?.[String(s.id)] || r.arrivals?.[String(s.id)];
+                    const arrivalAt = r.arrivals?.[String(s.id)]?.at || r.arrivals?.[String(s.id)];
+                    const solvedAt = r.stations?.[String(s.id)];
+                    const hintAt = r.hints?.[String(s.id)];
+                    const notGuessedAt = r.notGuessed?.[String(s.id)];
+                    // Для arrived — показываем время
+                    let label = style.label;
+                    if (state === "arrived" && arrivalAt) {
+                      label = time(typeof arrivalAt === "object" ? arrivalAt.at : arrivalAt);
+                    }
+                    if (state === "hinted" && hintAt) {
+                      label = "💡" + (hintAt ? " " + time(hintAt) : "");
+                    }
+                    const titleParts = [s.name];
+                    if (arrivalAt) titleParts.push(`Прибытие: ${time(typeof arrivalAt === "object" ? arrivalAt.at : arrivalAt)}`);
+                    if (hintAt) titleParts.push(`Подсказка: ${time(hintAt)}`);
+                    if (notGuessedAt) titleParts.push(`Не отгадал: ${time(notGuessedAt)}`);
+                    if (solvedAt) titleParts.push(`Выполнено: ${time(solvedAt)}`);
                     return (
                       <td key={s.id} className="board-cell">
                         <span
                           className="board-dot"
-                          style={{ background: style.background, color: style.color }}
-                          title={`${s.name}${at ? ` · ${time(at)}` : ""}`}
+                          style={{ background: style.background, color: style.color, fontSize: label.length > 2 ? "10px" : undefined }}
+                          title={titleParts.join(" · ")}
                         >
-                          {style.label}
+                          {label}
                         </span>
                       </td>
                     );

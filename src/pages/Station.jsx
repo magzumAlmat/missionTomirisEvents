@@ -28,6 +28,9 @@ export default function Station() {
   const [hintLoading, setHintLoading] = useState(false);
   const [hintReceived, setHintReceived] = useState(false); // true только после onGetHint()
   
+  // Показать задание (после "Не отгадал" или "Подсказка")
+  const [showTaskFromNotGuessed, setShowTaskFromNotGuessed] = useState(false);
+  
   // Загадка на следующую локацию (появляется после "Задание выполнено")
   const [nextRiddle, setNextRiddle] = useState("");
   
@@ -41,6 +44,7 @@ export default function Station() {
     setRevealed(solvedAlready);
     setHint("");
     setHintReceived(false);
+    setShowTaskFromNotGuessed(false);
     setNextRiddle("");
     setErr("");
     setShowHintModal(false);
@@ -122,7 +126,7 @@ export default function Station() {
 
   /**
    * Загадку команда разгадывает на месте — ответ через сайт не вводится.
-   * Кнопка «Задание выполнено» отмечает точку с подтверждением.
+   * Кнопка «Задание отправлено» отмечает точку с подтверждением.
    */
   async function onSolved() {
     setErr("");
@@ -151,7 +155,7 @@ export default function Station() {
     }
   }
 
-  /** Получить подсказку (-3 балла) */
+  /** Получить подсказку */
   async function onGetHint() {
     setErr("");
     if (!HAS_BACKEND) {
@@ -161,14 +165,6 @@ export default function Station() {
     setHintLoading(true);
     try {
       // Отправляем уведомление админам о использовании подсказки
-      const text = `💡 <b>ПОДСКАЗКА ИСПОЛЬЗОВАНА</b>\n\n` +
-        `👤 Телефон: ${phone.trim()}\n` +
-        `👥 Команда: ${teamNo ? `№${teamNo}` : "не указана"}\n` +
-        `📍 Точка: ${station.id} - ${station.name}\n` +
-        `⚠️ Штраф: -3 балла\n` +
-        `🕒 ${new Date().toLocaleString("ru-RU")}`;
-      
-      // Отправляем уведомление через стандартный notify
       await notify("hint_used", {
         stationId: station.id,
         stationName: station.name,
@@ -181,6 +177,8 @@ export default function Station() {
       setHint(hint);
       setHintReceived(true);
       setShowHintModal(false);
+      // После подсказки также показываем задание
+      setShowTaskFromNotGuessed(true);
     } catch (e) {
       setErr(e.message || "Не удалось получить подсказку.");
     } finally {
@@ -188,7 +186,7 @@ export default function Station() {
     }
   }
 
-  /** Не отгадал — уведомляем администраторов через бота (0 баллов за точку) */
+  /** Не отгадал — уведомляем администраторов через бота */
   async function onNotGuessed() {
     setErr("");
     if (!HAS_BACKEND) {
@@ -206,11 +204,15 @@ export default function Station() {
         teamNumber: teamNo || null,
         team: teamLabel || undefined,
       });
-      setErr(`✅ Отправлено организаторам. Команда «${teamLabel || phone}» получает 0 баллов за точку ${station.id}.`);
+      // Показываем задание и кнопку перехода к следующей точке
+      setShowTaskFromNotGuessed(true);
     } catch (e) {
       setErr(e.message || "Не удалось отправить уведомление.");
     }
   }
+
+  // Показать задание если: arrive === done ИЛИ showTaskFromNotGuessed
+  const taskVisible = (arrive === "done" || showTaskFromNotGuessed) && station.detailedTask;
 
   return (
     <div className="card">
@@ -235,8 +237,8 @@ export default function Station() {
               </div>
             )}
 
-            {/* ЗАДАНИЕ (показывается только после "Я прибыл") */}
-            {arrive === "done" && station.detailedTask && (
+            {/* ЗАДАНИЕ (показывается после "Я прибыл (отгадал загадку)" ИЛИ после "Не отгадал"/"Подсказка") */}
+            {taskVisible && (
               <div className="task assignment-block" style={{ marginTop: "16px", backgroundColor: "rgba(255, 255, 255, 0.05)", padding: "16px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.1)" }}>
                 <div 
                   style={{ fontSize: "15px", lineHeight: "1.6" }} 
@@ -275,23 +277,16 @@ export default function Station() {
           >
             {arrive === "sending"
               ? "Отправляем…"
-              : "📍 Я прибыл"}
+              : "📍 Я прибыл (отгадал загадку)"}
           </button>
         )}
-        <button
-          className="btn ghost"
-          onClick={() => navigate("/profile")}
-          style={{ marginTop: 8, width: "100%" }}
-        >
-          🏠 В профиль
-        </button>
 
         {!revealed && arrive === "done" && (
           <>
             <button
               className="btn green"
               onClick={() => setShowConfirm(true)}
-              disabled={check === "sending"}
+              disabled={check === "sending" || !taskVisible}
               style={{ marginTop: 8 }}
             >
               {check === "sending" ? "Отмечаем…" : "✅ Задание отправлено"}
@@ -302,7 +297,7 @@ export default function Station() {
               disabled={hintLoading}
               style={{ marginTop: 8 }}
             >
-              {hintLoading ? "Загружаем…" : "💡 Прошу подсказку"}
+              {hintLoading ? "Загружаем…" : "💡 Прошу подсказку к загадке"}
             </button>
             <button
               className="btn ghost"
@@ -316,10 +311,30 @@ export default function Station() {
 
         {!revealed && arrive !== "done" && (
           <p className="center muted tiny">
-            Сначала нажмите «Я прибыл» — после этого откроется «Задание выполнено».
+            Сначала нажмите «Я прибыл (отгадал загадку)» — после этого откроются остальные кнопки.
           </p>
         )}
       </div>
+
+      {/* Кнопка "Перейти к следующей точке" после "Не отгадал" */}
+      {!revealed && showTaskFromNotGuessed && (
+        <div style={{ marginTop: 16 }}>
+          {station.id < QUEST.stations.length - 1 ? (
+            <button
+              className="btn green"
+              onClick={() => {
+                solve(station.id);
+                navigate(`/s/${QUEST.stations[station.id + 1]?.code || station.id + 1}`);
+              }}
+              style={{ width: "100%", marginBottom: 12 }}
+            >
+              🚀 Перейти к следующей точке
+            </button>
+          ) : (
+            <p className="center muted">Это последняя точка квеста.</p>
+          )}
+        </div>
+      )}
 
       {err && <div className="feedback err">{err}</div>}
 
@@ -360,15 +375,24 @@ export default function Station() {
         </div>
       )}
 
+      {/* Кнопка "В профиль" — внизу страницы */}
+      <button
+        className="btn ghost"
+        onClick={() => navigate("/profile")}
+        style={{ marginTop: 16, width: "100%" }}
+      >
+        🏠 В профиль
+      </button>
+
       {/* Модальное окно подтверждения */}
       {showConfirm && (
         <div className="modal-overlay" onClick={() => setShowConfirm(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>Вы уверены?</h3>
-            <p>Вы хотите отметить текущую точку как выполненную?</p>
+            <h3>Подтверждение</h3>
+            <p>Вы хотите подтвердить текущую точку как выполненную?</p>
             <div className="modal-actions">
               <button className="btn green" onClick={() => { setShowConfirm(false); onSolved(); }}>
-                Да, отметить
+                Да, подтвердить
               </button>
               <button className="btn ghost" onClick={() => setShowConfirm(false)}>
                 Нет, отмена
@@ -382,16 +406,16 @@ export default function Station() {
       {showHintModal && (
         <div className="modal-overlay" onClick={() => setShowHintModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>💡 Подсказка</h3>
-            <p style={{ color: "#ff6b6b", fontSize: 14 }}>
-              ⚠️ Использование подсказки: -3 балла. Уведомление отправлено админам.
+            <h3>💡 Подсказка к загадке</h3>
+            <p style={{ fontSize: 14 }}>
+              Уведомление будет отправлено организаторам.
             </p>
             {hint ? (
               <div style={{ marginTop: 12, padding: 12, background: "rgba(255,255,255,0.1)", borderRadius: 8 }}>
                 <p style={{ whiteSpace: "pre-wrap" }}>{hint}</p>
               </div>
             ) : (
-              <p>Получаем подсказку...</p>
+              <p>Нажмите «Получить подсказку» для запроса.</p>
             )}
             <div className="modal-actions" style={{ marginTop: 16 }}>
               <button 
