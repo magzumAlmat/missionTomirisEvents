@@ -186,32 +186,38 @@ export default function AdminProgress() {
                   {QUEST.stations.map((s) => {
                     const state = cellState(r, s.id);
                     const style = CELL_STYLE[state];
-                    const arrivalAt = r.arrivals?.[String(s.id)]?.at || r.arrivals?.[String(s.id)];
-                    const solvedAt = r.stations?.[String(s.id)];
-                    const hintAt = r.hints?.[String(s.id)];
-                    const notGuessedAt = r.notGuessed?.[String(s.id)];
-                    // Для arrived — показываем время
+                    const sid = String(s.id);
+                    const arrivalAt = r.arrivals?.[sid]?.at || r.arrivals?.[sid];
+                    const solvedAt = r.stations?.[sid]?.at || r.stations?.[sid];
+                    const hintAt = r.hints?.[sid]?.at || r.hints?.[sid];
+                    const notGuessedAt = r.notGuessed?.[sid]?.at || r.notGuessed?.[sid];
+
+                    // Собираем ВСЕ действия с временами (не стираем по мере прогресса)
+                    const actions = [];
+                    if (arrivalAt) actions.push({ icon: "📍", label: "Прибыл", t: time(typeof arrivalAt === "object" ? arrivalAt.at : arrivalAt) });
+                    if (hintAt) actions.push({ icon: "💡", label: "Подсказка", t: time(hintAt) });
+                    if (notGuessedAt) actions.push({ icon: "❌", label: "Не отгадал", t: time(notGuessedAt) });
+                    if (solvedAt) actions.push({ icon: "✓", label: "Отгадал", t: time(solvedAt) });
+
+                    // Основной label — иконка приоритетного состояния + время последнего действия
                     let label = style.label;
-                    if (state === "arrived" && arrivalAt) {
-                      label = time(typeof arrivalAt === "object" ? arrivalAt.at : arrivalAt);
+                    if (actions.length > 0) {
+                      const lastAction = actions[actions.length - 1];
+                      label = style.label + " " + lastAction.t;
                     }
-                    if (state === "hinted" && hintAt) {
-                      label = "💡 " + time(hintAt);
-                    }
-                    if (state === "not_guessed" && notGuessedAt) {
-                      label = "❌ " + time(notGuessedAt);
-                    }
+
+                    // Tooltip: все действия с временами
                     const titleParts = [s.name];
-                    if (arrivalAt) titleParts.push(`Прибытие: ${time(typeof arrivalAt === "object" ? arrivalAt.at : arrivalAt)}`);
-                    if (hintAt) titleParts.push(`Подсказка: ${time(hintAt)}`);
-                    if (notGuessedAt) titleParts.push(`Не отгадал: ${time(notGuessedAt)}`);
-                    if (solvedAt) titleParts.push(`Выполнено: ${time(solvedAt)}`);
+                    for (const a of actions) {
+                      titleParts.push(`${a.icon} ${a.label}: ${a.t}`);
+                    }
+
                     return (
                       <td key={s.id} className="board-cell">
                         <span
                           className="board-dot"
                           style={{ background: style.background, color: style.color, fontSize: label.length > 2 ? "10px" : undefined }}
-                          title={titleParts.join(" · ")}
+                          title={titleParts.join("\n")}
                         >
                           {label}
                         </span>
