@@ -159,7 +159,7 @@ export default function Register() {
             slots: Number(captainSlots) || 4,
             hasCar,
           });
-          await registerParticipant({
+          const resCreate = await registerParticipant({
             name: trimmedName,
             phone: trimmedPhone,
             hasCar,
@@ -167,6 +167,10 @@ export default function Register() {
             teamName: teamName.trim(),
             teamSize: 1,
           });
+          if (resCreate?.teamNumber) {
+            setTeamNumberState(resCreate.teamNumber);
+            setTeamNumber(resCreate.teamNumber);
+          }
           break;
 
         case "JOIN_CAPTAIN":
@@ -177,7 +181,7 @@ export default function Register() {
             phone: trimmedPhone,
             hasCar,
           });
-          await registerParticipant({
+          const resJoin = await registerParticipant({
             name: trimmedName,
             phone: trimmedPhone,
             hasCar,
@@ -185,6 +189,10 @@ export default function Register() {
             teamName: selectedCap?.teamName || `Команда ${selectedCap?.name || selectedCaptainId}`,
             teamSize: 0,
           });
+          if (resJoin?.teamNumber) {
+            setTeamNumberState(resJoin.teamNumber);
+            setTeamNumber(resJoin.teamNumber);
+          }
           break;
 
         case "JOIN_TEAM":
