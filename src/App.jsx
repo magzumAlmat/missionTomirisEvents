@@ -44,11 +44,7 @@ export default function App() {
               <Link className="small" to="/landing">✨ Презентация</Link>
               {" · "}
               <Link className="small" to="/register">📝 Регистрация</Link>
-              {" · "}
             </>
-          )}
-          {!isProfilePage && (
-            <Link className="small" to="/profile">👤 Профиль</Link>
           )}
         </div>
       )}

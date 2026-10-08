@@ -216,6 +216,16 @@ export default function Station() {
   // Показать задание если: arrive === done ИЛИ hintReceived ИЛИ notGuessed ИЛИ уже решено
   const taskVisible = (arrive === "done" || hintReceived || notGuessed || revealed) && station.detailedTask;
 
+  // Подтверждение перехода к следующей точке
+  const [confirmNext, setConfirmNext] = useState(false);
+
+  function goNextStation() {
+    const next = QUEST.stations[station.id + 1];
+    if (next) {
+      navigate(`/s/${next.code || next.id}`);
+    }
+  }
+
   return (
     <div className="card">
       {revealed && <span className="done-badge">✓ Точка разгадана</span>}
@@ -320,10 +330,7 @@ export default function Station() {
           {station.id < QUEST.stations.length - 1 ? (
             <button
               className="btn green"
-              onClick={() => {
-                solve(station.id);
-                navigate(`/s/${QUEST.stations[station.id + 1]?.code || station.id + 1}`);
-              }}
+              onClick={() => setConfirmNext(true)}
               style={{ width: "100%", marginBottom: 12 }}
             >
               🚀 Перейти к следующей точке
@@ -342,7 +349,7 @@ export default function Station() {
           {station.id < QUEST.stations.length - 1 ? (
             <button
               className="btn green"
-              onClick={() => navigate(`/s/${QUEST.stations[station.id + 1]?.code || station.id + 1}`)}
+              onClick={() => setConfirmNext(true)}
               style={{ width: "100%", marginBottom: 20 }}
             >
               🚀 Перейти к следующей точке
@@ -373,15 +380,6 @@ export default function Station() {
         </div>
       )}
 
-      {/* Кнопка "В профиль" — внизу страницы */}
-      <button
-        className="btn ghost"
-        onClick={() => navigate("/profile")}
-        style={{ marginTop: 16, width: "100%" }}
-      >
-        🏠 В профиль
-      </button>
-
       {/* Модальное окно подтверждения */}
       {showConfirm && (
         <div className="modal-overlay" onClick={() => setShowConfirm(false)}>
@@ -394,6 +392,24 @@ export default function Station() {
               </button>
               <button className="btn ghost" onClick={() => setShowConfirm(false)}>
                 Нет, отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модальное окно: подтверждение перехода к следующей точке */}
+      {confirmNext && (
+        <div className="modal-overlay" onClick={() => setConfirmNext(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>Подтверждение</h3>
+            <p>Вы уверены что хотите перейти к следующей локации?</p>
+            <div className="modal-actions">
+              <button className="btn green" onClick={() => { setConfirmNext(false); goNextStation(); }}>
+                Да
+              </button>
+              <button className="btn ghost" onClick={() => setConfirmNext(false)}>
+                Нет
               </button>
             </div>
           </div>
