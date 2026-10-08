@@ -46,6 +46,8 @@ import {
   getCaptainsSummary,
   addSoloUser,
   listSoloUsers,
+  deleteAllCaptains,
+  deleteAllParticipants,
 } from "./captains.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -765,6 +767,20 @@ app.get("/api/admin/solo-users", (_req, res) => {
 
   const users = Array.from(uniqueUsers.values());
   res.json({ ok: true, users });
+});
+
+/** Удалить ВСЕХ капитанов (админ) */
+app.post("/api/admin/delete-all-captains", (req, res) => {
+  if (!requireToken(res)) return;
+  const result = deleteAllCaptains();
+  res.json({ ok: true, ...result });
+});
+
+/** Удалить ВСЕХ участников (админ) */
+app.post("/api/admin/delete-all-participants", (req, res) => {
+  if (!requireToken(res)) return;
+  const result = deleteAllParticipants();
+  res.json({ ok: true, ...result });
 });
 
 /* =====================================================================

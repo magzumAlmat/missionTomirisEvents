@@ -195,3 +195,16 @@ export function addSoloUser({ name, phone, hasCar }) {
 export function listSoloUsers() {
   return readJson(path.join(__dirname, "solo_users.json"), []);
 }
+
+/** Удалить ВСЕХ капитанов (captains.json → пустой массив) */
+export function deleteAllCaptains() {
+  const ok = writeJson(CAPTAINS_FILE, []);
+  return { ok, removed: true };
+}
+
+/** Удалить ВСЕХ участников (solo_users.json → пустой массив) */
+export function deleteAllParticipants() {
+  const soloFile = path.join(__dirname, "solo_users.json");
+  const ok = writeJson(soloFile, []);
+  return { ok, removed: true };
+}

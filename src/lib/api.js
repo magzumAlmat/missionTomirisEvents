@@ -194,5 +194,15 @@ export async function fetchTeams() {
   return data;
 }
 
+/** Удалить всех капитанов (админ) */
+export async function deleteAllCaptains() {
+  return post("/api/admin/delete-all-captains", {});
+}
+
+/** Удалить всех участников (админ) */
+export async function deleteAllParticipants() {
+  return post("/api/admin/delete-all-participants", {});
+}
+
 export const HAS_BACKEND = !!API_URL;
 export const API_BASE = API_URL;

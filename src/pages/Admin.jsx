@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 import { useNavigate } from "react-router-dom";
 import { QUEST, INCLUDE_START_QR } from "../questConfig.js";
 import PasswordGate, { isUnlocked } from "../components/PasswordGate.jsx";
-import { fetchCaptains, createCaptain, updateCaptainSlots, moveUserBetweenCaptains, unsubscribeFromCaptain, fetchSoloUsers } from "../lib/api.js";
+import { fetchCaptains, createCaptain, updateCaptainSlots, moveUserBetweenCaptains, unsubscribeFromCaptain, fetchSoloUsers, deleteAllCaptains, deleteAllParticipants } from "../lib/api.js";
 
 /** Список точек, для которых генерируем QR. */
 function buildItems(base) {
@@ -180,6 +180,36 @@ export default function Admin() {
     }
   }
 
+  // Удалить всех капитанов
+  async function onDeleteAllCaptains() {
+    if (!window.confirm("⚠️ Удалить ВСЕХ капитанов? Это действие необратимо.")) return;
+    setCaptainMsg("");
+    try {
+      await deleteAllCaptains();
+      setCaptainMsg("✅ Все капитаны удалены!");
+      setCaptains([]);
+      // Перезагружаем участников
+      const data = await fetchSoloUsers();
+      setSoloUsers(data.users || []);
+    } catch (e) {
+      setCaptainMsg("❌ " + e.message);
+    }
+  }
+
+  // Удалить всех участников
+  async function onDeleteAllParticipants() {
+    if (!window.confirm("⚠️ Удалить ВСЕХ участников? Это действие необратимо.")) return;
+    setCaptainMsg("");
+    try {
+      await deleteAllParticipants();
+      setCaptainMsg("✅ Все участники удалены!");
+      const data = await fetchSoloUsers();
+      setSoloUsers(data.users || []);
+    } catch (e) {
+      setCaptainMsg("❌ " + e.message);
+    }
+  }
+
   if (!unlocked) return <PasswordGate onOk={() => setUnlocked(true)} />;
 
   return (
@@ -318,6 +348,28 @@ export default function Admin() {
               ))}
             </div>
           )}
+
+          {/* Удалить всех капитанов */}
+          <div style={{ marginTop: 24, padding: 16, background: "rgba(255,107,107,0.1)", borderRadius: 8, border: "1px solid rgba(255,107,107,0.3)" }}>
+            <h3 style={{ margin: 0, color: "#ff6b6b" }}>🗑 Опасная зона</h3>
+            <p style={{ fontSize: 13, color: "#aaa", margin: "8px 0 12px" }}>Удаление данных необратимо. Убедитесь, что знаете, что делаете.</p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                className="btn ghost"
+                onClick={onDeleteAllCaptains}
+                style={{ flex: 1, borderColor: "#ff6b6b", color: "#ff6b6b" }}
+              >
+                🗑 Удалить всех капитанов
+              </button>
+              <button
+                className="btn ghost"
+                onClick={onDeleteAllParticipants}
+                style={{ flex: 1, borderColor: "#ff6b6b", color: "#ff6b6b" }}
+              >
+                🗑 Удалить всех участников
+              </button>
+            </div>
+          </div>
 
           {/* Создание капитана */}
           <h3 style={{ marginTop: 24 }}>➕ Создать капитана</h3>
