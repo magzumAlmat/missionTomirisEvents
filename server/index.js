@@ -909,33 +909,8 @@ app.post("/api/solve", async (req, res) => {
     ? Object.values(STATION_SECRETS).find((s) => s.id === station.id + 1)
     : null;
 
-  if (allDone) {
-    // Общее время квеста: первое прибытие → финиш.
-    const firstArrival = Object.values(entry?.arrivals || {}).filter(Boolean).sort()[0];
-    const totalTime = durationText(firstArrival, entry?.finishedAt || solveAt);
-    const mediaCount = (listSubmissions().filter((s) => Number(s.teamNumber) === (team?.number || 0))).length;
-    // Сколько команд уже финишировало (включая текущую) — видно, не первый ли финиш.
-    const finishedCount = rows.filter((r) => r.finishedAt).length;
-    notifyOrganizers(
-      `🏆 <b>КОМАНДА ПРОШЛА ВСЕ ТОЧКИ</b>\n${who}\n` +
-        `Взято точек: ${solvedCount} из ${TOTAL_STATIONS}\n` +
-        (rank ? `📊 <b>Место:</b> ${rank} из ${totalTeams}\n` : "") +
-        (totalTime !== "—" ? `⏱ <b>Общее время:</b> ${totalTime}\n` : "") +
-        `🏁 <b>Финишировало:</b> ${finishedCount} из ${totalTeams} команд\n` +
-        `📸 <b>Материалов от капитана:</b> ${mediaCount}\n` +
-        `🕒 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}`
-    );
-  } else {
-    notifyOrganizers(
-      `🧩 <b>Точка взята</b>\n${who}\n` +
-        `точка ${station.id} · ${escapeHtml(station.name || "")}\n` +
-        `Взято точек: ${solvedCount} из ${TOTAL_STATIONS}\n` +
-        (stationTime !== "—" ? `⏱ <b>Время на точке:</b> ${stationTime}\n` : "") +
-        (rank ? `📊 <b>Место:</b> ${rank} из ${totalTeams}\n` : "") +
-        (nextStation ? `➡️ <b>Следующая:</b> ${escapeHtml(nextStation.name)}\n` : "") +
-        `🕒 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}`
-    );
-  }
+  // Уведомления в Telegram только о прибытии, подсказке и "не отгадал".
+  // "Точка взята" и "Финиш" в чат админов не отправляются.
 
   res.json({
     ok: true,
@@ -966,6 +941,8 @@ app.get("/api/progress", (req, res) => {
     teamName: team ? team.name : entry?.teamName || "",
     stations: entry?.stations || {},
     arrivals: entry?.arrivals || {},
+    hints: entry?.hints || {},
+    notGuessed: entry?.notGuessed || {},
     finishedAt: entry?.finishedAt || null,
   });
 });

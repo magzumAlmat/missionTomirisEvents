@@ -65,6 +65,11 @@ export default function Station() {
       .then((data) => {
         if (cancelled) return;
         if (data.arrivals && data.arrivals[String(station.id)]) setArrive("done");
+        if (data.hints && data.hints[String(station.id)]) {
+          setHintReceived(true);
+          setHint(station.hint || "Подсказка получена ранее.");
+        }
+        if (data.notGuessed && data.notGuessed[String(station.id)]) setNotGuessed(true);
       })
       .catch(() => {
         /* нет связи — кнопка просто останется закрытой до «Я прибыл» */
