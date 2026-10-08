@@ -178,14 +178,12 @@ export default function Station() {
         phone: phone.trim(),
         teamNumber: teamNo || null,
       });
-      
+
       // Получаем подсказку из questConfig
       const hint = station.hint || "Подсказка отсутствует.";
       setHint(hint);
       setHintReceived(true);
-      setShowHintModal(false);
-      // После подсказки также показываем задание
-      setHintReceived(true);
+      // НЕ закрываем модалку — подсказка остаётся видимой внутри окна
     } catch (e) {
       setErr(e.message || "Не удалось получить подсказку.");
     } finally {
@@ -218,8 +216,12 @@ export default function Station() {
     }
   }
 
-  // Показать задание если: arrive === done ИЛИ hintReceived ИЛИ notGuessed ИЛИ уже решено
-  const taskVisible = (arrive === "done" || hintReceived || notGuessed || revealed) && station.detailedTask;
+  // Показать задание если: arrive === done ИЛИ notGuessed ИЛИ уже решено.
+  // Подсказка НЕ открывает задание — она показывает текст подсказки.
+  const taskVisible = (arrive === "done" || notGuessed || revealed) && station.detailedTask;
+
+  // Точка 0 (стартовая) — без загадки и подсказки
+  const isStartStation = station.id === 0;
 
   // Подтверждение перехода к следующей точке
   const [confirmNext, setConfirmNext] = useState(false);
@@ -244,8 +246,8 @@ export default function Station() {
 
         return (
           <div className="station-details">
-            {/* ЗАГАДКА */}
-            {riddleText && (
+            {/* ЗАГАДКА (не показываем на стартовой точке 0) */}
+            {riddleText && !isStartStation && (
               <div className="task riddle-block" style={{ whiteSpace: "pre-wrap" }}>
                 <div className="eyebrow" style={{ color: "var(--accent)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
                   <span>🔮</span> ЗАГАДКА
@@ -254,7 +256,7 @@ export default function Station() {
               </div>
             )}
 
-            {/* ЗАДАНИЕ (показывается после "Я прибыл (отгадал загадку)" ИЛИ после "Не отгадал"/"Подсказка") */}
+            {/* ЗАДАНИЕ (показывается после "Я прибыл" ИЛИ после "Не отгадал") */}
             {taskVisible && (
               <div className="task assignment-block" style={{ marginTop: "16px", backgroundColor: "rgba(255, 255, 255, 0.05)", padding: "16px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.1)" }}>
                 <div 
@@ -299,22 +301,26 @@ export default function Station() {
                 : "📍 Я прибыл (отгадал загадку)"}
           </button>
 
-          <button
-            className="btn ghost"
-            onClick={() => setShowHintModal(true)}
-            disabled={hintLoading || hintReceived}
-          >
-            {hintLoading ? "Загружаем…" : hintReceived ? "✓ Подсказка получена" : "💡 Прошу подсказку к загадке"}
-          </button>
+          {!isStartStation && (
+            <button
+              className="btn ghost"
+              onClick={() => setShowHintModal(true)}
+              disabled={hintLoading || hintReceived}
+            >
+              {hintLoading ? "Загружаем…" : hintReceived ? "✓ Подсказка получена" : "💡 Прошу подсказку к загадке"}
+            </button>
+          )}
 
-          <button
-            className="btn ghost"
-            onClick={onNotGuessed}
-            disabled={notGuessed}
-            style={{ borderColor: "#ff6b6b", color: notGuessed ? "#888" : "#ff6b6b" }}
-          >
-            {notGuessed ? "✓ Я не отгадал загадку" : "❌ Я не отгадал загадку"}
-          </button>
+          {!isStartStation && (
+            <button
+              className="btn ghost"
+              onClick={onNotGuessed}
+              disabled={notGuessed}
+              style={{ borderColor: "#ff6b6b", color: notGuessed ? "#888" : "#ff6b6b" }}
+            >
+              {notGuessed ? "✓ Я не отгадал загадку" : "❌ Я не отгадал загадку"}
+            </button>
+          )}
 
           {taskVisible && !notGuessed && (
             <button
@@ -426,26 +432,25 @@ export default function Station() {
         <div className="modal-overlay" onClick={() => setShowHintModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h3>💡 Подсказка к загадке</h3>
-            <p style={{ fontSize: 14 }}>
-              Уведомление будет отправлено организаторам.
-            </p>
             {hint ? (
               <div style={{ marginTop: 12, padding: 12, background: "rgba(255,255,255,0.1)", borderRadius: 8 }}>
-                <p style={{ whiteSpace: "pre-wrap" }}>{hint}</p>
+                <p style={{ whiteSpace: "pre-wrap", fontSize: 15 }}>{hint}</p>
               </div>
             ) : (
-              <p>Нажмите «Получить подсказку» для запроса.</p>
+              <p style={{ fontSize: 14 }}>Уведомление будет отправлено организаторам.</p>
             )}
             <div className="modal-actions" style={{ marginTop: 16 }}>
-              <button 
-                className="btn green" 
-                onClick={onGetHint}
-                disabled={hintLoading}
-              >
-                {hintLoading ? "Отправляем…" : "Получить подсказку"}
-              </button>
+              {!hint && (
+                <button 
+                  className="btn green" 
+                  onClick={onGetHint}
+                  disabled={hintLoading}
+                >
+                  {hintLoading ? "Отправляем…" : "Получить подсказку"}
+                </button>
+              )}
               <button className="btn ghost" onClick={() => setShowHintModal(false)}>
-                Закрыть
+                {hint ? "Закрыть" : "Отмена"}
               </button>
             </div>
           </div>
