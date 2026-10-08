@@ -64,7 +64,20 @@ export default function Station() {
     fetchProgress({ teamNumber, phone: savedPhone })
       .then((data) => {
         if (cancelled) return;
-        if (data.arrivals && data.arrivals[String(station.id)]) setArrive("done");
+        if (data.arrivals && data.arrivals[String(station.id)]) {
+          setArrive("done");
+        } else if (station.id === 0 && isValidPhone(savedPhone)) {
+          // Точка 0: авто-прибытие при первом входе
+          notify("arrived", {
+            stationId: 0,
+            stationName: station.name,
+            phone: savedPhone.trim(),
+            teamNumber: teamNumber || null,
+            team: [getTeam(), teamNumber ? `№${teamNumber}` : ""].filter(Boolean).join(" "),
+          }).then(() => {
+            if (!cancelled) setArrive("done");
+          }).catch(() => {});
+        }
         if (data.hints && data.hints[String(station.id)]) {
           setHintReceived(true);
           setHint(station.hint || "Подсказка получена ранее.");
