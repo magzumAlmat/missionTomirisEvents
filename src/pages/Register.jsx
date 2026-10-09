@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { registerParticipant, HAS_BACKEND, fetchCaptains, subscribeToCaptain, addSoloUser, createCaptain, fetchTeams } from "../lib/api.js";
 import { getPhone, setPhone, isValidPhone } from "../lib/phone.js";
 import { getTeam, setTeam, getName, setName, setTeamNumber } from "../lib/team.js";
+import { useProgress } from "../useProgress.js";
 
 /** Кнопка-переключатель «Да/Нет». */
 function ChoiceButton({ active, onClick, children }) {
@@ -31,6 +32,7 @@ const TWO_COLS = {
 
 export default function Register() {
   const navigate = useNavigate();
+  const { reset: resetProgress } = useProgress();
 
   // Step 1: Basic Info
   const [name, setNameState] = useState(getName());
@@ -214,6 +216,7 @@ export default function Register() {
           throw new Error("Выберите тип регистрации");
       }
 
+      resetProgress();
       setStatus("done");
     } catch (e) {
       setStatus("error");

@@ -181,30 +181,31 @@ export default function AdminProgress() {
                 <tr key={r.key}>
                   <td className="board-team">
                     {r.finishedAt && <span className="board-cup">🏆</span>}
-                    <b>№{r.teamNumber || "—"}</b> {r.teamName || "без названия"}
+                    {r.teamNumber ? (
+                      <>
+                        <b>№{r.teamNumber} |</b> {r.teamName || "без названия"}
+                      </>
+                    ) : (
+                      <>
+                        <b>Одиночка |</b> {r.teamName || r.phone || "без названия"}
+                      </>
+                    )}
                   </td>
                   {QUEST.stations.map((s) => {
                     const state = cellState(r, s.id);
                     const style = CELL_STYLE[state];
                     const sid = String(s.id);
-                    const arrivalAt = r.arrivals?.[sid]?.at || r.arrivals?.[sid];
-                    const solvedAt = r.stations?.[sid]?.at || r.stations?.[sid];
-                    const hintAt = r.hints?.[sid]?.at || r.hints?.[sid];
-                    const notGuessedAt = r.notGuessed?.[sid]?.at || r.notGuessed?.[sid];
+                    const arrivalAt = typeof r.arrivals?.[sid] === "object" ? r.arrivals[sid]?.at : r.arrivals?.[sid];
+                    const solvedAt = typeof r.stations?.[sid] === "object" ? r.stations[sid]?.at : r.stations?.[sid];
+                    const hintAt = typeof r.hints?.[sid] === "object" ? r.hints[sid]?.at : r.hints?.[sid];
+                    const notGuessedAt = typeof r.notGuessed?.[sid] === "object" ? r.notGuessed[sid]?.at : r.notGuessed?.[sid];
 
                     // Собираем ВСЕ действия с временами (не стираем по мере прогресса)
                     const actions = [];
-                    if (arrivalAt) actions.push({ icon: "📍", label: "Прибыл", t: time(typeof arrivalAt === "object" ? arrivalAt.at : arrivalAt) });
-                    if (hintAt) actions.push({ icon: "💡", label: "Подсказка", t: time(hintAt) });
+                    if (arrivalAt) actions.push({ icon: "📍", label: "Я прибыл", t: time(arrivalAt) });
+                    if (hintAt) actions.push({ icon: "💡", label: "Подсказка получена", t: time(hintAt) });
                     if (notGuessedAt) actions.push({ icon: "❌", label: "Не отгадал", t: time(notGuessedAt) });
                     if (solvedAt) actions.push({ icon: "✓", label: "Отгадал", t: time(solvedAt) });
-
-                    // Основной label — иконка приоритетного состояния + время последнего действия
-                    let label = style.label;
-                    if (actions.length > 0) {
-                      const lastAction = actions[actions.length - 1];
-                      label = style.label + " " + lastAction.t;
-                    }
 
                     // Tooltip: все действия с временами
                     const titleParts = [s.name];
@@ -214,13 +215,21 @@ export default function AdminProgress() {
 
                     return (
                       <td key={s.id} className="board-cell">
-                        <span
+                        <div
                           className="board-dot"
-                          style={{ background: style.background, color: style.color, fontSize: label.length > 2 ? "10px" : undefined }}
+                          style={{ background: style.background, color: style.color }}
                           title={titleParts.join("\n")}
                         >
-                          {label}
-                        </span>
+                          {actions.length === 0 ? (
+                            style.label
+                          ) : (
+                            actions.map((a, i) => (
+                              <div key={i}>
+                                {a.icon} {a.label} {a.t}
+                              </div>
+                            ))
+                          )}
+                        </div>
                       </td>
                     );
                   })}

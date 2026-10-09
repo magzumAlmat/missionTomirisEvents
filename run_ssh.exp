@@ -1,0 +1,6 @@
+#!/usr/bin/expect -f
+set timeout 20
+spawn ssh root@89.207.249.82 "cd /root/missionTomirisEvents && git pull && pm2 restart all"
+expect "password:"
+send "G1v%iju?0YU%\r"
+expect eof

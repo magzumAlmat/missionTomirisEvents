@@ -404,6 +404,7 @@ export function standings() {
         key,
         teamNumber: null,
         teamName: "",
+        phone: "",
         solved: 0,
         lastAt: null,
         finishedAt: null,
@@ -424,7 +425,7 @@ export function standings() {
   }
 
   for (const [key, p] of Object.entries(progress)) {
-    const row = rowFor(key, { teamNumber: p.teamNumber, teamName: p.teamName });
+    const row = rowFor(key, { teamNumber: p.teamNumber, teamName: p.teamName, phone: p.phone });
     const times = Object.values(p.stations || {}).map((s) => s.at).filter(Boolean);
     row.solved = times.length;
     row.lastAt = times.sort().slice(-1)[0] || null;
@@ -444,6 +445,7 @@ export function standings() {
     );
     if (!row.teamName && p.teamName) row.teamName = p.teamName;
     if (!row.teamNumber && p.teamNumber) row.teamNumber = p.teamNumber;
+    if (!row.phone && p.phone) row.phone = p.phone;
   }
 
   for (const s of submissions) {

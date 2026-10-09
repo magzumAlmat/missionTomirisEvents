@@ -117,18 +117,20 @@ export default function Profile() {
           )}
         </div>
 
-        {profile.teamNumber && solvedCount < QUEST.stations.length && (
-          <button
-            className="btn green mt"
-            style={{ width: "100%", marginTop: 32 }}
-            onClick={() => {
-              const nextStation = QUEST.stations[solvedCount];
-              navigate(`/s/${nextStation?.code || nextStation?.id}`);
-            }}
-          >
-            🚀 Продолжить квест (Точка {solvedCount + 1})
-          </button>
-        )}
+        {profile.teamNumber && solvedCount < QUEST.stations.length && (() => {
+          const nextStation = QUEST.stations[solvedCount];
+          return (
+            <button
+              className="btn green mt"
+              style={{ width: "100%", marginTop: 32 }}
+              onClick={() => {
+                navigate(`/s/${nextStation?.code || nextStation?.id}`);
+              }}
+            >
+              🚀 Продолжить квест (Точка {nextStation?.id ?? solvedCount})
+            </button>
+          );
+        })()}
       </div>
     </div>
   );
