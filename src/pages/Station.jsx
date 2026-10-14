@@ -109,7 +109,7 @@ export default function Station() {
     return (
       <div className="card">
         <h2>Точка не найдена</h2>
-        <p className="muted">Проверь QR-код.</p>
+        <p className="muted">Проверь код.</p>
         <button className="btn ghost" onClick={() => navigate("/profile")}>
           На главную
         </button>

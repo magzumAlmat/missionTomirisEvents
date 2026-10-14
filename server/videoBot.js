@@ -21,7 +21,8 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 // Команды и журнал материалов — общие с сайтом.
-import { addSubmission, findTeamByNumber, listSubmissions } from "./store.js";
+import { addSubmission, findTeamByNumber, listSubmissions, listTeams } from "./store.js";
+import { listCaptains, findCaptainById } from "./captains.js";
 import { escapeHtml } from "./messages.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -43,7 +44,18 @@ function readJson(file, fallback) {
 
 function readSenders() {
   const data = readJson(SENDERS_FILE, {});
-  return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+  // pendingMsg — это объект Telegram-сообщения, который не переживает рестарт
+  // процесса: после перезапуска message_id укажет на устаревшее сообщение.
+  // Вычищаем такие «висящие» записи при каждом чтении.
+  for (const key of Object.keys(data)) {
+    if (data[key] && data[key].pendingMsg) {
+      delete data[key].pendingMsg;
+      delete data[key].pendingKind;
+      if (data[key].step === "ask_station") data[key].step = "ready";
+    }
+  }
+  return data;
 }
 
 function saveSenders(map) {
@@ -120,6 +132,34 @@ const ASK_PHONE_KEYBOARD = {
 };
 
 const HIDE_KEYBOARD = { remove_keyboard: true };
+
+/**
+ * Найти команду капитана по его телефону (captainPhone в teams.json).
+ */
+function findTeamByCaptainPhone(phone) {
+  const key = phoneKey(phone);
+  if (!key) return null;
+  const teams = listTeams();
+  return teams.find((t) => phoneKey(t.captainPhone) === key) || null;
+}
+
+/**
+ * Строит inline-клавиатуру со списком зарегистрированных капитанов.
+ * Используется, когда бот не нашёл пользователя по номеру телефона.
+ */
+function buildCaptainKeyboard() {
+  const captains = listCaptains();
+  if (!captains.length) return null;
+  const buttons = captains.map((c) => {
+    const team = findTeamByCaptainPhone(c.phone);
+    const teamLabel = team ? ` (№${team.number} «${team.name}»)` : "";
+    return {
+      text: `👤 ${c.name}${teamLabel}`,
+      callback_data: `captain:${c.id}`,
+    };
+  });
+  return { inline_keyboard: [buttons] };
+}
 
 const HELP_TEXT =
   `🎬 <b>Бот для видео капитанов</b>\n\n` +
@@ -287,6 +327,37 @@ async function handleMessage(msg) {
   if (text.startsWith("/help")) return send(chatId, HELP_TEXT);
   if (text.startsWith("/reset")) return startRegistration(chatId, senders);
 
+  // --- выбор капитана из inline-клавиатуры ---
+  if (msg.callback_query) {
+    const cq = msg.callback_query;
+    const data = cq.data || "";
+    if (data.startsWith("captain:")) {
+      const captainId = data.slice(8);
+      const captain = findCaptainById(captainId);
+      if (!captain) {
+        return tg("answerCallbackQuery", { callback_query_id: cq.id, text: "Капитан не найден" });
+      }
+      // Ищем команду капитана по его телефону
+      const team = findTeamByCaptainPhone(captain.phone);
+      senders[chatId] = {
+        ...(sender || {}),
+        captainName: captain.name,
+        teamName: team?.name || "",
+        teamNumber: team?.number || null,
+        teamSize: team?.size || captain.currentParticipants || 0,
+        phone: captain.phone || sender?.phone || "",
+      };
+      if (senders[chatId].teamNumber) applyTeamNumber(chatId, senders, senders[chatId].teamNumber);
+      saveSenders(senders);
+      await tg("answerCallbackQuery", { callback_query_id: cq.id, text: "Выбрано!" });
+      if (senders[chatId].teamName && senders[chatId].captainName) {
+        return finishRegistration(chatId, senders);
+      }
+      return askCaptainName(chatId, senders);
+    }
+    return;
+  }
+
   // --- ответ на вопрос «с какой точки?» (после получения медиа) ---
   if (sender && sender.step === "ask_station" && sender.pendingMsg) {
     const pendingMsg = sender.pendingMsg;
@@ -353,6 +424,16 @@ async function handleMessage(msg) {
     if (!senders[chatId].teamName) {
       senders[chatId].step = "number";
       saveSenders(senders);
+      // Показываем список капитанов для выбора
+      const captainKb = buildCaptainKeyboard();
+      if (captainKb) {
+        return send(
+          chatId,
+          `Не нашёл вас в списке. Выберите <b>себя</b> из списка капитанов ниже, ` +
+            `или напишите <b>номер команды</b> цифрами.`,
+          { reply_markup: captainKb }
+        );
+      }
       return send(
         chatId,
         `Не нашёл вас в списке. Напишите <b>номер команды</b> цифрами ` +
@@ -479,7 +560,28 @@ async function handleMessage(msg) {
 
 /* ---------- long polling ---------- */
 
-let lastUpdateId = 0;
+// lastUpdateId держим в файле: после рестарта процесса бот продолжит
+// с того же места и не обработает старые команды повторно.
+const OFFSET_FILE = path.join(__dirname, "videoBotOffset.json");
+
+function readOffset() {
+  try {
+    const v = JSON.parse(fs.readFileSync(OFFSET_FILE, "utf8"));
+    return Number.isFinite(v) && v > 0 ? v : 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+function saveOffset(id) {
+  try {
+    fs.writeFileSync(OFFSET_FILE, JSON.stringify(id), "utf8");
+  } catch (e) {
+    /* не критично */
+  }
+}
+
+let lastUpdateId = readOffset();
 
 async function poll() {
   const { TOKEN } = getEnv();
@@ -495,6 +597,7 @@ async function poll() {
     if (data.ok && Array.isArray(data.result)) {
       for (const update of data.result) {
         lastUpdateId = update.update_id;
+        saveOffset(lastUpdateId);
         if (update.message) {
           try {
             await handleMessage(update.message);
