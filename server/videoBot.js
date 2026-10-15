@@ -21,8 +21,9 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 // Команды и журнал материалов — общие с сайтом.
-import { addSubmission, findTeamByNumber, listSubmissions, listTeams } from "./store.js";
+import { addSubmission, findTeamByNumber, findTeamByName, listSubmissions, listTeams, getProgress, progressKey } from "./store.js";
 import { listCaptains, findCaptainById } from "./captains.js";
+import { STATION_SECRETS, findStation } from "./questSecret.js";
 import { escapeHtml } from "./messages.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -45,16 +46,6 @@ function readJson(file, fallback) {
 function readSenders() {
   const data = readJson(SENDERS_FILE, {});
   if (!data || typeof data !== "object" || Array.isArray(data)) return {};
-  // pendingMsg — это объект Telegram-сообщения, который не переживает рестарт
-  // процесса: после перезапуска message_id укажет на устаревшее сообщение.
-  // Вычищаем такие «висящие» записи при каждом чтении.
-  for (const key of Object.keys(data)) {
-    if (data[key] && data[key].pendingMsg) {
-      delete data[key].pendingMsg;
-      delete data[key].pendingKind;
-      if (data[key].step === "ask_station") data[key].step = "ready";
-    }
-  }
   return data;
 }
 
@@ -141,6 +132,82 @@ function findTeamByCaptainPhone(phone) {
   if (!key) return null;
   const teams = listTeams();
   return teams.find((t) => phoneKey(t.captainPhone) === key) || null;
+}
+
+/**
+ * Получить текущую точку команды из progress.json (по последней отметке прибытия).
+ */
+function getTeamCurrentStation(teamNumber) {
+  if (!teamNumber) return null;
+  try {
+    const key = progressKey({ teamNumber });
+    const prog = getProgress(key);
+    if (!prog || !prog.arrivals) return null;
+    let latestSid = null;
+    let latestTime = 0;
+    for (const [sid, arr] of Object.entries(prog.arrivals)) {
+      if (arr && arr.at) {
+        const t = new Date(arr.at).getTime();
+        if (t > latestTime) {
+          latestTime = t;
+          latestSid = sid;
+        }
+      }
+    }
+    return latestSid;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Извлечь номер/название точки из любого текста (подписи к медиа или сообщения).
+ */
+function extractStation(text) {
+  if (!text) return null;
+  const str = String(text).trim();
+
+  // 1. Одиночное число: "2", "#2", "0"
+  const singleNum = str.match(/^#?\s*(\d+)\s*$/);
+  if (singleNum) return singleNum[1];
+
+  // 2. С ключевым словом: "точка 2", "станция 2", "№ 2", "point 2"
+  const keywordMatch = str.match(/(?:точка|станция|station|point|локация|№|#)\s*[:#-]?\s*(\d+)/i);
+  if (keywordMatch) return keywordMatch[1];
+
+  // 3. Число перед словом: "2 точка", "2 станция", "2-я локация"
+  const revMatch = str.match(/(\d+)\s*(?:-?я|-ая|-ой)?\s*(?:точка|станция|локация|station)/i);
+  if (revMatch) return revMatch[1];
+
+  // 4. Поиск по названию локации (например, «неделька», «абай», «цой»)
+  const lower = str.toLowerCase();
+  for (const [, s] of Object.entries(STATION_SECRETS)) {
+    if (s.name && lower.includes(s.name.toLowerCase())) {
+      return String(s.id);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Красивое отображение точки (с названием и пометкой, если определено по игре).
+ */
+function formatStationLabel(stationNumOrId, teamNumber = null) {
+  let sid = stationNumOrId;
+  let fromProgress = false;
+  if ((sid == null || sid === "") && teamNumber) {
+    sid = getTeamCurrentStation(teamNumber);
+    if (sid != null) fromProgress = true;
+  }
+  if (sid == null || sid === "") {
+    return "не указана";
+  }
+  const st = findStation(sid);
+  if (st && st.name) {
+    return `${st.id} (${st.name})${fromProgress ? " [по игре]" : ""}`;
+  }
+  return `${sid}${fromProgress ? " [по игре]" : ""}`;
 }
 
 /**
@@ -256,13 +323,12 @@ function mediaKind(msg) {
 async function forwardVideo(msg, sender, kind, stationNumOverride = null) {
   const { CHAT_ID } = getEnv();
   const time = new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" });
-  const caption = msg.caption ? `\n💬 ${escapeHtml(msg.caption)}` : "";
+  const caption = msg.caption ? `\n💬 <b>Подпись:</b> ${escapeHtml(msg.caption)}` : "";
   const title = kind === "photo" ? "📸 <b>ФОТО ОТ КОМАНДЫ</b>" : "🎬 <b>ВИДЕО ОТ КОМАНДЫ</b>";
 
-  // Номер точки: приоритет у явно переданного значения (из промпта),
-  // иначе — парсим из подписи к видео.
-  const stationMatch = (msg.caption || "").match(/(?:точка|station)\s*(\d+)/i);
-  const stationNum = stationNumOverride || (stationMatch ? stationMatch[1] : null);
+  // Определяем номер точки: переданный явно, либо из подписи, либо из прогресса команды на сайте
+  const st = stationNumOverride || extractStation(msg.caption);
+  const stationLabel = formatStationLabel(st, sender.teamNumber);
 
   // Сколько материалов уже прислала эта команда.
   const prevCount = listSubmissions().filter(
@@ -277,17 +343,40 @@ async function forwardVideo(msg, sender, kind, stationNumOverride = null) {
     `👥 <b>Команда:</b> ${num}${escapeHtml(sender.teamName)}${teamSize}\n` +
     `👤 <b>Капитан:</b> ${escapeHtml(sender.captainName)}\n` +
     (sender.phone ? `📞 <b>Телефон:</b> ${escapeHtml(sender.phone)}\n` : "") +
-    (stationNum ? `📍 <b>Точка:</b> ${stationNum}\n` : `📍 <b>Точка:</b> не указана\n`) +
+    `📍 <b>Точка:</b> ${stationLabel}\n` +
     `📎 <b>Материал №:</b> ${submissionNum} от этой команды\n` +
     `🕒 <b>Время:</b> ${time}` +
     caption;
 
+  // Пытаемся скопировать с подписью напрямую (поддерживается Telegram для фото и видео)
+  // Для video_note (кружочков) подпись не поддерживается Telegram API
+  const isVideoNote = !!msg.video_note;
+  if (!isVideoNote && header.length <= 1024) {
+    const copyWithCaption = await tg("copyMessage", {
+      chat_id: CHAT_ID,
+      from_chat_id: msg.chat.id,
+      message_id: msg.message_id,
+      caption: header,
+      parse_mode: "HTML",
+    });
+    if (copyWithCaption.ok) {
+      addSubmission({
+        teamNumber: sender.teamNumber,
+        teamName: sender.teamName,
+        captainName: sender.captainName,
+        kind,
+        station: st || getTeamCurrentStation(sender.teamNumber) || null,
+      });
+      return { ok: true };
+    }
+  }
+
+  // Запасной вариант (или для кружочков): сначала текст, потом само медиа
   const head = await send(CHAT_ID, header);
   if (!head.ok) {
     return { ok: false, error: head.description || "не удалось отправить подпись" };
   }
 
-  // copyMessage переносит видео без повторной загрузки и работает для всех типов.
   const copy = await tg("copyMessage", {
     chat_id: CHAT_ID,
     from_chat_id: msg.chat.id,
@@ -297,15 +386,48 @@ async function forwardVideo(msg, sender, kind, stationNumOverride = null) {
     return { ok: false, error: copy.description || "не удалось переслать видео" };
   }
 
-  // Записываем в журнал: по нему судья видит, сколько материалов прислала
-  // команда и когда — эта сводка видна в таблице у организаторов.
   addSubmission({
     teamNumber: sender.teamNumber,
     teamName: sender.teamName,
     captainName: sender.captainName,
     kind,
+    station: st || getTeamCurrentStation(sender.teamNumber) || null,
   });
   return { ok: true };
+}
+
+/* ---------- обработка callback query (inline-кнопки) ---------- */
+
+async function handleCallbackQuery(cq) {
+  const chatId = cq.message?.chat?.id;
+  if (!chatId) return;
+  const senders = readSenders();
+  const sender = senders[chatId];
+  const data = cq.data || "";
+  if (data.startsWith("captain:")) {
+    const captainId = data.slice(8);
+    const captain = findCaptainById(captainId);
+    if (!captain) {
+      return tg("answerCallbackQuery", { callback_query_id: cq.id, text: "Капитан не найден" });
+    }
+    // Ищем команду капитана по его телефону
+    const team = findTeamByCaptainPhone(captain.phone);
+    senders[chatId] = {
+      ...(sender || {}),
+      captainName: captain.name,
+      teamName: team?.name || "",
+      teamNumber: team?.number || null,
+      teamSize: team?.size || captain.currentParticipants || 0,
+      phone: captain.phone || sender?.phone || "",
+    };
+    if (senders[chatId].teamNumber) applyTeamNumber(chatId, senders, senders[chatId].teamNumber);
+    saveSenders(senders);
+    await tg("answerCallbackQuery", { callback_query_id: cq.id, text: "Выбрано!" });
+    if (senders[chatId].teamName && senders[chatId].captainName) {
+      return finishRegistration(chatId, senders);
+    }
+    return askCaptainName(chatId, senders);
+  }
 }
 
 /* ---------- обработка одного апдейта ---------- */
@@ -327,37 +449,6 @@ async function handleMessage(msg) {
   if (text.startsWith("/help")) return send(chatId, HELP_TEXT);
   if (text.startsWith("/reset")) return startRegistration(chatId, senders);
 
-  // --- выбор капитана из inline-клавиатуры ---
-  if (msg.callback_query) {
-    const cq = msg.callback_query;
-    const data = cq.data || "";
-    if (data.startsWith("captain:")) {
-      const captainId = data.slice(8);
-      const captain = findCaptainById(captainId);
-      if (!captain) {
-        return tg("answerCallbackQuery", { callback_query_id: cq.id, text: "Капитан не найден" });
-      }
-      // Ищем команду капитана по его телефону
-      const team = findTeamByCaptainPhone(captain.phone);
-      senders[chatId] = {
-        ...(sender || {}),
-        captainName: captain.name,
-        teamName: team?.name || "",
-        teamNumber: team?.number || null,
-        teamSize: team?.size || captain.currentParticipants || 0,
-        phone: captain.phone || sender?.phone || "",
-      };
-      if (senders[chatId].teamNumber) applyTeamNumber(chatId, senders, senders[chatId].teamNumber);
-      saveSenders(senders);
-      await tg("answerCallbackQuery", { callback_query_id: cq.id, text: "Выбрано!" });
-      if (senders[chatId].teamName && senders[chatId].captainName) {
-        return finishRegistration(chatId, senders);
-      }
-      return askCaptainName(chatId, senders);
-    }
-    return;
-  }
-
   // --- ответ на вопрос «с какой точки?» (после получения медиа) ---
   if (sender && sender.step === "ask_station" && sender.pendingMsg) {
     const pendingMsg = sender.pendingMsg;
@@ -365,7 +456,7 @@ async function handleMessage(msg) {
     const what = pendingKind === "photo" ? "Фото" : "Видео";
     const { CHAT_ID } = getEnv();
 
-    // Пропуск — отправляем без номера точки.
+    // Пропуск — отправляем без явного номера (точка возьмётся из прогресса, если есть).
     if (text.toLowerCase() === "пропустить" || text.toLowerCase() === "skip") {
       senders[chatId] = { ...(sender || {}), step: "ready" };
       delete senders[chatId].pendingMsg;
@@ -374,34 +465,25 @@ async function handleMessage(msg) {
       if (!CHAT_ID) return send(chatId, `⚠️ Не настроена группа для видео.`);
       const result = await forwardVideo(pendingMsg, sender, pendingKind, null);
       if (!result.ok) return send(chatId, `❌ Не получилось отправить: ${escapeHtml(result.error)}`);
-      return send(chatId, `✅ ${what} отправлено организаторам (без номера точки). Спасибо!`);
+      const stLabel = formatStationLabel(null, sender.teamNumber);
+      return send(chatId, `✅ ${what} отправлено организаторам (Точка: ${stLabel}). Спасибо!`);
     }
 
-    // Числовой ответ — считаем номером точки.
-    if (/^\d+$/.test(text)) {
-      senders[chatId] = { ...(sender || {}), step: "ready" };
-      delete senders[chatId].pendingMsg;
-      delete senders[chatId].pendingKind;
-      saveSenders(senders);
-      if (!CHAT_ID) return send(chatId, `⚠️ Не настроена группа для видео.`);
-      const result = await forwardVideo(pendingMsg, sender, pendingKind, text);
-      if (!result.ok) {
-        return send(chatId, `❌ Не получилось отправить: ${escapeHtml(result.error)}`);
-      }
-      return send(chatId, `✅ ${what} отправлено организаторам (точка ${text}). Спасибо!`);
-    }
+    const foundStation = extractStation(text);
+    const stationToUse = foundStation || text;
 
-    // Не число — считаем названием точки (например, «театр»). 
     senders[chatId] = { ...(sender || {}), step: "ready" };
     delete senders[chatId].pendingMsg;
     delete senders[chatId].pendingKind;
     saveSenders(senders);
+
     if (!CHAT_ID) return send(chatId, `⚠️ Не настроена группа для видео.`);
-    const result = await forwardVideo(pendingMsg, sender, pendingKind, text);
+    const result = await forwardVideo(pendingMsg, sender, pendingKind, stationToUse);
     if (!result.ok) {
       return send(chatId, `❌ Не получилось отправить: ${escapeHtml(result.error)}`);
     }
-    return send(chatId, `✅ ${what} отправлено организаторам (точка: ${escapeHtml(text)}). Спасибо!`);
+    const stLabel = formatStationLabel(stationToUse, sender.teamNumber);
+    return send(chatId, `✅ ${what} отправлено организаторам (Точка: ${stLabel}). Спасибо!`);
   }
 
   // --- номер телефона через кнопку «Отправить мой номер» ---
@@ -460,25 +542,30 @@ async function handleMessage(msg) {
       return send(chatId, `⚠️ Не настроена группа для видео (TELEGRAM_VIDEO_CHAT_ID).`);
     }
 
-    // Если в подписи нет номера точки — спросим отдельно (можно пропустить).
-    const captionHasStation = /(?:точка|station)\s*\d+/i.test(msg.caption || "");
-    if (!captionHasStation) {
-      senders[chatId] = { ...(sender || {}), step: "ask_station", pendingMsg: msg, pendingKind: kind };
-      saveSenders(senders);
-      return send(
-        chatId,
-        `📍 <b>С какой точки этот материал?</b>\n` +
-          `Напишите номер точки (например, «3») или слово «пропустить».`,
-        { reply_markup: HIDE_KEYBOARD }
-      );
+    // Если в подписи к медиа уже есть номер точки — отправляем сразу!
+    const captionStation = extractStation(msg.caption);
+    if (captionStation) {
+      const result = await forwardVideo(msg, sender, kind, captionStation);
+      if (!result.ok) {
+        console.error("videoBot: не удалось отправить материал в группу:", result.error);
+        return send(chatId, `❌ Не получилось отправить организаторам: ${escapeHtml(result.error)}`);
+      }
+      const stLabel = formatStationLabel(captionStation, sender.teamNumber);
+      return send(chatId, `✅ ${what} успешно отправлено организаторам (Точка: ${stLabel})! Спасибо!`);
     }
 
-    const result = await forwardVideo(msg, sender, kind);
-    if (!result.ok) {
-      console.error("videoBot: не удалось отправить материал в группу:", result.error);
-      return send(chatId, `❌ Не получилось отправить организаторам: ${escapeHtml(result.error)}`);
-    }
-    return send(chatId, `✅ ${what} успешно отправлено организаторам! Спасибо!`);
+    // Если точки в подписи нет — сохраняем и спрашиваем у капитана
+    senders[chatId] = { ...(sender || {}), step: "ask_station", pendingMsg: msg, pendingKind: kind };
+    saveSenders(senders);
+
+    const currentSid = getTeamCurrentStation(sender.teamNumber);
+    const hintText = currentSid != null ? ` (по игре ваша команда на точке ${currentSid})` : "";
+    return send(
+      chatId,
+      `📍 <b>С какой точки этот материал?</b>\n` +
+        `Напишите номер точки (например, «2»)${hintText} или слово «пропустить».`,
+      { reply_markup: HIDE_KEYBOARD }
+    );
   }
 
   // --- шаги регистрации текстом ---
@@ -506,6 +593,23 @@ async function handleMessage(msg) {
       return askCaptainName(chatId, senders);
     }
 
+    // Если ввели "пропустить" на этапе номера — просим всё же ввести номер или нажать кнопку
+    if (text.toLowerCase() === "пропустить" || text.toLowerCase() === "skip") {
+      return send(
+        chatId,
+        `⚠️ Чтобы бот знал, чьи материалы приходят, укажите <b>номер команды</b> или нажмите «Отправить мой номер».`,
+        { reply_markup: ASK_PHONE_KEYBOARD }
+      );
+    }
+
+    // Поиск по названию среди существующих команд
+    const foundByName = findTeamByName(text);
+    if (foundByName) {
+      applyTeamNumber(chatId, senders, foundByName.number);
+      if (senders[chatId].captainName) return finishRegistration(chatId, senders);
+      return askCaptainName(chatId, senders);
+    }
+
     // Иначе — название команды словами (запасной путь, если номера ещё нет).
     senders[chatId] = { ...(sender || {}), teamName: text };
     if (senders[chatId].captainName) return finishRegistration(chatId, senders);
@@ -525,9 +629,9 @@ async function handleMessage(msg) {
       const time = new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" });
       const num = sender.teamNumber ? `№${sender.teamNumber} ` : "";
 
-      // Номер точки из текста (если капитан указал).
-      const stationMatch = text.match(/(?:точка|station)\s*(\d+)/i);
-      const stationNum = stationMatch ? stationMatch[1] : null;
+      // Номер точки из текста (если капитан указал), иначе из прогресса команды
+      const extracted = extractStation(text);
+      const stationText = formatStationLabel(extracted, sender.teamNumber);
 
       // Сколько материалов уже прислала эта команда (включая текстовые).
       const prevCount = listSubmissions().filter(
@@ -540,7 +644,7 @@ async function handleMessage(msg) {
         `👥 <b>Команда:</b> ${num}${escapeHtml(sender.teamName)}\n` +
         `👤 <b>Капитан:</b> ${escapeHtml(sender.captainName)}\n` +
         (sender.phone ? `📞 <b>Телефон:</b> ${escapeHtml(sender.phone)}\n` : "") +
-        (stationNum ? `📍 <b>Точка:</b> ${stationNum}\n` : "") +
+        `📍 <b>Точка:</b> ${stationText}\n` +
         `📎 <b>Материал №:</b> ${submissionNum} от этой команды\n` +
         `🕒 <b>Время:</b> ${time}\n\n` +
         `📝 <b>Текст:</b>\n${escapeHtml(text)}`;
@@ -552,6 +656,7 @@ async function handleMessage(msg) {
         captainName: sender.captainName,
         kind: "text",
         text,
+        station: extracted || getTeamCurrentStation(sender.teamNumber) || null,
       });
       return send(chatId, `✅ Текстовое сообщение отправлено организаторам! Спасибо!`);
     }
@@ -598,7 +703,13 @@ async function poll() {
       for (const update of data.result) {
         lastUpdateId = update.update_id;
         saveOffset(lastUpdateId);
-        if (update.message) {
+        if (update.callback_query) {
+          try {
+            await handleCallbackQuery(update.callback_query);
+          } catch (e) {
+            console.error("videoBot: ошибка обработки callback_query", e);
+          }
+        } else if (update.message) {
           try {
             await handleMessage(update.message);
           } catch (e) {
