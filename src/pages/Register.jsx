@@ -23,6 +23,70 @@ function ChoiceButton({ active, onClick, children }) {
   );
 }
 
+/** Карточка выбора роли участника с иконкой, заголовком и пояснением */
+function RoleChoiceCard({ icon, title, description, active, onClick }) {
+  return (
+    <button
+      type="button"
+      className="role-choice-card"
+      onClick={onClick}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        padding: "16px 18px",
+        borderRadius: 14,
+        cursor: "pointer",
+        textAlign: "left",
+        width: "100%",
+        fontFamily: "inherit",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        background: active
+          ? "linear-gradient(135deg, rgba(76, 217, 100, 0.16) 0%, rgba(76, 217, 100, 0.05) 100%)"
+          : "rgba(255, 255, 255, 0.04)",
+        border: active
+          ? "2px solid #4cd964"
+          : "1px solid rgba(255, 255, 255, 0.12)",
+        boxShadow: active
+          ? "0 0 20px rgba(76, 217, 100, 0.22)"
+          : "none",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 20, lineHeight: 1 }}>{icon}</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: active ? "#ffffff" : "rgba(255,255,255,0.92)" }}>
+            {title}
+          </span>
+        </div>
+        <div
+          style={{
+            width: 20,
+            height: 20,
+            borderRadius: "50%",
+            border: active ? "6px solid #4cd964" : "2px solid rgba(255, 255, 255, 0.25)",
+            background: active ? "#ffffff" : "transparent",
+            boxSizing: "border-box",
+            flexShrink: 0,
+            transition: "all 0.2s ease",
+          }}
+        />
+      </div>
+      <p
+        style={{
+          margin: "4px 0 0 0",
+          fontSize: 13.5,
+          lineHeight: 1.45,
+          color: active ? "rgba(255, 255, 255, 0.88)" : "rgba(255, 255, 255, 0.6)",
+          paddingLeft: 30,
+        }}
+      >
+        {description}
+      </p>
+    </button>
+  );
+}
+
 const TWO_COLS = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
@@ -98,6 +162,25 @@ export default function Register() {
     return () => { cancelled = true; };
   }, []);
 
+  // Поддержка ссылок-приглашений, например /#register?team=Барсы
+  useEffect(() => {
+    try {
+      const hash = window.location.hash || "";
+      const qIdx = hash.indexOf("?");
+      if (qIdx !== -1) {
+        const params = new URLSearchParams(hash.slice(qIdx));
+        const inviteTeam = params.get("team") || params.get("teamName");
+        if (inviteTeam) {
+          setTeamNameState(inviteTeam);
+          setTeam(inviteTeam);
+          setRegistrationType("JOIN_TEAM");
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   function onPhoneChange(v) {
     setPhoneState(v);
     setPhone(v);
@@ -116,7 +199,7 @@ export default function Register() {
   const typeOk = {
     SOLO: true,
     CREATE_TEAM: teamName.trim().length > 0 && captainSlots,
-    JOIN_CAPTAIN: !!selectedCaptainId,
+    JOIN_CAPTAIN: !!selectedCaptainId || teamName.trim().length > 0,
     JOIN_TEAM: teamName.trim().length > 0,
   }[registrationType];
 
@@ -264,11 +347,11 @@ export default function Register() {
             <b>Своё авто:</b> {hasCar ? "Да 🚗" : "Нет 🚶"}
             <br />
             <b>Статус:</b>{" "}
-            {registrationType === "JOIN_CAPTAIN"
-              ? "Подписан на капитана"
-              : registrationType === "CREATE_TEAM" || registrationType === "JOIN_TEAM"
-              ? `Команда «${teamName}»`
-              : "Одиночный участник 🙋"}
+            {registrationType === "CREATE_TEAM"
+              ? `Капитан команды «${teamName}» 👑`
+              : registrationType === "JOIN_TEAM" || registrationType === "JOIN_CAPTAIN"
+              ? `Команда «${teamName}» 🤝`
+              : "Участник без команды 🙋"}
           </p>
         </div>
 
@@ -346,32 +429,38 @@ export default function Register() {
         )}
 
         {currentStep === 2 && (
-          <div className="field-block" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div className="field-block" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <label className="field-label">Кто вы в этом квесте?</label>
-            <ChoiceButton
-              active={registrationType === "SOLO"}
-              onClick={() => { setRegistrationType("SOLO"); setCurrentStep(3); }}
-            >
-              🙋 Одиночный участник
-            </ChoiceButton>
-            <ChoiceButton
+
+            <RoleChoiceCard
+              icon="👑"
+              title="Создать свою команду"
+              description="Вы станете капитаном команды и сможете пригласить других участников."
               active={registrationType === "CREATE_TEAM"}
-              onClick={() => { setRegistrationType("CREATE_TEAM"); setCurrentStep(3); }}
-            >
-              👑 Создать свою команду
-            </ChoiceButton>
-            <ChoiceButton
-              active={registrationType === "JOIN_CAPTAIN"}
-              onClick={() => { setRegistrationType("JOIN_CAPTAIN"); setCurrentStep(3); }}
-            >
-              🤝 Присоединиться к капитану
-            </ChoiceButton>
-            <ChoiceButton
-              active={registrationType === "JOIN_TEAM"}
-              onClick={() => { setRegistrationType("JOIN_TEAM"); setCurrentStep(3); }}
-            >
-              👥 Вступить в существующую команду
-            </ChoiceButton>
+              onClick={() => {
+                setRegistrationType("CREATE_TEAM");
+              }}
+            />
+
+            <RoleChoiceCard
+              icon="🤝"
+              title="Присоединиться к команде"
+              description="Если капитан уже создал команду, вы сможете присоединиться к ней по ссылке-приглашению или по названию команды."
+              active={registrationType === "JOIN_TEAM" || registrationType === "JOIN_CAPTAIN"}
+              onClick={() => {
+                setRegistrationType("JOIN_TEAM");
+              }}
+            />
+
+            <RoleChoiceCard
+              icon="🙋"
+              title="Участвовать без команды"
+              description="Если у вас пока нет команды, мы поможем подобрать для вас подходящую команду."
+              active={registrationType === "SOLO"}
+              onClick={() => {
+                setRegistrationType("SOLO");
+              }}
+            />
           </div>
         )}
 
@@ -401,76 +490,85 @@ export default function Register() {
               </>
             )}
 
-            {registrationType === "JOIN_CAPTAIN" && (
+            {(registrationType === "JOIN_TEAM" || registrationType === "JOIN_CAPTAIN") && (
               <>
-                <label className="field-label">Выберите капитана</label>
-                {loadingCaptains ? (
-                  <p className="muted tiny">Загрузка...</p>
-                ) : captains.length === 0 ? (
-                  <p className="err-text tiny">Капитанов пока нет.</p>
-                ) : (
-                  <select
-                    className="field-select"
-                    value={selectedCaptainId || ""}
-                    onChange={(e) => setSelectedCaptainId(e.target.value || null)}
-                    required
-                    style={{
-                      width: "100%",
-                      padding: "10px 12px",
-                      borderRadius: 8,
-                      border: "1px solid rgba(255,255,255,0.2)",
-                      background: "rgba(255,255,255,0.05)",
-                      color: "white",
-                      fontSize: 14,
-                    }}
-                  >
-                    <option value="">— Выберите капитана —</option>
-                    {captains.map((cap) => (
-                      <option key={cap.id} value={cap.id} disabled={(cap.availableSlots || 0) <= 0}>
-                        {cap.name || cap.phone} — {cap.availableSlots || 0} / {cap.slots} мест
-                        {cap.hasCar ? " 🚗" : ""}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {captainError && <p className="err-text tiny" style={{ marginTop: 4 }}>{captainError}</p>}
-              </>
-            )}
+                <label className="field-label">Название команды</label>
+                <input
+                  type="text"
+                  placeholder="Например: Барсы"
+                  value={teamName}
+                  onChange={(e) => onTeamNameChange(e.target.value)}
+                  required
+                />
 
-            {registrationType === "JOIN_TEAM" && (
-              <>
-                <label className="field-label">Выберите команду</label>
-                {loadingTeams ? (
-                  <p className="muted tiny">Загрузка...</p>
-                ) : teams.length === 0 ? (
-                  <p className="err-text tiny">Команд пока нет.</p>
-                ) : (
-                  <select
-                    className="field-select"
-                    value={teamName}
-                    onChange={(e) => onTeamNameChange(e.target.value)}
-                    required
-                    style={{
-                      width: "100%",
-                      padding: "10px 12px",
-                      borderRadius: 8,
-                      border: "1px solid rgba(255,255,255,0.2)",
-                      background: "rgba(255,255,255,0.05)",
-                      color: "white",
-                      fontSize: 14,
-                    }}
-                  >
-                    <option value="">— Выберите команду —</option>
-                    {teams.map((t, i) => (
-                      <option key={i} value={t.name}>{t.name}</option>
-                    ))}
-                  </select>
+                {(teams.length > 0 || captains.length > 0) && (
+                  <>
+                    <label className="field-label mt" style={{ marginTop: 16 }}>
+                      Или выберите команду из списка:
+                    </label>
+                    <select
+                      className="field-select"
+                      value={teamName}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        onTeamNameChange(val);
+                        const matchedCap = captains.find(
+                          (c) => c.name === val || c.teamName === val || `Команда ${c.name}` === val
+                        );
+                        if (matchedCap) setSelectedCaptainId(matchedCap.id);
+                        else setSelectedCaptainId(null);
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "12px 14px",
+                        borderRadius: 12,
+                        border: "1px solid rgba(255,255,255,0.2)",
+                        background: "#0d1224",
+                        color: "white",
+                        fontSize: 15,
+                        outline: "none",
+                      }}
+                    >
+                      <option value="">— Выберите из созданных команд —</option>
+                      {teams.map((t, i) => (
+                        <option key={`t-${i}`} value={t.name}>
+                          👥 {t.name} {t.size ? `(${t.size} чел.)` : ""}
+                        </option>
+                      ))}
+                      {captains
+                        .filter((c) => !teams.some((t) => t.name === c.name || t.name === c.teamName))
+                        .map((c) => (
+                          <option key={c.id} value={c.teamName || c.name || `Команда ${c.name}`}>
+                            👑 {c.name || c.phone} — {c.availableSlots || 0} / {c.slots} мест
+                          </option>
+                        ))}
+                    </select>
+                  </>
                 )}
+                <p className="muted tiny" style={{ marginTop: 8 }}>
+                  💡 Если капитан отправил вам название команды, введите его выше в поле «Название команды».
+                </p>
               </>
             )}
 
             {registrationType === "SOLO" && (
-              <p className="center muted">Вы зарегистрируетесь как одиночный участник.</p>
+              <div
+                style={{
+                  padding: "18px 20px",
+                  borderRadius: 14,
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  textAlign: "left",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 8 }}>
+                  <span style={{ fontSize: 20 }}>🙋</span>
+                  <span>Участие без команды</span>
+                </div>
+                <p className="muted" style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>
+                  Если у вас пока нет команды, мы поможем подобрать для вас подходящую команду перед началом квеста. Организаторы свяжутся с вами по указанному телефону.
+                </p>
+              </div>
             )}
           </div>
         )}
