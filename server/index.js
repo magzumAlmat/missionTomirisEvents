@@ -49,6 +49,7 @@ import {
   deleteAllCaptains,
   deleteAllParticipants,
 } from "./captains.js";
+import { checkPhoneRegistration, normalizePhone } from "./phoneValidator.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -383,6 +384,20 @@ app.post("/api/admin/reset-quest", (req, res) => {
   });
 });
 
+/** Проверить, зарегистрирован ли уже номер телефона в квесте */
+app.get("/api/check-phone", (req, res) => {
+  const phone = req.query.phone;
+  if (!phone) {
+    return res.json({ ok: true, registered: false });
+  }
+  const check = checkPhoneRegistration(phone);
+  res.json({
+    ok: true,
+    registered: check.registered,
+    details: check.details || null,
+  });
+});
+
 /**
  * Регистрация нового участника.
  * body: { name, phone, hasCar, hasTeam, teamName?, teamSize? }
@@ -400,6 +415,16 @@ app.post("/api/register", async (req, res) => {
   }
   if (!phone || !phone.trim()) {
     return res.status(400).json({ ok: false, error: "Введите номер телефона." });
+  }
+
+  // Валидация: проверка на повторную регистрацию того же номера телефона
+  const regCheck = checkPhoneRegistration(phone, { ignoreRecentCaptainsMs: 60000, ignoreRecentSoloMs: 60000 });
+  if (regCheck.registered) {
+    return res.status(400).json({
+      ok: false,
+      code: "PHONE_ALREADY_REGISTERED",
+      error: `Номер телефона ${phone.trim()} уже зарегистрирован (${regCheck.details?.description || "в квесте"}). Повторная регистрация не требуется.`,
+    });
   }
 
   // Если участник в команде — нужны её название и размер.

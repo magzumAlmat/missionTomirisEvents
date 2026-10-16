@@ -8,6 +8,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { checkPhoneRegistration, normalizePhone } from "./phoneValidator.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CAPTAINS_FILE = path.join(__dirname, "captains.json");
@@ -50,13 +51,12 @@ export function findCaptainByPhone(phone) {
 export function createCaptain({ name, phone, slots, hasCar }) {
   const captains = listCaptains();
   const id = `cap_${Date.now()}`;
-  const existing = captains.find((c) => {
-    const cPhone = (c.phone || "").replace(/\D/g, "").slice(-10);
-    const newPhone = String(phone || "").replace(/\D/g, "").slice(-10);
-    return cPhone === newPhone;
-  });
-  if (existing) {
-    return { error: "Этот номер уже зарегистрирован как капитан", captain: existing };
+
+  const regCheck = checkPhoneRegistration(phone);
+  if (regCheck.registered) {
+    return {
+      error: `Номер телефона ${phone} уже зарегистрирован (${regCheck.details?.description || "в квесте"}). Повторная регистрация невозможна.`,
+    };
   }
   const captain = {
     id,
@@ -100,11 +100,19 @@ export function canSubscribeToCaptain(captainId) {
 export function subscribeToCaptain({ captainId, name, phone, hasCar }) {
   const validation = canSubscribeToCaptain(captainId);
   if (!validation.ok) return validation;
+
+  const regCheck = checkPhoneRegistration(phone);
+  if (regCheck.registered) {
+    return {
+      error: `Номер телефона ${phone} уже зарегистрирован (${regCheck.details?.description || "в квесте"}). Повторная регистрация невозможна.`,
+    };
+  }
+
   const captains = listCaptains();
   const captain = captains.find((c) => c.id === captainId);
-  const phoneClean = String(phone || "").replace(/\D/g, "").slice(-10);
+  const phoneClean = normalizePhone(phone);
   const alreadySubscribed = captain.participants.some((p) => {
-    return (p.phone || "").replace(/\D/g, "").slice(-10) === phoneClean;
+    return normalizePhone(p.phone) === phoneClean;
   });
   if (alreadySubscribed) {
     return { error: "Вы уже подписаны на этого капитана" };
@@ -180,6 +188,12 @@ export function getCaptainsSummary() {
 }
 
 export function addSoloUser({ name, phone, hasCar }) {
+  const regCheck = checkPhoneRegistration(phone);
+  if (regCheck.registered) {
+    return {
+      error: `Номер телефона ${phone} уже зарегистрирован (${regCheck.details?.description || "в квесте"}). Повторная регистрация невозможна.`,
+    };
+  }
   const soloFile = path.join(__dirname, "solo_users.json");
   const users = readJson(soloFile, []);
   users.push({

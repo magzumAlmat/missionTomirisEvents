@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { registerParticipant, HAS_BACKEND, fetchCaptains, subscribeToCaptain, addSoloUser, createCaptain, fetchTeams } from "../lib/api.js";
+import { registerParticipant, HAS_BACKEND, fetchCaptains, subscribeToCaptain, addSoloUser, createCaptain, fetchTeams, checkPhone } from "../lib/api.js";
 import { getPhone, setPhone, isValidPhone } from "../lib/phone.js";
 import { getTeam, setTeam, getName, setName, setTeamNumber } from "../lib/team.js";
 import { useProgress } from "../useProgress.js";
@@ -122,6 +122,10 @@ export default function Register() {
   const [teams, setTeams] = useState([]);
   const [loadingTeams, setLoadingTeams] = useState(false);
 
+  // Валидация уникальности номера телефона
+  const [phoneDuplicateError, setPhoneDuplicateError] = useState("");
+  const [checkingPhone, setCheckingPhone] = useState(false);
+
   const phoneOk = isValidPhone(phone);
   const nameOk = name.trim().length > 0;
 
@@ -184,7 +188,41 @@ export default function Register() {
   function onPhoneChange(v) {
     setPhoneState(v);
     setPhone(v);
+    setPhoneDuplicateError("");
   }
+
+  // Проверка телефона на дубликаты в реальном времени
+  useEffect(() => {
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length < 10) {
+      setPhoneDuplicateError("");
+      return;
+    }
+
+    let cancelled = false;
+    setCheckingPhone(true);
+    const timer = setTimeout(() => {
+      checkPhone(phone)
+        .then((res) => {
+          if (cancelled) return;
+          setCheckingPhone(false);
+          if (res && res.registered) {
+            const desc = res.details?.description ? ` (${res.details.description})` : "";
+            setPhoneDuplicateError(`Этот номер телефона уже зарегистрирован${desc}. Один номер не может участвовать дважды.`);
+          } else {
+            setPhoneDuplicateError("");
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setCheckingPhone(false);
+        });
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [phone]);
 
   function onNameChange(v) {
     setNameState(v);
@@ -410,11 +448,34 @@ export default function Register() {
               onChange={(e) => onPhoneChange(e.target.value)}
               required
             />
-            {!phoneOk && phone.length > 0 && (
+            {phoneDuplicateError ? (
+              <div
+                style={{
+                  marginTop: 8,
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  background: "rgba(255, 107, 107, 0.12)",
+                  border: "1px solid rgba(255, 107, 107, 0.35)",
+                  color: "#ff6b6b",
+                  fontSize: 13,
+                  lineHeight: 1.4,
+                  textAlign: "left",
+                }}
+              >
+                ⚠️ <b>Номер уже занят:</b> {phoneDuplicateError}
+                <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
+                  Если это вы, вы уже зарегистрированы в квесте — нажмите кнопку «На главную» внизу.
+                </div>
+              </div>
+            ) : !phoneOk && phone.length > 0 ? (
               <p className="err-text tiny" style={{ marginTop: 4 }}>
                 Введите корректный номер (мин. 10 цифр).
               </p>
-            )}
+            ) : checkingPhone ? (
+              <p className="muted tiny" style={{ marginTop: 4 }}>
+                🔍 Проверка номера телефона...
+              </p>
+            ) : null}
 
             <label className="field-label mt">3. Ваш автомобиль участвует в игре?</label>
             <div style={TWO_COLS}>
@@ -591,13 +652,27 @@ export default function Register() {
               type="button"
               className="btn green"
               style={{ flex: 1 }}
-              disabled={currentStep === 1 ? (!nameOk || !phoneOk) : !registrationType}
-              onClick={() => {
-                console.log("Navigating to step 2");
+              disabled={
+                currentStep === 1
+                  ? (!nameOk || !phoneOk || !!phoneDuplicateError || checkingPhone)
+                  : !registrationType
+              }
+              onClick={async () => {
+                if (currentStep === 1) {
+                  setCheckingPhone(true);
+                  const res = await checkPhone(phone);
+                  setCheckingPhone(false);
+                  if (res && res.registered) {
+                    const desc = res.details?.description ? ` (${res.details.description})` : "";
+                    setPhoneDuplicateError(`Этот номер телефона уже зарегистрирован${desc}. Один номер не может участвовать дважды.`);
+                    return;
+                  }
+                  setPhoneDuplicateError("");
+                }
                 setCurrentStep(currentStep + 1);
               }}
             >
-              Далее
+              {checkingPhone ? "Проверка..." : "Далее"}
             </button>
           ) : (
             <button

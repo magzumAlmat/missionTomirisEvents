@@ -45,6 +45,18 @@ export async function registerParticipant({ name, phone, hasCar, hasTeam, teamNa
   return data;
 }
 
+/** Проверить, зарегистрирован ли уже телефон */
+export async function checkPhone(phone) {
+  if (!API_URL || !phone) return { ok: true, registered: false };
+  try {
+    const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/check-phone?phone=${encodeURIComponent(phone)}`);
+    const data = await res.json().catch(() => ({}));
+    return data;
+  } catch {
+    return { ok: true, registered: false };
+  }
+}
+
 /** Общий помощник: POST на бэкенд с понятной ошибкой. */
 async function post(path, body) {
   if (!API_URL) {
