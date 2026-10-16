@@ -325,7 +325,7 @@ export default function Register() {
             hasCar,
             hasTeam: true,
             teamName: teamName.trim(),
-            teamSize: 0,
+            teamSize: 1,
           });
           if (res?.teamNumber) {
             setTeamNumberState(res.teamNumber);

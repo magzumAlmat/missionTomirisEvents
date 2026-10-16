@@ -427,15 +427,16 @@ app.post("/api/register", async (req, res) => {
     });
   }
 
-  // Если участник в команде — нужны её название и размер.
+  // Если участник в команде — нужны её название.
   const inTeam = !!hasTeam;
   const teamNameClean = inTeam ? String(teamName || "").trim() : "";
-  const teamSizeNum = inTeam ? Number(teamSize) : 0;
   if (inTeam && !teamNameClean) {
     return res.status(400).json({ ok: false, error: "Введите название команды." });
   }
-  if (inTeam && (!Number.isFinite(teamSizeNum) || teamSizeNum < 1)) {
-    return res.status(400).json({ ok: false, error: "Укажите количество человек в команде (от 1)." });
+  const existingTeam = inTeam ? findTeamByName(teamNameClean) : null;
+  let teamSizeNum = Number(teamSize);
+  if (!Number.isFinite(teamSizeNum) || teamSizeNum < 1) {
+    teamSizeNum = existingTeam ? (existingTeam.size || 1) : 1;
   }
 
   const carText = hasCar ? "Да 🚗 (на своей машине)" : "Нет 🚶 (без машины)";
