@@ -21,6 +21,7 @@ import { buildParticipantsListText, buildStandingsText, durationText, escapeHtml
 import {
   findOrCreateTeam,
   findTeamByNumber,
+  findTeamByName,
   getProgress,
   hasArrived,
   markArrival,
