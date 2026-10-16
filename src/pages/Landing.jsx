@@ -129,7 +129,22 @@ export default function Landing() {
             </div>
           </div>
           <p className="countdown-sub">
-            📅 {displayDate} · 🕒 {displayTime} · 📍 {displayPlace}
+            📅 {displayDate} · 🕒 {displayTime} · 📍{" "}
+            {(() => {
+              const urlMatch = displayPlace.match(/(https?:\/\/\S+)\)?/);
+              if (urlMatch) {
+                const url = urlMatch[1].replace(/\)$/, "");
+                const label = displayPlace.replace(/\s*\(?\s*https?:\/\/\S+\)?\s*/, "").trim();
+                return (
+                  <>
+                    <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: "#4cd964", textDecoration: "underline" }}>
+                      {label || displayPlace}
+                    </a>
+                  </>
+                );
+              }
+              return displayPlace;
+            })()}
           </p>
         </div>
 
