@@ -59,7 +59,7 @@ export default function Landing() {
     },
     {
       q: "Нужен ли автомобиль для прохождения?",
-      a: "Да! В команде должен быть хотя бы один автомобиль.",
+      a: "Да! В команде должен быть хотя бы один автомобиль. Но если у вас нет машины — мы подберем для вас команду с автомобилем",
     },
     {
       q: "Что нужно иметь с собой на старте?",
@@ -83,11 +83,15 @@ export default function Landing() {
         <div className="hero-img-wrapper">
           <img
             src="/assets/hero.jpeg"
-
             alt="EventTomiris Quest Poster"
             className="hero-img"
             onError={(e) => {
-              e.target.style.display = "none";
+              if (!e.target.dataset.triedFallback) {
+                e.target.dataset.triedFallback = "true";
+                e.target.src = "/quest_hero.png";
+              } else {
+                e.target.style.display = "none";
+              }
             }}
           />
           <div className="hero-img-overlay" />
@@ -172,7 +176,7 @@ export default function Landing() {
       <div className="landing-stats-grid">
         <div className="stat-card">
           <span className="stat-icon">🗺️</span>
-          <span className="stat-value">{QUEST.stations?.length || 11}</span>
+          <span className="stat-value">10</span>
           <span className="stat-label">Секретных локаций</span>
         </div>
         <div className="stat-card">
