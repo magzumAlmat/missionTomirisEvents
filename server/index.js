@@ -298,6 +298,52 @@ app.post("/api/notify", (req, res) => handleNotify(req, res));
 // Обратная совместимость: старый путь = событие «прибыл».
 app.post("/api/arrived", (req, res) => handleNotify(req, res, "arrived"));
 
+/* =====================================================================
+   НАСТРОЙКИ КВЕСТА (обратный отсчёт / дата / место)
+   ===================================================================== */
+const SETTINGS_FILE = path.join(__dirname, "questSettings.json");
+
+function readSettings() {
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) {
+      return JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf-8"));
+    }
+  } catch (e) {
+    console.error("readSettings error:", e.message);
+  }
+  return { targetDate: "", displayDate: "", displayTime: "", place: "" };
+}
+
+function writeSettings(data) {
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(data, null, 2), "utf-8");
+}
+
+/** Публичный эндпоинт: Landing-страница запрашивает дату обратного отсчёта. */
+app.get("/api/settings", (_req, res) => {
+  try {
+    const settings = readSettings();
+    res.json({ ok: true, settings });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
+/** Админский эндпоинт: сохранить настройки квеста (дата, время, место). */
+app.post("/api/admin/settings", (req, res) => {
+  try {
+    const { targetDate, displayDate, displayTime, place } = req.body || {};
+    if (!targetDate) {
+      return res.status(400).json({ ok: false, error: "targetDate обязателен" });
+    }
+    const settings = { targetDate, displayDate: displayDate || "", displayTime: displayTime || "", place: place || "" };
+    writeSettings(settings);
+    console.log(`[settings] Обновлены: ${targetDate} (${displayDate} ${displayTime}), место: ${place}`);
+    res.json({ ok: true, settings });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
 /** Текст «есть ли команда» для сообщений в Telegram. */
 function teamText(p) {
   if (!p.hasTeam) return "Нет 🙋 (без команды)";

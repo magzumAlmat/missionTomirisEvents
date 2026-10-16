@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
+import { fetchSettings } from "../lib/api.js";
 
 // Вычисление обратного отсчета до даты квеста
 function useCountdown(targetDateStr) {
   const [timeLeft, setTimeLeft] = useState(() => calculateLeft(targetDateStr));
 
   useEffect(() => {
+    setTimeLeft(calculateLeft(targetDateStr));
     const timer = setInterval(() => {
       setTimeLeft(calculateLeft(targetDateStr));
     }, 1000);
@@ -17,8 +19,8 @@ function useCountdown(targetDateStr) {
 }
 
 function calculateLeft(targetDateStr) {
-  // Пробуем распарсить дату из конфига или ставим дефолт +3 дня для интерактива
-  const target = new Date("2026-09-14T12:00:00").getTime();
+  if (!targetDateStr) return { days: 0, hours: 0, minutes: 0, seconds: 0, expired: true };
+  const target = new Date(targetDateStr).getTime();
   const now = new Date().getTime();
   const diff = Math.max(0, target - now);
 
@@ -33,7 +35,21 @@ function calculateLeft(targetDateStr) {
 export default function Landing() {
   const navigate = useNavigate();
   const poster = QUEST.poster || {};
-  const countdown = useCountdown(poster.date);
+  const [settings, setSettings] = useState(null);
+
+  // Загрузить настройки обратного отсчёта с сервера
+  useEffect(() => {
+    fetchSettings()
+      .then((data) => setSettings(data.settings || {}))
+      .catch(() => setSettings({}));
+  }, []);
+
+  const targetDate = settings?.targetDate || "2026-10-18T12:00:00";
+  const displayDate = settings?.displayDate || poster.date || "18 октября 2026";
+  const displayTime = settings?.displayTime || poster.time || "12:00";
+  const displayPlace = settings?.place || poster.place || "Центр города";
+
+  const countdown = useCountdown(targetDate);
   const [activeFaq, setActiveFaq] = useState(null);
 
   const faqs = [
@@ -112,7 +128,7 @@ export default function Landing() {
             </div>
           </div>
           <p className="countdown-sub">
-            📅 {poster.date || "14 сентября 2026"} · 🕒 {poster.time || "12:00"} · 📍 {poster.place || "Центр города"}
+            📅 {displayDate} · 🕒 {displayTime} · 📍 {displayPlace}
           </p>
         </div>
 

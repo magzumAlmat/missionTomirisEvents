@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 import { useNavigate } from "react-router-dom";
 import { QUEST, INCLUDE_START_QR } from "../questConfig.js";
 import PasswordGate, { isUnlocked } from "../components/PasswordGate.jsx";
-import { fetchCaptains, createCaptain, updateCaptainSlots, moveUserBetweenCaptains, unsubscribeFromCaptain, fetchSoloUsers, deleteAllCaptains, deleteAllParticipants } from "../lib/api.js";
+import { fetchCaptains, createCaptain, updateCaptainSlots, moveUserBetweenCaptains, unsubscribeFromCaptain, fetchSoloUsers, deleteAllCaptains, deleteAllParticipants, fetchSettings, saveSettings } from "../lib/api.js";
 
 /** Список точек, для которых генерируем QR. */
 function buildItems(base) {
@@ -27,7 +27,7 @@ function buildItems(base) {
 export default function Admin() {
   const navigate = useNavigate();
   const [unlocked, setUnlocked] = useState(isUnlocked);
-  const [activeTab, setActiveTab] = useState("qr"); // qr | captains | solo
+  const [activeTab, setActiveTab] = useState("qr"); // qr | captains | solo | timer
 
   // QR-коды
   const defaultBase = useMemo(
@@ -60,7 +60,34 @@ export default function Admin() {
   // Одиночные пользователи
   const [soloUsers, setSoloUsers] = useState([]);
 
+  // Настройки обратного отсчёта
+  const [timerTargetDate, setTimerTargetDate] = useState("");
+  const [timerDisplayDate, setTimerDisplayDate] = useState("");
+  const [timerDisplayTime, setTimerDisplayTime] = useState("");
+  const [timerPlace, setTimerPlace] = useState("");
+  const [timerMsg, setTimerMsg] = useState("");
+  const [timerLoading, setTimerLoading] = useState(false);
+
   const items = useMemo(() => buildItems(base), [base]);
+
+  // Загрузка настроек таймера
+  useEffect(() => {
+    if (!unlocked || activeTab !== "timer") return;
+    let cancelled = false;
+    setTimerLoading(true);
+    fetchSettings()
+      .then((data) => {
+        if (!cancelled && data.settings) {
+          setTimerTargetDate(data.settings.targetDate || "");
+          setTimerDisplayDate(data.settings.displayDate || "");
+          setTimerDisplayTime(data.settings.displayTime || "");
+          setTimerPlace(data.settings.place || "");
+        }
+        if (!cancelled) setTimerLoading(false);
+      })
+      .catch(() => { if (!cancelled) setTimerLoading(false); });
+    return () => { cancelled = true; };
+  }, [unlocked, activeTab]);
 
   // Генерация QR
   useEffect(() => {
@@ -196,6 +223,38 @@ export default function Admin() {
     }
   }
 
+  // Сохранить настройки таймера
+  async function onSaveTimer() {
+    setTimerMsg("");
+    try {
+      await saveSettings({
+        targetDate: timerTargetDate,
+        displayDate: timerDisplayDate,
+        displayTime: timerDisplayTime,
+        place: timerPlace,
+      });
+      setTimerMsg("✅ Настройки обратного отсчёта сохранены!");
+    } catch (e) {
+      setTimerMsg("❌ " + e.message);
+    }
+  }
+
+  // Автозаполнение displayDate и displayTime из targetDate
+  function onTargetDateChange(val) {
+    setTimerTargetDate(val);
+    if (val) {
+      try {
+        const d = new Date(val);
+        if (!isNaN(d.getTime())) {
+          const months = ["января", "февраля", "марта", "апреля", "мая", "июня",
+            "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+          setTimerDisplayDate(`${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`);
+          setTimerDisplayTime(`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`);
+        }
+      } catch {}
+    }
+  }
+
   // Удалить всех участников
   async function onDeleteAllParticipants() {
     if (!window.confirm("⚠️ Удалить ВСЕХ участников? Это действие необратимо.")) return;
@@ -223,6 +282,7 @@ export default function Admin() {
           { key: "qr", label: "📱 QR-коды" },
           { key: "captains", label: "👑 Капитаны" },
           { key: "solo", label: "🙋 Участники" },
+          { key: "timer", label: "⏱ Таймер" },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -489,6 +549,83 @@ export default function Admin() {
           <button className="btn mt" onClick={onMoveUser} style={{ width: "100%" }}>
             Переместить
           </button>
+        </div>
+      )}
+
+      {/* ⏱ Настройки обратного отсчёта */}
+      {activeTab === "timer" && (
+        <div>
+          {timerMsg && (
+            <div className={`feedback ${timerMsg.startsWith("✅") ? "ok" : "err"}`} style={{ marginBottom: 16 }}>
+              {timerMsg}
+            </div>
+          )}
+
+          {timerLoading ? (
+            <p>Загрузка настроек...</p>
+          ) : (
+            <>
+              <h3>⏱ Обратный отсчёт на Landing-странице</h3>
+              <p className="muted" style={{ marginBottom: 16 }}>
+                Укажите точную дату и время старта квеста. Обратный отсчёт на главной странице обновится автоматически.
+              </p>
+
+              <label className="field-label" style={{ display: "block", marginTop: 16, marginBottom: 6, color: "#ccc", fontSize: 13, fontWeight: 600 }}>📅 Дата и время старта (ISO формат)</label>
+              <input
+                type="datetime-local"
+                value={timerTargetDate ? timerTargetDate.slice(0, 16) : ""}
+                onChange={(e) => onTargetDateChange(e.target.value)}
+                style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", color: "white", fontSize: 16 }}
+              />
+
+              <label className="field-label" style={{ display: "block", marginTop: 16, marginBottom: 6, color: "#ccc", fontSize: 13, fontWeight: 600 }}>🗓 Отображаемая дата (текстом, например: 18 октября 2026)</label>
+              <input
+                type="text"
+                placeholder="18 октября 2026"
+                value={timerDisplayDate}
+                onChange={(e) => setTimerDisplayDate(e.target.value)}
+                style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", color: "white", fontSize: 16 }}
+              />
+
+              <label className="field-label" style={{ display: "block", marginTop: 16, marginBottom: 6, color: "#ccc", fontSize: 13, fontWeight: 600 }}>🕒 Отображаемое время (например: 12:00)</label>
+              <input
+                type="text"
+                placeholder="12:00"
+                value={timerDisplayTime}
+                onChange={(e) => setTimerDisplayTime(e.target.value)}
+                style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", color: "white", fontSize: 16 }}
+              />
+
+              <label className="field-label" style={{ display: "block", marginTop: 16, marginBottom: 6, color: "#ccc", fontSize: 13, fontWeight: 600 }}>📍 Место проведения</label>
+              <input
+                type="text"
+                placeholder="Парковка у школы 216, Адрес: Курильская улица, 17"
+                value={timerPlace}
+                onChange={(e) => setTimerPlace(e.target.value)}
+                style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", color: "white", fontSize: 16 }}
+              />
+
+              {timerTargetDate && (
+                <div style={{ marginTop: 20, padding: 16, background: "rgba(76,217,100,0.1)", borderRadius: 8, border: "1px solid rgba(76,217,100,0.3)" }}>
+                  <strong style={{ color: "#4cd964" }}>Предпросмотр:</strong>
+                  <p style={{ margin: "8px 0 0", color: "#ccc" }}>
+                    📅 {timerDisplayDate} · 🕒 {timerDisplayTime} · 📍 {timerPlace}
+                  </p>
+                  <p style={{ margin: "4px 0 0", color: "#aaa", fontSize: 13 }}>
+                    ISO: {timerTargetDate}
+                  </p>
+                </div>
+              )}
+
+              <button
+                className="btn green mt"
+                onClick={onSaveTimer}
+                style={{ width: "100%", fontSize: 16, padding: 14, marginTop: 20 }}
+              >
+                💾 Сохранить настройки
+              </button>
+            </>
+          )}
         </div>
       )}
 

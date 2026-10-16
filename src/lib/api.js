@@ -204,5 +204,25 @@ export async function deleteAllParticipants() {
   return post("/api/admin/delete-all-participants", {});
 }
 
+/* =====================================================================
+   НАСТРОЙКИ КВЕСТА (обратный отсчёт / дата / место)
+   ===================================================================== */
+
+/** Получить настройки квеста (публичный) — дата обратного отсчёта, место и т.д. */
+export async function fetchSettings() {
+  if (!API_URL) throw new Error("Бэкенд не подключён (VITE_API_URL).");
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/settings`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "Не удалось получить настройки.");
+  }
+  return data;
+}
+
+/** Сохранить настройки квеста (админ) — дата, время, место. */
+export async function saveSettings({ targetDate, displayDate, displayTime, place }) {
+  return post("/api/admin/settings", { targetDate, displayDate, displayTime, place });
+}
+
 export const HAS_BACKEND = !!API_URL;
 export const API_BASE = API_URL;
