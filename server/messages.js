@@ -35,13 +35,19 @@ export function durationText(fromIso, toIso) {
  * standingsRows — необязательный массив из store.standings() для показа
  * прогресса по точкам у каждой команды.
  */
-export function buildParticipantsListText(participants, { groups, loners }, standingsRows = []) {
+export function buildParticipantsListText(participants, { groups, loners }, standingsRows = [], mode = "all") {
   if (participants.length === 0) {
     return "📋 <b>Список участников пока пуст.</b>\nНикто ещё не зарегистрировался через форму.";
   }
 
-  const withCar = participants.filter((p) => p.hasCar).length;
-  const withoutCar = participants.length - withCar;
+  const currentGroups = groups.filter((g) => !g.team.archived);
+  const archived = groups.length - currentGroups.length;
+  const targetGroups = mode === "current" && (currentGroups.length > 0 || loners.length > 0) ? currentGroups : groups;
+
+  const currentMembers = [...targetGroups.flatMap((g) => g.members), ...loners];
+  const listForStats = mode === "current" ? currentMembers : participants;
+  const withCar = listForStats.filter((p) => p.hasCar).length;
+  const withoutCar = listForStats.length - withCar;
 
   // Индекс прогресса по номеру команды для быстрой подстановки.
   const progressByTeam = new Map();
@@ -58,12 +64,16 @@ export function buildParticipantsListText(participants, { groups, loners }, stan
     );
   }
 
-  const current = groups.filter((g) => !g.team.archived).length;
-  const archived = groups.length - current;
+  const isCurrentOnly = mode === "current" && archived > 0;
+  let msg = isCurrentOnly
+    ? `📋 <b>УЧАСТНИКИ ТЕКУЩЕГО КВЕСТА</b> (${currentMembers.length} чел.)\n\n`
+    : `📋 <b>БАЗА УЧАСТНИКОВ</b> (всего: ${participants.length} чел.)\n\n`;
 
-  let msg = `📋 <b>БАЗА УЧАСТНИКОВ</b> (всего: ${participants.length} чел.)\n\n`;
+  if (targetGroups.length === 0) {
+    msg += `   <i>В текущем квесте пока нет зарегистрированных команд.</i>\n\n`;
+  }
 
-  for (const { team, members } of groups) {
+  for (const { team, members } of targetGroups) {
     const declared = team.size ? `${members.length} из ${team.size}` : `${members.length}`;
     // Команда без номера — из прошлых мероприятий: её номер уже стёрт очисткой.
     const head = team.archived
@@ -102,10 +112,16 @@ export function buildParticipantsListText(participants, { groups, loners }, stan
   }
 
   msg += `───────────────\n`;
-  msg += `📊 <b>Итого:</b> ${participants.length} чел. (🚘 На машине: ${withCar} | 🚶 Без авто: ${withoutCar})\n`;
-  msg += `👥 <b>Команд в этом квесте:</b> ${current}`;
-  if (archived) msg += ` | 🗂 из прошлых: ${archived}`;
-  msg += ` | 🙋 Без команды: ${loners.length}`;
+  if (isCurrentOnly) {
+    msg += `📊 <b>Итого в этом квесте:</b> ${currentMembers.length} чел. (🚘 На машине: ${withCar} | 🚶 Без авто: ${withoutCar})\n`;
+    msg += `👥 <b>Команд:</b> ${currentGroups.length} | 🙋 Без команды: ${loners.length}\n`;
+    msg += `🗂 <i>В архиве прошлых квестов ещё ${archived} команд (${participants.length - currentMembers.length} чел.)</i>`;
+  } else {
+    msg += `📊 <b>Итого:</b> ${participants.length} чел. (🚘 На машине: ${withCar} | 🚶 Без авто: ${withoutCar})\n`;
+    msg += `👥 <b>Команд в этом квесте:</b> ${currentGroups.length}`;
+    if (archived) msg += ` | 🗂 из прошлых: ${archived}`;
+    msg += ` | 🙋 Без команды: ${loners.length}`;
+  }
   return msg;
 }
 

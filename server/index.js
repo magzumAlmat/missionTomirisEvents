@@ -968,46 +968,200 @@ app.get("/api/standings", (_req, res) => {
   res.json({ ok: true, total: TOTAL_STATIONS, rows: standings() });
 });
 
-/** Отправить список всех участников в Telegram-чат */
-async function sendParticipantsListToChat(chatId) {
-  const participants = readParticipants();
+const BOT_OFFSET_FILE = path.join(__dirname, "botOffset.json");
 
-  const reply_markup = {
-    inline_keyboard: [
-      [{ text: "🔄 Обновить список", callback_data: "list_participants" }],
-    ],
-  };
+function readBotOffset() {
+  try {
+    const v = JSON.parse(fs.readFileSync(BOT_OFFSET_FILE, "utf8"));
+    return Number.isFinite(v) && v > 0 ? v : 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+function saveBotOffset(id) {
+  try {
+    fs.writeFileSync(BOT_OFFSET_FILE, JSON.stringify(id), "utf8");
+  } catch (e) {}
+}
+
+/**
+ * Безопасное разбиение длинного сообщения для Telegram (лимит 4096 символов).
+ * Режет по строкам, сохраняя целостность строк и тегов.
+ */
+function splitTelegramMessage(text, maxLen = 3800) {
+  if (!text || text.length <= maxLen) return [text || ""];
+  const chunks = [];
+  const lines = text.split("\n");
+  let currentChunk = "";
+
+  for (const line of lines) {
+    if ((currentChunk + "\n" + line).length > maxLen) {
+      if (currentChunk) chunks.push(currentChunk.trim());
+      currentChunk = line;
+    } else {
+      currentChunk = currentChunk ? currentChunk + "\n" + line : line;
+    }
+  }
+  if (currentChunk.trim()) chunks.push(currentChunk.trim());
+  return chunks.length ? chunks : [text];
+}
+
+/**
+ * Отправка сообщения в Telegram с поддержкой:
+ *  - автоматического разбиения длинных сообщений на части
+ *  - фоллбэка на чистый текст при ошибке парсинга HTML entities
+ *  - повторов при 429 Too Many Requests
+ *  - поддержки message_thread_id (топиков в супергруппах)
+ */
+async function sendTelegramMessage(chatId, text, options = {}) {
+  const { TOKEN } = getEnv();
+  if (!TOKEN || !chatId) {
+    console.warn("[TG] sendTelegramMessage: отсутствует токен или chatId", { chatId });
+    return { ok: false, error: "Token or chatId missing" };
+  }
+
+  const { reply_markup, threadId, parse_mode = "HTML" } = options;
+  const chunks = splitTelegramMessage(text, 3800);
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const isLast = i === chunks.length - 1;
+
+    const payload = {
+      chat_id: chatId,
+      text: chunk,
+    };
+    if (parse_mode) payload.parse_mode = parse_mode;
+    if (threadId) payload.message_thread_id = threadId;
+    if (isLast && reply_markup) payload.reply_markup = reply_markup;
+
+    try {
+      let res = await fetch(API("sendMessage"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      let data = await res.json();
+
+      // Если Telegram ругается на некорректный HTML, пробуем без разметки (чистый текст)
+      if (!data.ok && parse_mode && String(data.description || "").includes("can't parse entities")) {
+        console.warn("[TG] Ошибка парсинга HTML entities, отправляем чистым текстом:", data.description);
+        delete payload.parse_mode;
+        payload.text = chunk.replace(/<[^>]+>/g, "");
+        res = await fetch(API("sendMessage"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        data = await res.json();
+      }
+
+      // Если 429 Too Many Requests
+      if (!data.ok && data.error_code === 429) {
+        const waitSec = (data.parameters && data.parameters.retry_after) || 3;
+        console.warn(`[TG] 429 Too Many Requests, ждём ${waitSec}с...`);
+        await new Promise((r) => setTimeout(r, waitSec * 1000));
+        res = await fetch(API("sendMessage"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        data = await res.json();
+      }
+
+      if (!data.ok) {
+        console.error("[TG] Ошибка sendMessage:", JSON.stringify(data));
+        return data;
+      }
+    } catch (err) {
+      console.error("[TG] Сетевая ошибка sendMessage:", err.message);
+      return { ok: false, error: err.message };
+    }
+
+    if (chunks.length > 1 && !isLast) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+
+  return { ok: true };
+}
+
+/** Сопоставление команд: с '/', без '/', с суффиксом @botname */
+function matchCommand(rawText, commandNames) {
+  if (!rawText) return false;
+  const cleaned = rawText.trim().toLowerCase();
+  for (const name of commandNames) {
+    const n = name.toLowerCase();
+    if (
+      cleaned === n ||
+      cleaned === `/${n}` ||
+      cleaned.startsWith(`/${n}@`) ||
+      cleaned.startsWith(`/${n} `) ||
+      cleaned.startsWith(`${n} `)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Отправить список всех участников в Telegram-чат */
+async function sendParticipantsListToChat(chatId, options = {}) {
+  const { mode = "all", threadId = null } = options;
+  const participants = readParticipants();
 
   if (participants.length === 0) {
     const text = "📋 <b>Список участников пока пуст.</b>\nНикто ещё не зарегистрировался через форму.";
-    await fetch(API("sendMessage"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", reply_markup }),
-    });
+    const reply_markup = {
+      inline_keyboard: [
+        [{ text: "🔄 Обновить список", callback_data: "list_participants" }],
+      ],
+    };
+    await sendTelegramMessage(chatId, text, { reply_markup, threadId });
     return;
   }
 
-  const text = buildParticipantsListText(participants, participantsByTeam(participants), standings());
+  const { groups, loners } = participantsByTeam(participants);
+  const rows = standings();
+  const currentGroups = groups.filter((g) => !g.team.archived);
+  const archivedCount = groups.length - currentGroups.length;
 
-  await fetch(API("sendMessage"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", reply_markup }),
-  });
+  const text = buildParticipantsListText(participants, { groups, loners }, rows, mode);
+
+  const buttons = [];
+  if (archivedCount > 0) {
+    if (mode === "current") {
+      buttons.push([
+        { text: `🗂 Показать всю базу (${participants.length} чел.)`, callback_data: "list_all" },
+      ]);
+    } else {
+      buttons.push([
+        { text: `👥 Только текущий квест (${currentGroups.length} ком.)`, callback_data: "list_current" },
+      ]);
+    }
+  }
+  buttons.push([
+    { text: "🔄 Обновить список", callback_data: mode === "current" ? "list_current" : "list_all" },
+    { text: "🏁 Таблица квеста", callback_data: "standings" },
+  ]);
+
+  const reply_markup = { inline_keyboard: buttons };
+  await sendTelegramMessage(chatId, text, { reply_markup, threadId });
 }
 
 /** Судейская таблица в Telegram: кто сколько точек взял и когда финишировал. */
-async function sendStandingsToChat(chatId) {
+async function sendStandingsToChat(chatId, options = {}) {
   const text = buildStandingsText(standings(), TOTAL_STATIONS);
   const reply_markup = {
-    inline_keyboard: [[{ text: "🔄 Обновить таблицу", callback_data: "standings" }]],
+    inline_keyboard: [
+      [
+        { text: "🔄 Обновить таблицу", callback_data: "standings" },
+        { text: "📋 Список участников", callback_data: "list_participants" },
+      ],
+    ],
   };
-  await fetch(API("sendMessage"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", reply_markup }),
-  });
+  await sendTelegramMessage(chatId, text, { reply_markup, threadId: options.threadId });
 }
 
 /** Список всех участников для админов в JSON */
@@ -1075,7 +1229,7 @@ app.get("*", (req, res, next) => {
  * Спросить подтверждение перед очисткой. Сама очистка стирает всё
  * мероприятие целиком, поэтому одного случайного нажатия быть не должно.
  */
-async function askFinishConfirmation(targetChatId) {
+async function askFinishConfirmation(targetChatId, options = {}) {
   const participants = readParticipants();
   const text =
     `⚠️ <b>ЗАВЕРШИТЬ КВЕСТ?</b>\n\n` +
@@ -1092,11 +1246,7 @@ async function askFinishConfirmation(targetChatId) {
       [{ text: "↩️ Отмена", callback_data: "finish_quest_cancel" }],
     ],
   };
-  await fetch(API("sendMessage"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: targetChatId, text, parse_mode: "HTML", reply_markup }),
-  });
+  await sendTelegramMessage(targetChatId, text, { reply_markup, threadId: options.threadId });
 }
 
 /**
@@ -1104,7 +1254,7 @@ async function askFinishConfirmation(targetChatId) {
  * Участников НЕ трогает: participants.json — накопительная база клиентов,
  * она живёт от мероприятия к мероприятию.
  */
-async function handleFinishQuestCommand(targetChatId) {
+async function handleFinishQuestCommand(targetChatId, options = {}) {
   const counts = resetAll();
   const kept = readParticipants().length;
   const text =
@@ -1120,15 +1270,11 @@ async function handleFinishQuestCommand(targetChatId) {
       [{ text: `📋 База участников (${kept})`, callback_data: "list_participants" }],
     ],
   };
-  await fetch(API("sendMessage"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: targetChatId, text, parse_mode: "HTML", reply_markup }),
-  });
+  await sendTelegramMessage(targetChatId, text, { reply_markup, threadId: options.threadId });
 }
 
 // === Telegram Long Polling для обработки кнопок и команд (/list, /finish_quest, /participants, /список) ===
-let lastUpdateId = 0;
+let lastUpdateId = readBotOffset();
 
 async function pollTelegramUpdates() {
   const { TOKEN, CHAT_ID } = getEnv();
@@ -1144,95 +1290,73 @@ async function pollTelegramUpdates() {
     if (data.ok && Array.isArray(data.result)) {
       for (const update of data.result) {
         lastUpdateId = update.update_id;
+        saveBotOffset(lastUpdateId);
 
         // Обработка нажатий на инлайн-кнопки
         if (update.callback_query) {
           const cb = update.callback_query;
           const data = cb.data;
           const targetChatId = cb.message?.chat?.id || CHAT_ID;
+          const threadId = cb.message?.message_thread_id;
 
-          if (data === "list_participants") {
-            try {
-              await fetch(API("answerCallbackQuery"), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ callback_query_id: cb.id, text: "Загружаю список..." }),
-              });
-            } catch (e) {}
-            await sendParticipantsListToChat(targetChatId);
-          } else if (data === "standings") {
-            try {
-              await fetch(API("answerCallbackQuery"), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ callback_query_id: cb.id, text: "Считаю таблицу..." }),
-              });
-            } catch (e) {}
-            await sendStandingsToChat(targetChatId);
-          } else if (data === "finish_quest") {
-            try {
-              await fetch(API("answerCallbackQuery"), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ callback_query_id: cb.id, text: "Нужно подтверждение" }),
-              });
-            } catch (e) {}
-            await askFinishConfirmation(targetChatId);
-          } else if (data === "finish_quest_confirm") {
-            try {
-              await fetch(API("answerCallbackQuery"), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ callback_query_id: cb.id, text: "Стираю данные..." }),
-              });
-            } catch (e) {}
-            await handleFinishQuestCommand(targetChatId);
-          } else if (data === "finish_quest_cancel") {
-            try {
-              await fetch(API("answerCallbackQuery"), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ callback_query_id: cb.id, text: "Отменено" }),
-              });
-            } catch (e) {}
-            await fetch(API("sendMessage"), {
+          const answer = (text) =>
+            fetch(API("answerCallbackQuery"), {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                chat_id: targetChatId,
-                text: "↩️ Очистка отменена. Данные на месте.",
-              }),
-            });
+              body: JSON.stringify({ callback_query_id: cb.id, text }),
+            }).catch(() => {});
+
+          if (data === "list_participants" || data === "list_all") {
+            await answer("Загружаю список...");
+            await sendParticipantsListToChat(targetChatId, { mode: "all", threadId });
+          } else if (data === "list_current") {
+            await answer("Загружаю текущий квест...");
+            await sendParticipantsListToChat(targetChatId, { mode: "current", threadId });
+          } else if (data === "standings") {
+            await answer("Считаю таблицу...");
+            await sendStandingsToChat(targetChatId, { threadId });
+          } else if (data === "finish_quest") {
+            await answer("Нужно подтверждение");
+            await askFinishConfirmation(targetChatId, { threadId });
+          } else if (data === "finish_quest_confirm") {
+            await answer("Стираю данные...");
+            await handleFinishQuestCommand(targetChatId, { threadId });
+          } else if (data === "finish_quest_cancel") {
+            await answer("Отменено");
+            await sendTelegramMessage(targetChatId, "↩️ Очистка отменена. Данные на месте.", { threadId });
           }
         }
 
         // Обработка команд (/list, /finish_quest, /participants, /список, /start)
         const msg = update.message || update.channel_post;
         if (msg && msg.text) {
-          const text = msg.text.trim().toLowerCase();
+          const text = msg.text.trim();
           const targetChatId = msg.chat.id;
+          const threadId = msg.message_thread_id;
 
           if (
-            text.startsWith("/finish_quest") ||
-            text.startsWith("/finishquest") ||
-            text.startsWith("/finish quest") ||
-            text.startsWith("/finish") ||
-            text.startsWith("/очистить")
+            matchCommand(text, ["finish_quest", "finishquest", "finish quest", "finish", "очистить", "завершить"])
           ) {
-            await askFinishConfirmation(targetChatId);
+            await askFinishConfirmation(targetChatId, { threadId });
           } else if (
-            text.startsWith("/list") ||
-            text.startsWith("/participants") ||
-            text.startsWith("/список")
+            matchCommand(text, ["list_all", "список_все", "база", "архив"])
           ) {
-            await sendParticipantsListToChat(targetChatId);
+            await sendParticipantsListToChat(targetChatId, { mode: "all", threadId });
           } else if (
-            text.startsWith("/standings") ||
-            text.startsWith("/table") ||
-            text.startsWith("/таблица")
+            matchCommand(text, ["list", "participants", "список", "участники"])
           ) {
-            await sendStandingsToChat(targetChatId);
-          } else if (text.startsWith("/start") || text.startsWith("/help")) {
+            await sendParticipantsListToChat(targetChatId, { mode: "all", threadId });
+          } else if (
+            matchCommand(text, ["list_current", "текущие"])
+          ) {
+            await sendParticipantsListToChat(targetChatId, { mode: "current", threadId });
+          } else if (
+            matchCommand(text, ["standings", "table", "таблица", "результаты", "счет"])
+          ) {
+            await sendStandingsToChat(targetChatId, { threadId });
+          } else if (
+            matchCommand(text, ["start", "help", "старт", "помощь", "меню", "menu"])
+          ) {
             // Живая статистика для приветствия.
             const participants = readParticipants();
             const teams = listTeams();
@@ -1257,26 +1381,22 @@ async function pollTelegramUpdates() {
               `• ${questStatus}\n\n` +
               `📌 <b>Доступные команды:</b>\n` +
               `• /list или /список — Показать список зарегистрированных участников со всеми данными.\n` +
-              // `• /standings или /таблица — Таблица квеста: кто сколько точек взял и кто финишировал.\n` +
+              `• /standings или /таблица — Таблица квеста: кто сколько точек взял и кто финишировал.\n` +
               `• /finish_quest или /finish — Завершить квест и очистить список участников.`;
             const reply_markup = {
               inline_keyboard: [
                 [{ text: "📋 Показать список участников", callback_data: "list_participants" }],
-               // [{ text: "🏁 Таблица квеста", callback_data: "standings" }],
+                [{ text: "🏁 Таблица квеста", callback_data: "standings" }],
                 [{ text: "🧹 Завершить квест (/finish_quest)", callback_data: "finish_quest" }],
               ],
             };
-            await fetch(API("sendMessage"), {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chat_id: targetChatId, text: welcomeText, parse_mode: "HTML", reply_markup }),
-            });
+            await sendTelegramMessage(targetChatId, welcomeText, { reply_markup, threadId });
           }
         }
       }
     }
   } catch (e) {
-    // Ошибки сети или таймаута при polling не ломают сервер
+    console.error("[Telegram Poll Error]:", e.message || e);
   }
 
   setTimeout(pollTelegramUpdates, 2000);
