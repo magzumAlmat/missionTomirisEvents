@@ -1257,12 +1257,12 @@ async function pollTelegramUpdates() {
               `• ${questStatus}\n\n` +
               `📌 <b>Доступные команды:</b>\n` +
               `• /list или /список — Показать список зарегистрированных участников со всеми данными.\n` +
-              `• /standings или /таблица — Таблица квеста: кто сколько точек взял и кто финишировал.\n` +
+              // `• /standings или /таблица — Таблица квеста: кто сколько точек взял и кто финишировал.\n` +
               `• /finish_quest или /finish — Завершить квест и очистить список участников.`;
             const reply_markup = {
               inline_keyboard: [
                 [{ text: "📋 Показать список участников", callback_data: "list_participants" }],
-                [{ text: "🏁 Таблица квеста", callback_data: "standings" }],
+               // [{ text: "🏁 Таблица квеста", callback_data: "standings" }],
                 [{ text: "🧹 Завершить квест (/finish_quest)", callback_data: "finish_quest" }],
               ],
             };
