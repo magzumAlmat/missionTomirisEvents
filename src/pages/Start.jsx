@@ -29,9 +29,26 @@ export default function Start() {
         <div className="howto">
           <div className="howto-title">Как играть</div>
           <ol className="howto-list">
-            {poster.howTo.map((step, i) => (
-              <li key={i}>{step}</li>
-            ))}
+            {poster.howTo.map((step, i) => {
+              if (typeof step === "string" && step.includes("@thisMirrorbot")) {
+                const parts = step.split("@thisMirrorbot");
+                return (
+                  <li key={i}>
+                    {parts[0]}
+                    <a
+                      href="https://t.me/thisMirrorbot"
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: "var(--accent)", textDecoration: "underline", fontWeight: 600 }}
+                    >
+                      @thisMirrorbot
+                    </a>
+                    {parts[1]}
+                  </li>
+                );
+              }
+              return <li key={i}>{step}</li>;
+            })}
           </ol>
         </div>
       )}
@@ -52,11 +69,6 @@ export default function Start() {
           ℹ️ Информация
         </button>
       </div>
-
-      <p className="center muted small-note">
-        Чтобы начать, отсканируйте первый код на точке сбора. Каждый код
-        открывает свою точку.
-      </p>
 
       {poster.organizer && (
         <div className="poster-org">{poster.organizer}</div>
