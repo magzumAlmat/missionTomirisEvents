@@ -5,10 +5,13 @@ import { useProgress } from "../useProgress.js";
 import { notify, solveStation, fetchProgress, HAS_BACKEND } from "../lib/api.js";
 import { getTeamNumber, setTeamNumber, getTeam } from "../lib/team.js";
 import { getPhone, setPhone, isValidPhone } from "../lib/phone.js";
+import { useGameStatus } from "../useGameStatus.js";
+import CountdownTimer from "../components/CountdownTimer.jsx";
 
 export default function Station() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isGameStarted, timeLeft, displayDate, displayTime, place } = useGameStatus();
   const station = QUEST.stations.find((s) => s.code === id || String(s.id) === id);
   const stationId = station ? station.id : parseInt(id, 10);
 
@@ -66,8 +69,8 @@ export default function Station() {
         if (cancelled) return;
         if (data.arrivals && data.arrivals[String(station.id)]) {
           setArrive("done");
-        } else if (station.id === 0 && isValidPhone(savedPhone)) {
-          // Точка 0: авто-прибытие при первом входе
+        } else if (station.id === 0 && isGameStarted && isValidPhone(savedPhone)) {
+          // Точка 0: авто-прибытие при первом входе ТОЛЬКО если игра уже началась
           notify("arrived", {
             stationId: 0,
             stationName: station.name,
@@ -90,7 +93,7 @@ export default function Station() {
     return () => {
       cancelled = true;
     };
-  }, [stationId, station]);
+  }, [stationId, station, isGameStarted]);
 
   const phoneOk = isValidPhone(phone);
 
@@ -113,6 +116,54 @@ export default function Station() {
         <button className="btn ghost" onClick={() => navigate("/profile")}>
           На главную
         </button>
+      </div>
+    );
+  }
+
+  // 🔒 Точка 0 и все станции закрыты до наступления времени старта квеста
+  if (!isGameStarted) {
+    return (
+      <div className="card">
+        <div className="eyebrow" style={{ color: "#ffcc4d", display: "flex", alignItems: "center", gap: 6 }}>
+          <span>🔒</span> ДОСТУП ЗАКРЫТ ДО СТАРТА ИГРЫ
+        </div>
+        <h2>{station.name}</h2>
+        <p className="muted" style={{ fontSize: 15, lineHeight: 1.5 }}>
+          {station.id === 0
+            ? "Вы прибыли на стартовую позицию. Первое задание и точка 0 откроются автоматически в назначенное время старта игры:"
+            : "Квест ещё не начался. Задания локаций откроются последовательно после старта игры в назначенное время:"}
+        </p>
+
+        <CountdownTimer
+          timeLeft={timeLeft}
+          displayDate={displayDate}
+          displayTime={displayTime}
+          place={place}
+          title="ДО СТАРТА КВЕСТА ОСТАЛОСЬ"
+        />
+
+        <div style={{
+          marginTop: 18,
+          padding: 14,
+          background: "rgba(255, 255, 255, 0.04)",
+          borderRadius: 12,
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          fontSize: 13,
+          lineHeight: 1.6,
+          color: "#ccc"
+        }}>
+          💡 <b>Что делать сейчас?</b><br />
+          Припаркуйте автомобиль на парковке стартовой локации, найдите свою команду и проверьте связь в Telegram. Как только таймер дойдёт до нуля, экран автоматически обновится и откроет задание!
+        </div>
+
+        <div className="btn-row" style={{ marginTop: 20 }}>
+          <button className="btn" onClick={() => navigate("/profile")}>
+            👤 Мой профиль и команда
+          </button>
+          <button className="btn ghost" onClick={() => navigate("/landing")}>
+            ℹ️ О квесте
+          </button>
+        </div>
       </div>
     );
   }

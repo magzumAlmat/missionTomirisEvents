@@ -65,6 +65,7 @@ export default function Admin() {
   const [timerDisplayDate, setTimerDisplayDate] = useState("");
   const [timerDisplayTime, setTimerDisplayTime] = useState("");
   const [timerPlace, setTimerPlace] = useState("");
+  const [timerForceOpen, setTimerForceOpen] = useState(false);
   const [timerMsg, setTimerMsg] = useState("");
   const [timerLoading, setTimerLoading] = useState(false);
 
@@ -82,6 +83,7 @@ export default function Admin() {
           setTimerDisplayDate(data.settings.displayDate || "");
           setTimerDisplayTime(data.settings.displayTime || "");
           setTimerPlace(data.settings.place || "");
+          setTimerForceOpen(Boolean(data.settings.forceOpen));
         }
         if (!cancelled) setTimerLoading(false);
       })
@@ -232,8 +234,9 @@ export default function Admin() {
         displayDate: timerDisplayDate,
         displayTime: timerDisplayTime,
         place: timerPlace,
+        forceOpen: timerForceOpen,
       });
-      setTimerMsg("✅ Настройки обратного отсчёта сохранены!");
+      setTimerMsg("✅ Настройки старта и таймера успешно сохранены!");
     } catch (e) {
       setTimerMsg("❌ " + e.message);
     }
@@ -565,10 +568,63 @@ export default function Admin() {
             <p>Загрузка настроек...</p>
           ) : (
             <>
-              <h3>⏱ Обратный отсчёт на Landing-странице</h3>
+              <h3>⏱ Время старта и доступ к Точке 0</h3>
               <p className="muted" style={{ marginBottom: 16 }}>
-                Укажите точную дату и время старта квеста. Обратный отсчёт на главной странице обновится автоматически.
+                Укажите точную дату и время старта квеста. До наступления этого времени точка 0 закрыта для всех участников.
               </p>
+
+              {(() => {
+                const isNowStarted = timerForceOpen || (timerTargetDate && new Date(timerTargetDate).getTime() <= Date.now());
+                return (
+                  <div style={{
+                    padding: 16,
+                    background: isNowStarted ? "rgba(76,217,100,0.12)" : "rgba(255,107,107,0.12)",
+                    borderRadius: 12,
+                    border: `1px solid ${isNowStarted ? "rgba(76,217,100,0.4)" : "rgba(255,107,107,0.4)"}`,
+                    marginBottom: 20
+                  }}>
+                    <div style={{
+                      color: isNowStarted ? "#4cd964" : "#ff6b6b",
+                      fontWeight: 700,
+                      fontSize: 16,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8
+                    }}>
+                      <span>{isNowStarted ? "🟢" : "🔒"}</span>
+                      {isNowStarted ? "ТОЧКА 0 ДОСТУПНА УЧАСТНИКАМ" : "ТОЧКА 0 ЗАБЛОКИРОВАНА"}
+                    </div>
+                    <div style={{ fontSize: 13, color: "#ccc", marginTop: 6, lineHeight: 1.5 }}>
+                      {timerForceOpen
+                        ? "Включён принудительный (досрочный) старт. Участники могут заходить на точку 0 прямо сейчас."
+                        : isNowStarted
+                        ? "Время старта наступило. Доступ к точке 0 открыт."
+                        : `Точка 0 откроется автоматически в установленное время: ${timerDisplayDate} в ${timerDisplayTime}.`}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div style={{
+                marginBottom: 20,
+                padding: 14,
+                background: "rgba(255,255,255,0.05)",
+                borderRadius: 10,
+                border: "1px solid rgba(255,255,255,0.15)"
+              }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", color: "#fff", fontWeight: 600, fontSize: 15 }}>
+                  <input
+                    type="checkbox"
+                    checked={timerForceOpen}
+                    onChange={(e) => setTimerForceOpen(e.target.checked)}
+                    style={{ width: 20, height: 20, accentColor: "#4cd964" }}
+                  />
+                  <span>⚡ Открыть доступ досрочно (принудительно открыть Точку 0 прямо сейчас)</span>
+                </label>
+                <p className="muted" style={{ fontSize: 12, margin: "6px 0 0 30px" }}>
+                  Включите этот пункт, если хотите начать квест раньше времени или для тестирования прохождения.
+                </p>
+              </div>
 
               <label className="field-label" style={{ display: "block", marginTop: 16, marginBottom: 6, color: "#ccc", fontSize: 13, fontWeight: 600 }}>📅 Дата и время старта (ISO формат)</label>
               <input
@@ -612,7 +668,7 @@ export default function Admin() {
                     📅 {timerDisplayDate} · 🕒 {timerDisplayTime} · 📍 {timerPlace}
                   </p>
                   <p style={{ margin: "4px 0 0", color: "#aaa", fontSize: 13 }}>
-                    ISO: {timerTargetDate}
+                    ISO: {timerTargetDate} {timerForceOpen && "· ⚡ Досрочный старт ВКЛЮЧЕН"}
                   </p>
                 </div>
               )}

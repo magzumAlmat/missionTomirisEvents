@@ -232,6 +232,14 @@ async function handleNotify(req, res, forcedEvent) {
   const { stationId, stationName, team, phone, teamNumber } = req.body || {};
   const event = forcedEvent || (req.body && req.body.event) || "arrived";
 
+  // До начала игры точка 0 закрыта для участников
+  if ((Number(stationId) === 0 || stationId === "start") && !isGameStarted()) {
+    return res.status(403).json({
+      ok: false,
+      error: "Квест ещё не начался. Точка 0 заблокирована до времени старта.",
+    });
+  }
+
   // Прибытие запоминаем на сервере: без него нельзя нажать «Я отгадал»
   // (порядок действий), а судья видит, сколько команда провозилась с загадкой.
   let progressKeyVal = null;
@@ -308,39 +316,66 @@ const SETTINGS_FILE = path.join(__dirname, "questSettings.json");
 function readSettings() {
   try {
     if (fs.existsSync(SETTINGS_FILE)) {
-      return JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf-8"));
+      const data = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf-8"));
+      return {
+        targetDate: data.targetDate || "2026-10-18T12:00:00",
+        displayDate: data.displayDate || "18 октября 2026",
+        displayTime: data.displayTime || "12:00",
+        place: data.place || "Парковка у школы 216, Адрес: Курильская улица, 17 (https://go.2gis.com/jzNzu)",
+        forceOpen: Boolean(data.forceOpen),
+      };
     }
   } catch (e) {
     console.error("readSettings error:", e.message);
   }
-  return { targetDate: "", displayDate: "", displayTime: "", place: "" };
+  return {
+    targetDate: "2026-10-18T12:00:00",
+    displayDate: "18 октября 2026",
+    displayTime: "12:00",
+    place: "Парковка у школы 216, Адрес: Курильская улица, 17 (https://go.2gis.com/jzNzu)",
+    forceOpen: false,
+  };
+}
+
+/** Проверка: наступило ли время старта или включён принудительный доступ */
+function isGameStarted() {
+  const s = readSettings();
+  if (s.forceOpen) return true;
+  if (!s.targetDate) return true;
+  const target = new Date(s.targetDate).getTime();
+  if (isNaN(target)) return true;
+  return Date.now() >= target;
 }
 
 function writeSettings(data) {
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(data, null, 2), "utf-8");
 }
 
-/** Публичный эндпоинт: Landing-страница запрашивает дату обратного отсчёта. */
+/** Публичный эндпоинт: Landing-страница и точки запрашивают дату обратного отсчёта и статус старта. */
 app.get("/api/settings", (_req, res) => {
   try {
     const settings = readSettings();
-    res.json({ ok: true, settings });
+    res.json({ ok: true, settings, isGameStarted: isGameStarted() });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
   }
 });
 
-/** Админский эндпоинт: сохранить настройки квеста (дата, время, место). */
+/** Админский эндпоинт: сохранить настройки квеста (дата, время, место, forceOpen). */
 app.post("/api/admin/settings", (req, res) => {
   try {
-    const { targetDate, displayDate, displayTime, place } = req.body || {};
-    if (!targetDate) {
-      return res.status(400).json({ ok: false, error: "targetDate обязателен" });
-    }
-    const settings = { targetDate, displayDate: displayDate || "", displayTime: displayTime || "", place: place || "" };
+    const { targetDate, displayDate, displayTime, place, forceOpen } = req.body || {};
+    const prev = readSettings();
+    const settings = {
+      targetDate: targetDate || prev.targetDate,
+      displayDate: displayDate !== undefined ? displayDate : prev.displayDate,
+      displayTime: displayTime !== undefined ? displayTime : prev.displayTime,
+      place: place !== undefined ? place : prev.place,
+      forceOpen: typeof forceOpen === "boolean" ? forceOpen : Boolean(prev.forceOpen),
+    };
     writeSettings(settings);
-    console.log(`[settings] Обновлены: ${targetDate} (${displayDate} ${displayTime}), место: ${place}`);
-    res.json({ ok: true, settings });
+    console.log(`[settings] Обновлены: ${settings.targetDate} (${settings.displayDate} ${settings.displayTime}), место: ${settings.place}, forceOpen: ${settings.forceOpen}`);
+    res.json({ ok: true, settings, isGameStarted: isGameStarted() });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
   }
@@ -930,6 +965,14 @@ app.post("/api/solve", async (req, res) => {
   const station = findStation(stationCode);
   if (!station) {
     return res.status(404).json({ ok: false, error: "Точка не найдена. Проверьте QR-код." });
+  }
+
+  // До старта игры точка 0 не может быть засчитана
+  if (station.id === 0 && !isGameStarted()) {
+    return res.status(403).json({
+      ok: false,
+      error: "Квест ещё не начался. Точка 0 заблокирована до времени старта.",
+    });
   }
 
   const team = teamNumber ? findTeamByNumber(teamNumber) : null;

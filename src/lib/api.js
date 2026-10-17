@@ -231,9 +231,9 @@ export async function fetchSettings() {
   return data;
 }
 
-/** Сохранить настройки квеста (админ) — дата, время, место. */
-export async function saveSettings({ targetDate, displayDate, displayTime, place }) {
-  return post("/api/admin/settings", { targetDate, displayDate, displayTime, place });
+/** Сохранить настройки квеста (админ) — дата, время, место, досрочный старт. */
+export async function saveSettings({ targetDate, displayDate, displayTime, place, forceOpen }) {
+  return post("/api/admin/settings", { targetDate, displayDate, displayTime, place, forceOpen });
 }
 
 export const HAS_BACKEND = !!API_URL;

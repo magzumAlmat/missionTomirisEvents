@@ -39,9 +39,15 @@ export default function Start() {
       {HAS_BACKEND && null}
 
       <div className="btn-row">
-        <button className="btn green" onClick={() => navigate("/register")}>
-          📝 Зарегистрироваться на квест
-        </button>
+        {phone ? (
+          <button className="btn green" onClick={() => navigate("/profile")}>
+            👤 Мой профиль и статус квеста
+          </button>
+        ) : (
+          <button className="btn green" onClick={() => navigate("/register")}>
+            📝 Зарегистрироваться на квест
+          </button>
+        )}
         <button className="btn ghost" onClick={() => navigate("/landing")}>
           ℹ️ Информация
         </button>

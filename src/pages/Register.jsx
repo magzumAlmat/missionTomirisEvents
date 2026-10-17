@@ -4,6 +4,7 @@ import { registerParticipant, HAS_BACKEND, fetchCaptains, subscribeToCaptain, ad
 import { getPhone, setPhone, isValidPhone } from "../lib/phone.js";
 import { getTeam, setTeam, getName, setName, setTeamNumber } from "../lib/team.js";
 import { useProgress } from "../useProgress.js";
+import { useGameStatus } from "../useGameStatus.js";
 
 /** Кнопка-переключатель «Да/Нет». */
 function ChoiceButton({ active, onClick, children }) {
@@ -97,6 +98,7 @@ const TWO_COLS = {
 export default function Register() {
   const navigate = useNavigate();
   const { reset: resetProgress } = useProgress();
+  const { isGameStarted, displayDate, displayTime, place } = useGameStatus();
 
   // Step 1: Basic Info
   const [name, setNameState] = useState(getName());
@@ -393,8 +395,29 @@ export default function Register() {
           </p>
         </div>
 
+        {!isGameStarted && (
+          <div style={{
+            marginTop: 18,
+            padding: 14,
+            background: "rgba(255, 204, 77, 0.08)",
+            border: "1px solid rgba(255, 204, 77, 0.25)",
+            borderRadius: 12,
+            fontSize: 13,
+            lineHeight: 1.6
+          }}>
+            <div style={{ fontWeight: 700, color: "#ffcc4d", marginBottom: 4 }}>
+              ⏳ Доступ к игре откроется к началу квеста:
+            </div>
+            <div>📅 <b>{displayDate}</b> в 🕒 <b>{displayTime}</b></div>
+            <div style={{ marginTop: 2, color: "#aaa" }}>📍 {place}</div>
+            <div style={{ marginTop: 6, color: "#ccc", fontSize: 12 }}>
+              До наступления этого времени точка 0 закрыта. Перейдите в профиль команды, чтобы увидеть сокомандников и таймер обратного отсчёта.
+            </div>
+          </div>
+        )}
+
         <button className="btn mt" onClick={() => navigate("/profile")}>
-          На главную квеста
+          👤 Перейти в профиль команды
         </button>
         <button
           className="btn ghost"

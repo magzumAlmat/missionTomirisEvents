@@ -5,10 +5,13 @@ import { getName, getTeam, getTeamNumber } from "../lib/team.js";
 import { fetchTeams, fetchCaptains } from "../lib/api.js";
 import { QUEST } from "../questConfig.js";
 import { useProgress } from "../useProgress.js";
+import { useGameStatus } from "../useGameStatus.js";
+import CountdownTimer from "../components/CountdownTimer.jsx";
 
 export default function Profile() {
   const navigate = useNavigate();
   const { solvedCount } = useProgress();
+  const { isGameStarted, timeLeft, displayDate, displayTime, place } = useGameStatus();
   const [profile, setProfile] = useState({
     name: getName(),
     phone: getPhone(),
@@ -119,6 +122,39 @@ export default function Profile() {
 
         {profile.teamNumber && solvedCount < QUEST.stations.length && (() => {
           const nextStation = QUEST.stations[solvedCount];
+
+          // Если квест ещё не начался и команда ещё не взяла точку 0
+          if (solvedCount === 0 && !isGameStarted) {
+            return (
+              <div style={{ marginTop: 28, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+                <div className="eyebrow" style={{ color: "#ffcc4d", display: "flex", alignItems: "center", gap: 6 }}>
+                  <span>⏳</span> СТАРТ КВЕСТА
+                </div>
+                <h3 style={{ margin: "4px 0 8px", fontSize: 18 }}>Ожидание начала игры</h3>
+                <p className="muted" style={{ fontSize: 14 }}>
+                  Точка 0 (стартовая точка) станет доступна в назначенное время старта. Соберитесь со своей командой на месте сбора:
+                </p>
+
+                <CountdownTimer
+                  timeLeft={timeLeft}
+                  displayDate={displayDate}
+                  displayTime={displayTime}
+                  place={place}
+                  title="ДО СТАРТА ИГРЫ ОСТАЛОСЬ"
+                  compact={true}
+                />
+
+                <button
+                  className="btn ghost mt"
+                  disabled
+                  style={{ width: "100%", opacity: 0.6, cursor: "not-allowed", borderStyle: "dashed" }}
+                >
+                  🔒 Точка 0 заблокирована до {displayTime}
+                </button>
+              </div>
+            );
+          }
+
           return (
             <button
               className="btn green mt"
@@ -127,7 +163,9 @@ export default function Profile() {
                 navigate(`/s/${nextStation?.code || nextStation?.id}`);
               }}
             >
-              🚀 Продолжить квест (Точка {nextStation?.id ?? solvedCount})
+              {solvedCount === 0
+                ? "🚀 Начать квест (Точка 0)"
+                : `🚀 Продолжить квест (Точка ${nextStation?.id ?? solvedCount})`}
             </button>
           );
         })()}
