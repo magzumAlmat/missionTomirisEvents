@@ -647,7 +647,7 @@ export default function Register() {
                     </button>
                   ))}
                 </div>
-                <input
+                {/* <input
                   type="number"
                   inputMode="numeric"
                   min="2"
@@ -658,7 +658,7 @@ export default function Register() {
                   onChange={(e) => setCaptainSlots(e.target.value)}
                   style={{ marginTop: 10 }}
                   required
-                />
+                /> */}
                 {!slotsOk && captainSlots && (
                   <p className="err-text tiny" style={{ marginTop: 4 }}>
                     Число участников должно быть от 2 до 5.
