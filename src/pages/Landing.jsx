@@ -55,7 +55,7 @@ export default function Landing() {
   const faqs = [
     {
       q: "Сколько человек может быть в одной команде?",
-      a: "Рекомендуем от 1 до 5 человек. Вы можете проходить квест всей семьёй, с друзьями или коллегами.",
+      a: "Рекомендуем от 2 до 5 человек. Вы можете проходить квест всей семьёй, с друзьями или коллегами.",
     },
     {
       q: "Нужен ли автомобиль для прохождения?",
@@ -230,35 +230,62 @@ export default function Landing() {
         <h2>Как проходить квест</h2>
 
         <div className="steps-container">
-          <div className="step-card">
+          <div className="step-card" style={{ alignItems: "flex-start" }}>
             <span className="step-num">1</span>
             <div className="step-content">
-              <h3>Соберите команду</h3>
-              <p className="muted">Придумайте название команды и зарегистрируйтесь через форму на сайте.</p>
+              <h3>Стартовая точка</h3>
+              <p className="muted" style={{ margin: "2px 0 0", fontSize: "14px", lineHeight: "1.5" }}>
+                Прибудьте на стартовую точку квеста. Найдите там Хранительницу.
+              </p>
             </div>
           </div>
 
-          <div className="step-card">
+          <div className="step-card" style={{ alignItems: "flex-start" }}>
             <span className="step-num">2</span>
             <div className="step-content">
-              <h3>Информация</h3>
-              <p className="muted">Вам пришлют ссылку на страницу первой локации.</p>
+              <h3>Мозаика и первая локация</h3>
+              <p className="muted" style={{ margin: "2px 0 0", fontSize: "14px", lineHeight: "1.5" }}>
+                Соберите мозаику и определите первую локацию. Отметьте разгадку в системе и отправляйтесь на место.
+              </p>
             </div>
           </div>
 
-          <div className="step-card">
+          <div className="step-card" style={{ alignItems: "flex-start" }}>
             <span className="step-num">3</span>
             <div className="step-content">
-              <h3>Отмечайтесь на точках</h3>
-              <p className="muted">Нажмите «Я прибыл», назовите ответ организатору и нажмите «Я отгадал» — откроется подсказка к следующей точке.</p>
+              <h3>Прибытие и задание</h3>
+              <p className="muted" style={{ margin: "2px 0 0", fontSize: "14px", lineHeight: "1.5" }}>
+                Доберитесь до указанной локации. Получите там задание.
+              </p>
             </div>
           </div>
 
-          <div className="step-card">
+          <div className="step-card" style={{ alignItems: "flex-start" }}>
             <span className="step-num">4</span>
             <div className="step-content">
-              <h3>Заберите приз!</h3>
-              <p className="muted">Пройдите все точки быстрее других команд и получите заветную награду.</p>
+              <h3>Капитан и отчёты</h3>
+              <p className="muted" style={{ margin: "2px 0 0", fontSize: "14px", lineHeight: "1.5" }}>
+                Только капитан команды работает с сайтом, отправляет фото и видео в Telegram{" "}
+                <a
+                  href="https://t.me/thisMirrorbot"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: "var(--accent)", textDecoration: "underline", fontWeight: 600 }}
+                >
+                  @thisMirrorbot
+                </a>{" "}
+                и общается с Хранительницей. Остальные участники могут свободно переписываться в общем чате.
+              </p>
+            </div>
+          </div>
+
+          <div className="step-card" style={{ alignItems: "flex-start" }}>
+            <span className="step-num">5</span>
+            <div className="step-content">
+              <h3>Бонусные миссии</h3>
+              <p className="muted" style={{ margin: "2px 0 0", fontSize: "14px", lineHeight: "1.5" }}>
+                Внимательно следите за общим чатом. Там могут появляться бонусные миссии.
+              </p>
             </div>
           </div>
         </div>
