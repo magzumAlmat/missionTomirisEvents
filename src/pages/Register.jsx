@@ -100,9 +100,9 @@ export default function Register() {
   const { reset: resetProgress } = useProgress();
   const { isGameStarted, displayDate, displayTime, place } = useGameStatus();
 
-  // Step 1: Basic Info
-  const [name, setNameState] = useState(getName());
-  const [phone, setPhoneState] = useState(getPhone());
+  // Step 1: Basic Info (начинаем с пустых полей для чистого ввода)
+  const [name, setNameState] = useState("");
+  const [phone, setPhoneState] = useState("");
   const [hasCar, setHasCar] = useState(true);
 
   // Flow State
@@ -110,7 +110,7 @@ export default function Register() {
   const [registrationType, setRegistrationType] = useState(null); // SOLO | CREATE_TEAM | JOIN_CAPTAIN | JOIN_TEAM
 
   // Step 3: Specifics
-  const [teamName, setTeamNameState] = useState(getTeam());
+  const [teamName, setTeamNameState] = useState("");
   const [captainSlots, setCaptainSlots] = useState("4");
   const [selectedCaptainId, setSelectedCaptainId] = useState(null);
 
@@ -189,7 +189,6 @@ export default function Register() {
 
   function onPhoneChange(v) {
     setPhoneState(v);
-    setPhone(v);
     setPhoneDuplicateError("");
   }
 
@@ -228,22 +227,63 @@ export default function Register() {
 
   function onNameChange(v) {
     setNameState(v);
-    setName(v);
   }
 
   function onTeamNameChange(v) {
     setTeamNameState(v);
-    setTeam(v);
   }
+
+  const slotsNum = Number(captainSlots);
+  const slotsOk = Number.isInteger(slotsNum) && slotsNum >= 2 && slotsNum <= 5;
 
   const typeOk = {
     SOLO: true,
-    CREATE_TEAM: teamName.trim().length > 0 && captainSlots,
+    CREATE_TEAM: teamName.trim().length > 0 && slotsOk,
     JOIN_CAPTAIN: !!selectedCaptainId || teamName.trim().length > 0,
     JOIN_TEAM: teamName.trim().length > 0,
   }[registrationType];
 
   const formOk = nameOk && phoneOk && typeOk;
+
+  async function handleNextStep() {
+    if (currentStep === 1) {
+      if (!nameOk || !phoneOk) {
+        setErr("Заполните имя и корректный номер телефона (мин. 10 цифр).");
+        return;
+      }
+      setCheckingPhone(true);
+      const res = await checkPhone(phone);
+      setCheckingPhone(false);
+      if (res && res.registered) {
+        const desc = res.details?.description ? ` (${res.details.description})` : "";
+        setPhoneDuplicateError(`Этот номер телефона уже зарегистрирован${desc}. Один номер не может участвовать дважды.`);
+        return;
+      }
+      setPhoneDuplicateError("");
+      setErr("");
+      setCurrentStep(2);
+      return;
+    }
+
+    if (currentStep === 2) {
+      if (!registrationType) {
+        setErr("Пожалуйста, выберите вашу роль в квесте.");
+        return;
+      }
+      setErr("");
+      setCurrentStep(3);
+      return;
+    }
+  }
+
+  function handleFormSubmit(e) {
+    if (e) e.preventDefault();
+    if (currentStep < 3) {
+      handleNextStep();
+      return;
+    }
+    onSubmit(e);
+  }
 
   async function onSubmit(e) {
     if (e) e.preventDefault();
@@ -278,10 +318,13 @@ export default function Register() {
           break;
 
         case "CREATE_TEAM":
+          if (!slotsOk) {
+            throw new Error("Количество участников в команде должно быть от 2 до 5 человек.");
+          }
           await createCaptain({
             name: trimmedName,
             phone: trimmedPhone,
-            slots: Number(captainSlots) || 4,
+            slots: slotsNum,
             hasCar,
           });
           const resCreate = await registerParticipant({
@@ -337,6 +380,13 @@ export default function Register() {
 
         default:
           throw new Error("Выберите тип регистрации");
+      }
+
+      // Сохраняем в localStorage только при успешной регистрации
+      setPhone(trimmedPhone);
+      setName(trimmedName);
+      if (teamName.trim()) {
+        setTeam(teamName.trim());
       }
 
       resetProgress();
@@ -423,6 +473,13 @@ export default function Register() {
           className="btn ghost"
           style={{ marginTop: 8 }}
           onClick={() => {
+            setNameState("");
+            setPhoneState("");
+            setTeamNameState("");
+            setCaptainSlots("4");
+            setSelectedCaptainId(null);
+            setPhoneDuplicateError("");
+            setErr("");
             setStatus("idle");
             setCurrentStep(1);
             setRegistrationType(null);
@@ -450,12 +507,15 @@ export default function Register() {
         </div>
       )}
 
-      <form onSubmit={onSubmit}>
+      <form onSubmit={handleFormSubmit}>
         {currentStep === 1 && (
           <div className="field-block">
             <label className="field-label">1. Имя участника</label>
             <input
               type="text"
+              name="name"
+              id="reg-name"
+              autoComplete="name"
               placeholder="Например: Азамат"
               value={name}
               onChange={(e) => onNameChange(e.target.value)}
@@ -465,6 +525,9 @@ export default function Register() {
             <label className="field-label mt">2. Номер телефона</label>
             <input
               type="tel"
+              name="phone"
+              id="reg-phone"
+              autoComplete="tel"
               inputMode="tel"
               placeholder="+7 708 737 37 72"
               value={phone}
@@ -555,22 +618,52 @@ export default function Register() {
                 <label className="field-label">Название команды</label>
                 <input
                   type="text"
+                  name="teamName"
+                  id="reg-team-name"
+                  autoComplete="off"
                   placeholder="Например: Барсы"
                   value={teamName}
                   onChange={(e) => onTeamNameChange(e.target.value)}
                   required
                 />
-                <label className="field-label mt">Сколько свободных мест в команде? (включая вас)</label>
+                <label className="field-label mt">Количество участников в команде (включая вас, от 2 до 5):</label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginTop: 8 }}>
+                  {[2, 3, 4, 5].map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      className={`btn ${Number(captainSlots) === num ? "" : "ghost"}`}
+                      style={{
+                        padding: "10px 0",
+                        fontSize: "15px",
+                        fontWeight: 700,
+                        borderRadius: 12,
+                        borderColor: Number(captainSlots) === num ? "var(--accent)" : "rgba(255,255,255,0.15)",
+                        background: Number(captainSlots) === num ? undefined : "rgba(255,255,255,0.05)",
+                      }}
+                      onClick={() => setCaptainSlots(String(num))}
+                    >
+                      {num} чел.
+                    </button>
+                  ))}
+                </div>
                 <input
                   type="number"
                   inputMode="numeric"
-                  min="1"
+                  min="2"
+                  max="5"
                   step="1"
-                  placeholder="Например: 4"
+                  placeholder="2, 3, 4 или 5"
                   value={captainSlots}
                   onChange={(e) => setCaptainSlots(e.target.value)}
+                  style={{ marginTop: 10 }}
                   required
                 />
+                {!slotsOk && captainSlots && (
+                  <p className="err-text tiny" style={{ marginTop: 4 }}>
+                    Число участников должно быть от 2 до 5.
+                  </p>
+                )}
               </>
             )}
 
@@ -680,20 +773,7 @@ export default function Register() {
                   ? (!nameOk || !phoneOk || !!phoneDuplicateError || checkingPhone)
                   : !registrationType
               }
-              onClick={async () => {
-                if (currentStep === 1) {
-                  setCheckingPhone(true);
-                  const res = await checkPhone(phone);
-                  setCheckingPhone(false);
-                  if (res && res.registered) {
-                    const desc = res.details?.description ? ` (${res.details.description})` : "";
-                    setPhoneDuplicateError(`Этот номер телефона уже зарегистрирован${desc}. Один номер не может участвовать дважды.`);
-                    return;
-                  }
-                  setPhoneDuplicateError("");
-                }
-                setCurrentStep(currentStep + 1);
-              }}
+              onClick={handleNextStep}
             >
               {checkingPhone ? "Проверка..." : "Далее"}
             </button>

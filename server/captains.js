@@ -58,11 +58,19 @@ export function createCaptain({ name, phone, slots, hasCar }) {
       error: `Номер телефона ${phone} уже зарегистрирован (${regCheck.details?.description || "в квесте"}). Повторная регистрация невозможна.`,
     };
   }
+
+  const numSlots = Number(slots);
+  if (!numSlots || numSlots < 2 || numSlots > 5) {
+    return {
+      error: "Количество участников в команде должно быть от 2 до 5 человек.",
+    };
+  }
+
   const captain = {
     id,
     name: String(name || "").trim(),
     phone: String(phone || "").trim(),
-    slots: Number(slots) || 5,
+    slots: numSlots,
     currentParticipants: 0,
     participants: [],
     hasCar: !!hasCar,
@@ -79,8 +87,8 @@ export function updateCaptainSlots(captainId, newSlots) {
   const captain = captains.find((c) => c.id === captainId);
   if (!captain) return { error: "Капитан не найден" };
   const slots = Number(newSlots);
-  if (!Number.isFinite(slots) || slots < 1) {
-    return { error: "Некорректное количество слотов" };
+  if (!Number.isFinite(slots) || slots < 2 || slots > 5) {
+    return { error: "Количество слотов должно быть от 2 до 5." };
   }
   captain.slots = slots;
   writeJson(CAPTAINS_FILE, captains);

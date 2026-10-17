@@ -453,7 +453,9 @@ export default function Admin() {
             />
             <input
               type="number"
-              placeholder="Количество слотов"
+              min="2"
+              max="5"
+              placeholder="Количество слотов (от 2 до 5)"
               value={newCaptainSlots}
               onChange={(e) => setNewCaptainSlots(e.target.value)}
               style={{ padding: 10, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", color: "white" }}
@@ -494,7 +496,9 @@ export default function Admin() {
             </select>
             <input
               type="number"
-              placeholder="Новое кол-во"
+              min="2"
+              max="5"
+              placeholder="Слотов (2-5)"
               value={updateSlots}
               onChange={(e) => setUpdateSlots(e.target.value)}
               style={{ padding: 10, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", color: "white" }}
