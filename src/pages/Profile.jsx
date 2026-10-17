@@ -86,15 +86,32 @@ export default function Profile() {
         </p>
 
         <div style={{ marginTop: 16 }}>
-          <p>
-            <b className="muted">Команда:</b> {profile.teamName || "Не указана"}
-            {profile.teamNumber && (
-              <>
-                <br />
-                <b className="muted">Номер команды:</b> {profile.teamNumber}
-              </>
-            )}
-          </p>
+          {profile.teamName ? (
+            <p>
+              <b className="muted">Команда:</b> {profile.teamName}
+              {profile.teamNumber && (
+                <>
+                  <br />
+                  <b className="muted">Номер команды:</b> {profile.teamNumber}
+                </>
+              )}
+            </p>
+          ) : (
+            <div style={{
+              padding: "14px 16px",
+              borderRadius: 12,
+              background: "rgba(255, 204, 77, 0.08)",
+              border: "1px solid rgba(255, 204, 77, 0.25)",
+              marginTop: 4,
+            }}>
+              <div style={{ fontWeight: 700, color: "#ffcc4d", fontSize: 14, marginBottom: 4 }}>
+                🙋 Участник без команды
+              </div>
+              <p className="muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+                Ожидайте распределение по командам. Организаторы назначат вам команду и свяжутся с вами по телефону.
+              </p>
+            </div>
+          )}
         </div>
 
         <div style={{ marginTop: 24 }}>

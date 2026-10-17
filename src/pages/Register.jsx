@@ -385,7 +385,11 @@ export default function Register() {
       // Сохраняем в localStorage только при успешной регистрации
       setPhone(trimmedPhone);
       setName(trimmedName);
-      if (teamName.trim()) {
+      if (registrationType === "SOLO") {
+        // SOLO — явно очищаем команду, чтобы старые данные не «прилипли»
+        setTeam("");
+        setTeamNumber("");
+      } else if (teamName.trim()) {
         setTeam(teamName.trim());
       }
 
