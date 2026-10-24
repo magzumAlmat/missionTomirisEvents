@@ -165,7 +165,7 @@ export default function Profile() {
           )}
         </div>
 
-        {profile.teamNumber && !profile.isCaptain && solvedCount < QUEST.stations.length && (
+        {profile.teamNumber && !profile.isCaptain && (
           <div style={{
             marginTop: 28,
             padding: 16,
@@ -175,8 +175,24 @@ export default function Profile() {
           }}>
             <div className="eyebrow" style={{ color: "#ffcc4d" }}>👑 Капитан команды</div>
             <p className="muted" style={{ fontSize: 14, lineHeight: 1.55, margin: 0 }}>
-              Точки проходит капитан со своего телефона. Вы можете смотреть состав
-              команды и статус здесь.
+              {solvedCount >= QUEST.stations.length
+                ? "Квест завершён вашей командой. Итоги подводит организатор."
+                : "Точки проходит капитан со своего телефона. Вы можете смотреть состав команды и статус здесь."}
+            </p>
+          </div>
+        )}
+
+        {profile.teamNumber && profile.isCaptain && solvedCount >= QUEST.stations.length && (
+          <div style={{
+            marginTop: 28,
+            padding: 16,
+            borderRadius: 14,
+            background: "rgba(76, 217, 100, 0.08)",
+            border: "1px solid rgba(76, 217, 100, 0.3)",
+          }}>
+            <div className="eyebrow" style={{ color: "#4cd964" }}>🏆 Финиш</div>
+            <p className="muted" style={{ fontSize: 14, lineHeight: 1.55, margin: 0 }}>
+              Команда прошла все точки. Итоги подводит организатор.
             </p>
           </div>
         )}
