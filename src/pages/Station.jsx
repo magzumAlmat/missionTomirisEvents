@@ -7,6 +7,7 @@ import {
   solveStation,
   markSolved,
   fetchProgress,
+  fetchTeams,
   HAS_BACKEND,
 } from "../lib/api.js";
 import { getTeamNumber, getTeam } from "../lib/team.js";
@@ -26,6 +27,8 @@ function Modal({ children, onClose }) {
 }
 
 const MIRROR_BOT = "https://t.me/thisMirrorbot";
+
+const phoneDigits = (v) => String(v || "").replace(/\D/g, "").slice(-10);
 
 export default function Station() {
   const { id } = useParams();
@@ -69,6 +72,9 @@ export default function Station() {
   // Защита от двойного авто-прибытия на стартовой точке (React StrictMode).
   const autoArriveRef = useRef(false);
 
+  // Действия на точках разрешены только капитану команды.
+  const [captainStatus, setCaptainStatus] = useState("checking");
+
   // При переходе на другую точку сбрасываем локальное состояние.
   useEffect(() => {
     setRiddleSolved(false);
@@ -89,9 +95,55 @@ export default function Station() {
     setShowCompleteModal(false);
     setShowHistoryModal(false);
     autoArriveRef.current = false;
+    setCaptainStatus("checking");
     // isSolved намеренно не в зависимостях: иначе сброс затирал бы только что
     // выполненные действия при каждом обновлении локального прогресса.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stationId, station]);
+
+  // Определяем, капитан ли это команды. Пока проверка не завершена, точку
+  // не показываем — иначе участник увидит загадку и кнопки действий.
+  useEffect(() => {
+    if (!station || !HAS_BACKEND) {
+      setCaptainStatus("ok");
+      return;
+    }
+    const savedTeam = getTeamNumber();
+    const savedPhone = getPhone();
+    if (!savedTeam) {
+      setCaptainStatus("ok"); // соло или старая запись без команды
+      return;
+    }
+    if (!savedPhone) {
+      setCaptainStatus("not-captain");
+      return;
+    }
+
+    let cancelled = false;
+    fetchTeams()
+      .then((data) => {
+        if (cancelled) return;
+        const team = (data.teams || []).find(
+          (t) => String(t.teamNumber) === String(savedTeam)
+        );
+        if (!team || !team.captainPhone) {
+          setCaptainStatus("ok");
+          return;
+        }
+        setCaptainStatus(
+          phoneDigits(team.captainPhone) === phoneDigits(savedPhone)
+            ? "ok"
+            : "not-captain"
+        );
+      })
+      .catch(() => {
+        // Не блокируем квест из-за сетевой ошибки — сервер всё равно проверит.
+        if (!cancelled) setCaptainStatus("ok");
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [stationId, station]);
 
   // Восстанавливаем прогресс с сервера: перезагрузка страницы, новое устройство,
@@ -122,6 +174,7 @@ export default function Station() {
         // Стартовая точка: автоматически фиксируем прибытие после старта игры.
         if (
           station.id === 0 &&
+          captainStatus === "ok" &&
           !data.arrivals?.[sid] &&
           isGameStarted &&
           (isValidPhone(savedPhone) || Boolean(savedTeam)) &&
@@ -150,7 +203,7 @@ export default function Station() {
     return () => {
       cancelled = true;
     };
-  }, [stationId, station, isGameStarted, applyServer]);
+  }, [stationId, station, isGameStarted, applyServer, captainStatus]);
 
   function identityError() {
     if (!hasIdentity) {
@@ -378,6 +431,30 @@ export default function Station() {
             ℹ️ О квесте
           </button>
         </div>
+      </div>
+    );
+  }
+
+  if (captainStatus === "checking") {
+    return (
+      <div className="card">
+        <p className="center muted">Проверяем доступ к точке…</p>
+      </div>
+    );
+  }
+
+  if (captainStatus === "not-captain") {
+    return (
+      <div className="card">
+        <div className="eyebrow">👑 Капитан команды</div>
+        <h2>Действия на точке выполняет капитан</h2>
+        <p className="muted" style={{ fontSize: 15, lineHeight: 1.55 }}>
+          Вы вошли как участник команды. Разгадку, прибытие и завершение задания
+          отмечает капитан со своего телефона.
+        </p>
+        <button className="btn" onClick={() => navigate("/profile")}>
+          👤 Мой профиль и команда
+        </button>
       </div>
     );
   }

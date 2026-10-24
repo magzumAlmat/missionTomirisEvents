@@ -114,6 +114,15 @@ function requireToken(res) {
 // Проверка живости.
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
+/**
+ * Действия на точках разрешены только капитану команды.
+ * Соло-участники и старые команды без captainPhone не ограничиваются.
+ */
+function isTeamCaptain(team, phone) {
+  if (!team || !team.captainPhone) return true;
+  return normalizePhone(team.captainPhone) === normalizePhone(phone);
+}
+
 // Тексты для разных событий.
 // progressEntry — запись из progress.json (arrivals/stations/finishedAt),
 // если доступна: позволяет показать время на точке и текущий прогресс.
@@ -261,6 +270,12 @@ async function handleNotify(req, res, forcedEvent) {
   let progressEntry = null;
   if (stationId != null) {
     const found = teamNumber ? findTeamByNumber(teamNumber) : null;
+    if (found && !isTeamCaptain(found, phone)) {
+      return res.status(403).json({
+        ok: false,
+        error: "Действия на точке выполняет капитан команды.",
+      });
+    }
     progressKeyVal = progressKey({ teamNumber: found ? found.number : null, phone });
     if (progressKeyVal) {
       if (event === "arrived") {
@@ -348,6 +363,12 @@ app.post("/api/mark-solved", (req, res) => {
   }
 
   const team = teamNumber ? findTeamByNumber(teamNumber) : null;
+  if (team && !isTeamCaptain(team, phone)) {
+    return res.status(403).json({
+      ok: false,
+      error: "Действия на точке выполняет капитан команды.",
+    });
+  }
   const key = progressKey({ teamNumber: team ? team.number : null, phone });
   if (!key) {
     return res.status(400).json({
@@ -523,6 +544,7 @@ app.get("/api/teams", (_req, res) => {
     name: t.name,
     size: t.size,
     captainName: t.captainName,
+    captainPhone: t.captainPhone,
     participants: participants
       .filter((p) =>
         p.teamName
@@ -1142,6 +1164,12 @@ app.post("/api/solve", async (req, res) => {
   }
 
   const team = teamNumber ? findTeamByNumber(teamNumber) : null;
+  if (team && !isTeamCaptain(team, phone)) {
+    return res.status(403).json({
+      ok: false,
+      error: "Действия на точке выполняет капитан команды.",
+    });
+  }
   const key = progressKey({ teamNumber: team ? team.number : null, phone });
   if (!key) {
     return res.status(400).json({

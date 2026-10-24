@@ -157,11 +157,31 @@ export default function Profile() {
               ))}
             </div>
           ) : (
-            <p className="muted tiny">Вы участвуете в квесте соло или команда ещё не сформирована.</p>
+            <p className="muted tiny">
+              {profile.teamNumber
+                ? "В команде пока нет других участников."
+                : "Вы участвуете в квесте соло или команда ещё не сформирована."}
+            </p>
           )}
         </div>
 
-        {profile.teamNumber && solvedCount < QUEST.stations.length && (() => {
+        {profile.teamNumber && !profile.isCaptain && solvedCount < QUEST.stations.length && (
+          <div style={{
+            marginTop: 28,
+            padding: 16,
+            borderRadius: 14,
+            background: "rgba(255, 204, 77, 0.07)",
+            border: "1px solid rgba(255, 204, 77, 0.25)",
+          }}>
+            <div className="eyebrow" style={{ color: "#ffcc4d" }}>👑 Капитан команды</div>
+            <p className="muted" style={{ fontSize: 14, lineHeight: 1.55, margin: 0 }}>
+              Точки проходит капитан со своего телефона. Вы можете смотреть состав
+              команды и статус здесь.
+            </p>
+          </div>
+        )}
+
+        {profile.teamNumber && profile.isCaptain && solvedCount < QUEST.stations.length && (() => {
           const nextStation = QUEST.stations[solvedCount];
 
           // Если квест ещё не начался и команда ещё не взяла точку 0
