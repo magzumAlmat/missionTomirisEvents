@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { getPhone } from "../lib/phone.js";
 import { getName, getTeam, getTeamNumber } from "../lib/team.js";
-import { fetchTeams, fetchCaptains } from "../lib/api.js";
+import { fetchTeams, fetchCaptains, fetchProgress, HAS_BACKEND } from "../lib/api.js";
 import { QUEST } from "../questConfig.js";
 import { useProgress } from "../useProgress.js";
 import { useGameStatus } from "../useGameStatus.js";
@@ -10,7 +10,7 @@ import CountdownTimer from "../components/CountdownTimer.jsx";
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { solvedCount } = useProgress();
+  const { solvedCount, applyServer } = useProgress();
   const { isGameStarted, timeLeft, displayDate, displayTime, place } = useGameStatus();
   const [profile, setProfile] = useState({
     name: getName(),
@@ -55,6 +55,30 @@ export default function Profile() {
 
     loadProfile();
   }, []);
+
+  // Подтягиваем прогресс с сервера: на новом устройстве localStorage пуст,
+  // а «Продолжить квест» должен вести на правильную точку.
+  useEffect(() => {
+    if (!HAS_BACKEND) return;
+    const teamNumber = getTeamNumber();
+    const phone = getPhone();
+    if (!teamNumber && !phone) return;
+
+    let cancelled = false;
+    fetchProgress({ teamNumber, phone })
+      .then((data) => {
+        if (!cancelled && data.stations) {
+          applyServer(data.stations, data.finishedAt);
+        }
+      })
+      .catch(() => {
+        /* нет связи — остаёмся на локальном прогрессе */
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applyServer]);
 
   if (loading) {
     return (

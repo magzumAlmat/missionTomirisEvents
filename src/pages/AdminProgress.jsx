@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
-import { fetchStandings, deleteTeam, resetQuest, HAS_BACKEND } from "../lib/api.js";
+import { fetchStandings, deleteTeam, resetQuest, adminMarkArrival, HAS_BACKEND } from "../lib/api.js";
 import PasswordGate, { isUnlocked } from "../components/PasswordGate.jsx";
 
 const REFRESH_MS = 15000;
@@ -10,21 +10,23 @@ function time(iso) {
   return iso ? new Date(iso).toLocaleTimeString("ru-RU", { timeZone: "Asia/Almaty" }) : "";
 }
 
-/** Состояние точки у команды: взята / подсказка / не отгадал / команда пришла / ещё не была. */
+/** Состояние точки у команды: задание / адрес / прибытие / разгадка / подсказка. */
 function cellState(row, stationId) {
   const id = String(stationId);
   if (row.stations?.[id]) return "solved";
-  if (row.hints?.[id]) return "hinted";
   if (row.notGuessed?.[id]) return "not_guessed";
   if (row.arrivals?.[id]) return "arrived";
+  if (row.riddleSolved?.[id]) return "riddle";
+  if (row.hints?.[id]) return "hinted";
   return "empty";
 }
 
 const CELL_STYLE = {
   solved: { background: "rgba(76, 217, 100, 0.22)", color: "#4cd964", label: "✓" },
-  hinted: { background: "rgba(255, 193, 7, 0.25)", color: "#ffc107", label: "💡" },
   not_guessed: { background: "rgba(255, 107, 107, 0.2)", color: "#ff6b6b", label: "❌" },
-  arrived: { background: "rgba(255, 193, 7, 0.18)", color: "var(--accent)", label: "" },
+  arrived: { background: "rgba(255, 193, 7, 0.18)", color: "var(--accent)", label: "📍" },
+  riddle: { background: "rgba(107, 229, 201, 0.18)", color: "#6be5c9", label: "🔓" },
+  hinted: { background: "rgba(255, 193, 7, 0.25)", color: "#ffc107", label: "💡" },
   empty: { background: "rgba(255,255,255,0.04)", color: "var(--muted)", label: "" },
 };
 
@@ -40,7 +42,23 @@ export default function AdminProgress() {
   const [updatedAt, setUpdatedAt] = useState(null);
   const [err, setErr] = useState("");
   const [deleting, setDeleting] = useState(null);
+  const [marking, setMarking] = useState(null);
   const [resetting, setResetting] = useState(false);
+
+  async function handleMarkArrival(row, stationId) {
+    if (!row.teamNumber) return;
+    setMarking(`${row.key}-${stationId}`);
+    try {
+      await adminMarkArrival({ teamNumber: row.teamNumber, stationId });
+      const data = await fetchStandings();
+      setRows(data.rows || []);
+      setErr("");
+    } catch (e) {
+      setErr(e.message || "Не удалось засчитать прибытие.");
+    } finally {
+      setMarking(null);
+    }
+  }
 
   async function handleDelete(row) {
     if (!row.teamNumber) return;
@@ -124,7 +142,14 @@ export default function AdminProgress() {
 
   if (!unlocked) return <PasswordGate onOk={() => setUnlocked(true)} />;
 
-  const started = rows.filter((r) => r.solved > 0 || Object.keys(r.arrivals || {}).length);
+  const started = rows.filter(
+    (r) =>
+      r.solved > 0 ||
+      Object.keys(r.arrivals || {}).length ||
+      Object.keys(r.riddleSolved || {}).length ||
+      Object.keys(r.notGuessed || {}).length ||
+      Object.keys(r.hints || {}).length
+  );
   const finished = rows.filter((r) => r.finishedAt);
 
   return (
@@ -132,8 +157,9 @@ export default function AdminProgress() {
       <div className="eyebrow">Админ · ход игры</div>
       <h2>Прогресс команд</h2>
       <p className="muted">
-        Обновляется само каждые 15 секунд. ✓ — точка взята, • — команда отметила
-        прибытие, пусто — ещё не была.
+        Обновляется само каждые 15 секунд. 🔓 — локация разгадана, 📍 — прибытие
+        подтверждено, ✓ — задание завершено, 💡 — подсказка, ❌ — открыт адрес.
+        ⭐ — баллы за локацию (без творческих).
       </p>
 
       {!HAS_BACKEND && (
@@ -172,6 +198,7 @@ export default function AdminProgress() {
                   </th>
                 ))}
                 <th>Итог</th>
+                <th>Точек</th>
                 <th>Последняя</th>
                 <th className="no-print">Действия</th>
               </tr>
@@ -187,7 +214,7 @@ export default function AdminProgress() {
                       </>
                     ) : (
                       <>
-                        <b>Одиночка |</b> {r.teamName || r.phone || "без названия"}
+                        <b>Одиночка |</b> {r.teamName || "без названия"}
                       </>
                     )}
                   </td>
@@ -197,18 +224,28 @@ export default function AdminProgress() {
                     const sid = String(s.id);
                     const arrivalAt = typeof r.arrivals?.[sid] === "object" ? r.arrivals[sid]?.at : r.arrivals?.[sid];
                     const solvedAt = typeof r.stations?.[sid] === "object" ? r.stations[sid]?.at : r.stations?.[sid];
+                    const riddleAt = typeof r.riddleSolved?.[sid] === "object" ? r.riddleSolved[sid]?.at : r.riddleSolved?.[sid];
                     const hintAt = typeof r.hints?.[sid] === "object" ? r.hints[sid]?.at : r.hints?.[sid];
                     const notGuessedAt = typeof r.notGuessed?.[sid] === "object" ? r.notGuessed[sid]?.at : r.notGuessed?.[sid];
+                    const stationScore = Number(r.scores?.[sid] ?? 0);
+                    const scoreText = s.id === 0 ? "—" : `${stationScore} б.`;
 
                     // Собираем ВСЕ действия с временами (не стираем по мере прогресса)
                     const actions = [];
-                    if (arrivalAt) actions.push({ icon: "📍", label: "Я прибыл", t: time(arrivalAt) });
-                    if (hintAt) actions.push({ icon: "💡", label: "Подсказка получена", t: time(hintAt) });
-                    if (notGuessedAt) actions.push({ icon: "❌", label: "Не отгадал", t: time(notGuessedAt) });
-                    if (solvedAt) actions.push({ icon: "✓", label: "Отгадал", t: time(solvedAt) });
+                    if (riddleAt) actions.push({ icon: "🔓", label: "Разгадал", t: time(riddleAt) });
+                    if (arrivalAt) actions.push({ icon: "📍", label: "Прибыл", t: time(arrivalAt) });
+                    if (hintAt) actions.push({ icon: "💡", label: "Подсказка", t: time(hintAt) });
+                    if (notGuessedAt) actions.push({ icon: "❌", label: "Адрес открыт", t: time(notGuessedAt) });
+                    if (solvedAt) actions.push({ icon: "✓", label: "Задание", t: time(solvedAt) });
 
-                    // Tooltip: все действия с временами
-                    const titleParts = [s.name];
+                    // Ручное прибытие: капитан разгадал, но не подтвердил прибытие.
+                    const canMarkArrival = Boolean(
+                      r.teamNumber && riddleAt && !arrivalAt && !notGuessedAt
+                    );
+                    const markKey = `${r.key}-${s.id}`;
+
+                    // Tooltip: все действия с временами и баллы
+                    const titleParts = [s.name, `⭐ Баллы: ${scoreText}`];
                     for (const a of actions) {
                       titleParts.push(`${a.icon} ${a.label}: ${a.t}`);
                     }
@@ -229,10 +266,26 @@ export default function AdminProgress() {
                               </div>
                             ))
                           )}
+                          <div style={{ marginTop: 4, fontWeight: 800, fontSize: 11 }}>
+                            ⭐ {scoreText}
+                          </div>
+                          {canMarkArrival && (
+                            <button
+                              className="btn board-mini-btn"
+                              disabled={marking === markKey}
+                              onClick={() => handleMarkArrival(r, s.id)}
+                              title="Засчитать прибытие этой команды сейчас"
+                            >
+                              {marking === markKey ? "…" : "📍 Засчитать"}
+                            </button>
+                          )}
                         </div>
                       </td>
                     );
                   })}
+                  <td className="board-num">
+                    <b>{r.totalScore ?? 0}</b> б.
+                  </td>
                   <td className="board-num">
                     {r.solved}/{total}
                   </td>

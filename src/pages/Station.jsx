@@ -1,113 +1,327 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
 import { useProgress } from "../useProgress.js";
-import { notify, solveStation, fetchProgress, HAS_BACKEND } from "../lib/api.js";
-import { getTeamNumber, setTeamNumber, getTeam } from "../lib/team.js";
-import { getPhone, setPhone, isValidPhone } from "../lib/phone.js";
+import {
+  notify,
+  solveStation,
+  markSolved,
+  fetchProgress,
+  HAS_BACKEND,
+} from "../lib/api.js";
+import { getTeamNumber, getTeam } from "../lib/team.js";
+import { getPhone, isValidPhone } from "../lib/phone.js";
 import { useGameStatus } from "../useGameStatus.js";
 import CountdownTimer from "../components/CountdownTimer.jsx";
+
+/** Небольшая обёртка, чтобы все окна выглядели одинаково. */
+function Modal({ children, onClose }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+const MIRROR_BOT = "https://t.me/thisMirrorbot";
 
 export default function Station() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isGameStarted, timeLeft, displayDate, displayTime, place } = useGameStatus();
+
   const station = QUEST.stations.find((s) => s.code === id || String(s.id) === id);
   const stationId = station ? station.id : parseInt(id, 10);
+  const isStartStation = station?.id === 0;
+  const isFinalStation = station ? station.isFinal || station.id === QUEST.stations.length - 1 : false;
 
-  const { isSolved, solve } = useProgress();
-  const already = station ? isSolved(station.id) : false;
+  const { isSolved, solve, applyServer } = useProgress();
 
-  const [phone, setPhoneState] = useState(getPhone());
-  const [teamNo, setTeamNoState] = useState(getTeamNumber());
-  const [arrive, setArrive] = useState("idle"); // idle | sending | done | error
-  const [check, setCheck] = useState(already ? "done" : "idle"); // idle | sending | done
-  const [revealed, setRevealed] = useState(already);
+  const phone = getPhone();
+  const teamNo = getTeamNumber();
+  const phoneOk = isValidPhone(phone);
+  const hasIdentity = phoneOk || Boolean(teamNo);
+
+  // Состояние сценария. Все флаги приходят с сервера и переживают перезагрузку.
+  const [riddleSolved, setRiddleSolved] = useState(false); // «Я разгадал(а)» нажато
+  const [arrived, setArrived] = useState(false); // «Подтвердить прибытие» нажато
+  const [addressRevealed, setAddressRevealed] = useState(false); // открыт адрес (Путь Б)
+  const [taskComplete, setTaskComplete] = useState(false); // задание завершено
+
   const [hint, setHint] = useState("");
-  const [err, setErr] = useState("");
-  
-  // Подсказка (только после нажатия "Получить подсказку")
-  const [showHintModal, setShowHintModal] = useState(false);
+  const [hintReceived, setHintReceived] = useState(false);
   const [hintLoading, setHintLoading] = useState(false);
-  const [hintReceived, setHintReceived] = useState(false); // true только после onGetHint()
-  
-  // Показать задание (после "Не отгадал" или "Подсказка")
-  const [showTaskFromNotGuessed, setShowTaskFromNotGuessed] = useState(false);
-  const [notGuessed, setNotGuessed] = useState(false);
-  
-  // Загадка на следующую локацию (появляется после "Задание выполнено")
-  const [nextRiddle, setNextRiddle] = useState("");
-  
-  // Подтверждение выполнения
-  const [showConfirm, setShowConfirm] = useState(false);
 
+  const [solvedSending, setSolvedSending] = useState(false);
+  const [arriveSending, setArriveSending] = useState(false);
+  const [addressSending, setAddressSending] = useState(false);
+  const [completeSending, setCompleteSending] = useState(false);
+  const [err, setErr] = useState("");
+
+  const [showHintConfirm, setShowHintConfirm] = useState(false);
+  const [showAddressConfirm, setShowAddressConfirm] = useState(false);
+  const [showArriveModal, setShowArriveModal] = useState(false);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+
+  // Защита от двойного авто-прибытия на стартовой точке (React StrictMode).
+  const autoArriveRef = useRef(false);
+
+  // При переходе на другую точку сбрасываем локальное состояние.
   useEffect(() => {
-    const solvedAlready = station ? isSolved(station.id) : false;
-    setArrive("idle");
-    setCheck(solvedAlready ? "done" : "idle");
-    setRevealed(solvedAlready);
+    setRiddleSolved(false);
+    setArrived(false);
+    setAddressRevealed(false);
+    setTaskComplete(station ? isSolved(station.id) : false);
     setHint("");
     setHintReceived(false);
-    setShowTaskFromNotGuessed(false);
-    setNotGuessed(false);
-    setNextRiddle("");
+    setHintLoading(false);
+    setSolvedSending(false);
+    setArriveSending(false);
+    setAddressSending(false);
+    setCompleteSending(false);
     setErr("");
-    setShowHintModal(false);
-    setShowConfirm(false);
+    setShowHintConfirm(false);
+    setShowAddressConfirm(false);
+    setShowArriveModal(false);
+    setShowCompleteModal(false);
+    setShowHistoryModal(false);
+    autoArriveRef.current = false;
+    // isSolved намеренно не в зависимостях: иначе сброс затирал бы только что
+    // выполненные действия при каждом обновлении локального прогресса.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stationId, station]);
 
-  // Прибытие живёт на сервере, поэтому переживает перезагрузку страницы и
-  // смену телефона: спрашиваем его при открытии точки.
+  // Восстанавливаем прогресс с сервера: перезагрузка страницы, новое устройство,
+  // возврат на уже пройденную точку.
   useEffect(() => {
     if (!station || !HAS_BACKEND) return;
-    const teamNumber = getTeamNumber();
+    const savedTeam = getTeamNumber();
     const savedPhone = getPhone();
-    if (!teamNumber && !savedPhone) return;
+    if (!savedTeam && !savedPhone) return;
+
     let cancelled = false;
-    fetchProgress({ teamNumber, phone: savedPhone })
+    fetchProgress({ teamNumber: savedTeam, phone: savedPhone })
       .then((data) => {
         if (cancelled) return;
-        if (data.arrivals && data.arrivals[String(station.id)]) {
-          setArrive("done");
-        } else if (station.id === 0 && isGameStarted && isValidPhone(savedPhone)) {
-          // Точка 0: авто-прибытие при первом входе ТОЛЬКО если игра уже началась
+        // Синхронизируем локальный прогресс — от него зависит «Продолжить квест».
+        applyServer(data.stations, data.finishedAt);
+
+        const sid = String(station.id);
+        if (data.solved?.[sid]) setRiddleSolved(true);
+        if (data.arrivals?.[sid]) setArrived(true);
+        if (data.notGuessed?.[sid]) setAddressRevealed(true);
+        if (data.stations?.[sid]) setTaskComplete(true);
+        if (data.hints?.[sid]) {
+          setHintReceived(true);
+          setHint(station.hint || "Подсказка получена ранее.");
+        }
+
+        // Стартовая точка: автоматически фиксируем прибытие после старта игры.
+        if (
+          station.id === 0 &&
+          !data.arrivals?.[sid] &&
+          isGameStarted &&
+          (isValidPhone(savedPhone) || Boolean(savedTeam)) &&
+          !autoArriveRef.current
+        ) {
+          autoArriveRef.current = true;
           notify("arrived", {
             stationId: 0,
             stationName: station.name,
             phone: savedPhone.trim(),
-            teamNumber: teamNumber || null,
-            team: [getTeam(), teamNumber ? `№${teamNumber}` : ""].filter(Boolean).join(" "),
-          }).then(() => {
-            if (!cancelled) setArrive("done");
-          }).catch(() => {});
+            teamNumber: savedTeam || null,
+            team: [getTeam(), savedTeam ? `№${savedTeam}` : ""].filter(Boolean).join(" "),
+          })
+            .then(() => {
+              if (!cancelled) setArrived(true);
+            })
+            .catch(() => {
+              autoArriveRef.current = false;
+            });
         }
-        if (data.hints && data.hints[String(station.id)]) {
-          setHintReceived(true);
-          setHint(station.hint || "Подсказка получена ранее.");
-        }
-        if (data.notGuessed && data.notGuessed[String(station.id)]) setNotGuessed(true);
       })
       .catch(() => {
-        /* нет связи — кнопка просто останется закрытой до «Я прибыл» */
+        /* нет связи — остаёмся на локальном прогрессе */
       });
+
     return () => {
       cancelled = true;
     };
-  }, [stationId, station, isGameStarted]);
+  }, [stationId, station, isGameStarted, applyServer]);
 
-  const phoneOk = isValidPhone(phone);
-
-  function onPhoneChange(v) {
-    setPhoneState(v);
-    setPhone(v);
+  function identityError() {
+    if (!hasIdentity) {
+      setErr("Укажите номер команды или телефон — иначе прогресс не сохранится.");
+      return true;
+    }
+    return false;
   }
 
-  function onTeamNoChange(v) {
-    const digits = v.replace(/\D/g, "");
-    setTeamNoState(digits);
-    setTeamNumber(digits);
+  function teamPayload() {
+    return {
+      phone: phone.trim(),
+      teamNumber: teamNo || null,
+      team: [getTeam(), teamNo ? `№${teamNo}` : ""].filter(Boolean).join(" "),
+    };
   }
 
+  /** Шаг 1 Пути А: капитан разгадал загадку, ещё не доехал. */
+  async function onSolvedRiddle() {
+    setErr("");
+    if (!HAS_BACKEND) {
+      setErr("Бэкенд не подключён (VITE_API_URL). Запусти `npm run server`.");
+      return;
+    }
+    if (identityError()) return;
+
+    setSolvedSending(true);
+    try {
+      await markSolved({
+        stationCode: station.code || station.id,
+        phone: phone.trim(),
+        teamNumber: teamNo || null,
+      });
+      setRiddleSolved(true);
+    } catch (e) {
+      setErr(e.message || "Не удалось отметить разгадку.");
+    } finally {
+      setSolvedSending(false);
+    }
+  }
+
+  /** Подсказка: сначала подтверждение штрафа, затем уведомление и текст. */
+  async function submitHint() {
+    setErr("");
+    if (!HAS_BACKEND) {
+      setErr("Бэкенд не подключён (VITE_API_URL). Запусти `npm run server`.");
+      return;
+    }
+    if (identityError()) return;
+
+    setHintLoading(true);
+    try {
+      await notify("hint_used", {
+        stationId: station.id,
+        stationName: station.name,
+        ...teamPayload(),
+      });
+      setHint(station.hint || "Подсказка отсутствует.");
+      setHintReceived(true);
+    } catch (e) {
+      setErr(e.message || "Не удалось получить подсказку.");
+    } finally {
+      setHintLoading(false);
+    }
+  }
+
+  /** Путь Б: открыть адрес и сразу получить задание (без подтверждения прибытия). */
+  async function submitAddress() {
+    setShowAddressConfirm(false);
+    setErr("");
+    if (!HAS_BACKEND) {
+      setErr("Бэкенд не подключён (VITE_API_URL). Запусти `npm run server`.");
+      return;
+    }
+    if (identityError()) return;
+
+    setAddressSending(true);
+    try {
+      await notify("not_guessed", {
+        stationId: station.id,
+        stationName: station.name,
+        ...teamPayload(),
+      });
+      setAddressRevealed(true);
+    } catch (e) {
+      setErr(e.message || "Не удалось открыть адрес.");
+    } finally {
+      setAddressSending(false);
+    }
+  }
+
+  /** Подтверждение прибытия (Путь А). */
+  async function submitArrived() {
+    setShowArriveModal(false);
+    setErr("");
+    if (!HAS_BACKEND) {
+      setErr("Бэкенд не подключён (VITE_API_URL). Запусти `npm run server`.");
+      return;
+    }
+    if (identityError()) return;
+
+    setArriveSending(true);
+    try {
+      await notify("arrived", {
+        stationId: station.id,
+        stationName: station.name,
+        ...teamPayload(),
+      });
+      setArrived(true);
+    } catch (e) {
+      setErr(e.message || "Не удалось подтвердить прибытие.");
+    } finally {
+      setArriveSending(false);
+    }
+  }
+
+  /** Завершение задания и переход к следующей локации. */
+  async function submitComplete() {
+    setShowCompleteModal(false);
+    setErr("");
+    if (!HAS_BACKEND) {
+      setErr("Бэкенд не подключён (VITE_API_URL). Запусти `npm run server`.");
+      return;
+    }
+    if (identityError()) return;
+
+    setCompleteSending(true);
+    try {
+      await solveStation({
+        stationCode: station.code || station.id,
+        phone: phone.trim(),
+        teamNumber: teamNo || null,
+      });
+      setTaskComplete(true);
+      setArrived(true); // в Пути Б сервер фиксирует прибытие в этот момент
+      solve(station.id);
+
+      const hasHistory = Boolean(station.history && station.history.trim());
+
+      // Стартовая точка остаётся как раньше: после пазла капитан сам жмёт
+      // «Перейти к следующей точке», без авто-перехода.
+      if (station.id === 0) return;
+
+      if (hasHistory) {
+        setShowHistoryModal(true);
+      } else {
+        goNextStation();
+      }
+    } catch (e) {
+      setErr(e.message || "Не удалось завершить задание.");
+    } finally {
+      setCompleteSending(false);
+    }
+  }
+
+  function goNextStation() {
+    const next = QUEST.stations.find((s) => s.id === station.id + 1);
+    if (next) navigate(`/s/${next.code || next.id}`);
+  }
+
+  function closeHistoryAndContinue() {
+    setShowHistoryModal(false);
+    goNextStation();
+  }
+
+  function openHint() {
+    setErr("");
+    setShowHintConfirm(true);
+  }
+
+  // Пока страница не готова, хуки выше уже вызваны — порядок хуков не меняется.
   if (!station) {
     return (
       <div className="card">
@@ -120,7 +334,7 @@ export default function Station() {
     );
   }
 
-  // 🔒 Точка 0 и все станции закрыты до наступления времени старта квеста
+  // 🔒 Все станции закрыты до наступления времени старта квеста.
   if (!isGameStarted) {
     return (
       <div className="card">
@@ -129,7 +343,7 @@ export default function Station() {
         </div>
         <h2>{station.name}</h2>
         <p className="muted" style={{ fontSize: 15, lineHeight: 1.5 }}>
-          {station.id === 0
+          {isStartStation
             ? "Вы прибыли на стартовую позицию. Первое задание и точка 0 откроются автоматически в назначенное время старта игры:"
             : "Квест ещё не начался. Задания локаций откроются последовательно после старта игры в назначенное время:"}
         </p>
@@ -150,7 +364,7 @@ export default function Station() {
           border: "1px solid rgba(255, 255, 255, 0.08)",
           fontSize: 13,
           lineHeight: 1.6,
-          color: "#ccc"
+          color: "#ccc",
         }}>
           💡 <b>Что делать сейчас?</b><br />
           Припаркуйте автомобиль на парковке стартовой локации, найдите свою команду и проверьте связь в Telegram. Как только таймер дойдёт до нуля, экран автоматически обновится и откроет задание!
@@ -168,357 +382,360 @@ export default function Station() {
     );
   }
 
-  async function onArrived() {
-    setErr("");
-    if (!HAS_BACKEND) {
-      setArrive("error");
-      setErr("Бэкенд не подключён (VITE_API_URL). Запусти `npm run server`.");
-      return;
-    }
-    if (!phoneOk) {
-      setErr("Сначала введите номер телефона.");
-      return;
-    }
-    setArrive("sending");
-    try {
-      await notify("arrived", {
-        stationId: station.id,
-        stationName: station.name,
-        phone: phone.trim(),
-        teamNumber: teamNo || null,
-        team: [getTeam(), teamNo ? `№${teamNo}` : ""].filter(Boolean).join(" "),
-      });
-      setArrive("done");
-    } catch (e) {
-      setArrive("error");
-      setErr(e.message || "Ошибка отправки");
-    }
-  }
-
-  /**
-   * Загадку команда разгадывает на месте — ответ через сайт не вводится.
-   * Кнопка «Задание отправлено» отмечает точку с подтверждением.
-   */
-  async function onSolved() {
-    setErr("");
-    if (!HAS_BACKEND) {
-      setErr("Бэкенд не подключён (VITE_API_URL). Запусти `npm run server`.");
-      return;
-    }
-    if (!phoneOk && !teamNo) {
-      setErr("Укажите номер команды или телефон — иначе прогресс не сохранится.");
-      return;
-    }
-    setCheck("sending");
-    try {
-      const res = await solveStation({
-        stationCode: station.code || station.id,
-        phone: phone.trim(),
-        teamNumber: teamNo || null,
-      });
-      setCheck("done");
-      setNextRiddle(res.nextHint || "");
-      setRevealed(true);
-      solve(station.id);
-    } catch (e) {
-      setCheck("idle");
-      setErr(e.message || "Не удалось отметить точку.");
-    }
-  }
-
-  /** Получить подсказку */
-  async function onGetHint() {
-    setErr("");
-    if (!HAS_BACKEND) {
-      setErr("Бэкенд не подключён.");
-      return;
-    }
-    setHintLoading(true);
-    try {
-      // Отправляем уведомление админам о использовании подсказки
-      await notify("hint_used", {
-        stationId: station.id,
-        stationName: station.name,
-        phone: phone.trim(),
-        teamNumber: teamNo || null,
-      });
-
-      // Получаем подсказку из questConfig
-      const hint = station.hint || "Подсказка отсутствует.";
-      setHint(hint);
-      setHintReceived(true);
-      // НЕ закрываем модалку — подсказка остаётся видимой внутри окна
-    } catch (e) {
-      setErr(e.message || "Не удалось получить подсказку.");
-    } finally {
-      setHintLoading(false);
-    }
-  }
-
-  /** Не отгадал — уведомляем администраторов через бота */
-  async function onNotGuessed() {
-    setErr("");
-    if (!HAS_BACKEND) {
-      setErr("Бэкенд не подключён.");
-      return;
-    }
-
-    const teamLabel = [getTeam(), teamNo ? `№${teamNo}` : ""].filter(Boolean).join(" ");
-
-    try {
-      await notify("not_guessed", {
-        stationId: station.id,
-        stationName: station.name,
-        phone: phone.trim(),
-        teamNumber: teamNo || null,
-        team: teamLabel || undefined,
-      });
-      // Показываем задание и кнопку перехода к следующей точке
-      setNotGuessed(true);
-    } catch (e) {
-      setErr(e.message || "Не удалось отправить уведомление.");
-    }
-  }
-
-  // Показать задание если: arrive === done ИЛИ notGuessed ИЛИ уже решено.
-  // Подсказка НЕ открывает задание — она показывает текст подсказки.
-  const taskVisible = (arrive === "done" || notGuessed || revealed) && station.detailedTask;
-
-  // Точка 0 (стартовая) — без загадки и подсказки
-  const isStartStation = station.id === 0;
-
-  // Подтверждение перехода к следующей точке
-  const [confirmNext, setConfirmNext] = useState(false);
-
-  function goNextStation() {
-    const next = QUEST.stations[station.id + 1];
-    if (next) {
-      navigate(`/s/${next.code || next.id}`);
-    }
-  }
+  const riddleText = station.riddle || (
+    station.task ? station.task.split("ЗАДАНИЕ")[0].replace(/^ЗАГАДКА\s*/i, "").trim() : ""
+  );
+  const taskVisible = Boolean((arrived || addressRevealed || taskComplete) && station.detailedTask);
+  const canSolveRiddle = !isStartStation && !riddleSolved && !arrived && !addressRevealed && !taskComplete;
+  const canArrive = !isStartStation && riddleSolved && !arrived && !addressRevealed && !taskComplete;
+  const canComplete = taskVisible && !taskComplete;
+  const hasHistory = Boolean(station.history && station.history.trim());
 
   return (
     <div className="card">
-      {revealed && <span className="done-badge">✓ Точка разгадана</span>}
+      {taskComplete && <span className="done-badge">✓ Точка пройдена</span>}
+      {riddleSolved && !taskComplete && <span className="done-badge">✓ Локация разгадана</span>}
+
       <div className="eyebrow">
         Точка {station.id} из {QUEST.stations.length}
       </div>
-      <h2 style={{ display: 'none' }}>{station.name}</h2>
 
-      {(() => {
-        const riddleText = station.riddle || (station.task ? station.task.split("ЗАДАНИЕ")[0].replace(/^ЗАГАДКА\s*/i, "").trim() : "");
+      {/* Название локации открываем только после прибытия/адреса/завершения. */}
+      {(isStartStation || arrived || addressRevealed || taskComplete) && (
+        <h2 style={{ marginBottom: 12 }}>{station.name}</h2>
+      )}
 
-        return (
-          <div className="station-details">
-            {/* ЗАГАДКА (не показываем на стартовой точке 0) */}
-            {riddleText && !isStartStation && (
-              <div className="task riddle-block" style={{ whiteSpace: "pre-wrap" }}>
-                <div className="eyebrow" style={{ color: "var(--accent)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <span>🔮</span> ЗАГАДКА
-                </div>
-                <div style={{ fontSize: "16px", lineHeight: "1.6", fontWeight: "500" }}>{riddleText}</div>
-              </div>
-            )}
-
-            {/* ЗАДАНИЕ (показывается после "Я прибыл" ИЛИ после "Не отгадал") */}
-            {taskVisible && (
-              <div className="task assignment-block" style={{ marginTop: "16px", backgroundColor: "rgba(255, 255, 255, 0.05)", padding: "16px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.1)" }}>
-                <div 
-                  style={{ fontSize: "15px", lineHeight: "1.6" }} 
-                  dangerouslySetInnerHTML={{ __html: station.detailedTask.replace(/\n/g, "<br/>") }} 
-                />
-                <div style={{ marginTop: "16px", fontSize: "14px", color: "var(--accent)", fontWeight: "bold" }}>
-                  Воспользуйтесь телеграм ботом <a href="https://t.me/thisMirrorbot" target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "underline" }}>https://t.me/thisMirrorbot</a> чтобы отправлять видео и фото результаты Хранительнице
-                </div>
-              </div>
-            )}
+      {/* ЗАГАДКА */}
+      {riddleText && !isStartStation && (
+        <div className="task riddle-block" style={{ whiteSpace: "pre-wrap" }}>
+          <div className="eyebrow" style={{ color: "var(--accent)", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+            <span>🔮</span> ЗАГАДКА
           </div>
-        );
-      })()}
+          <div style={{ fontSize: 16, lineHeight: 1.6, fontWeight: 500 }}>{riddleText}</div>
+        </div>
+      )}
+
+      {/* Путь Б: адрес открыт */}
+      {addressRevealed && !taskComplete && (
+        <div style={{ marginTop: 16 }}>
+          <div className="modal-address">📍 {station.name}</div>
+          <p className="muted" style={{ marginTop: 8, fontSize: 14, lineHeight: 1.5 }}>
+            Адрес открыт — езжайте на локацию для выполнения задания. Баллы за
+            самостоятельное разгадывание этой локации не начисляются, баллы за
+            задание сохраняются.
+          </p>
+        </div>
+      )}
+
+      {/* ЗАДАНИЕ */}
+      {taskVisible && (
+        <div className="task assignment-block" style={{ marginTop: 16, backgroundColor: "rgba(255, 255, 255, 0.05)", padding: 16, borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)" }}>
+          <div
+            style={{ fontSize: 15, lineHeight: 1.6 }}
+            dangerouslySetInnerHTML={{ __html: station.detailedTask.replace(/\n/g, "<br/>") }}
+          />
+          <div style={{ marginTop: 16, fontSize: 14, color: "var(--accent)", fontWeight: "bold" }}>
+            Воспользуйтесь телеграм ботом{" "}
+            <a href={MIRROR_BOT} target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "underline" }}>
+              {MIRROR_BOT.replace("https://", "")}
+            </a>{" "}
+            чтобы отправлять фото и видео Хранительнице.
+          </div>
+        </div>
+      )}
 
       {!HAS_BACKEND && (
         <div className="feedback err">
-          ⚠️ Бэкенд не подключён. Ответы проверяются на сервере, поэтому без него
-          точку взять нельзя (задайте VITE_API_URL и запустите сервер).
+          ⚠️ Бэкенд не подключён. Задайте VITE_API_URL и запустите сервер.
         </div>
       )}
 
-      {!phoneOk && (
+      {!hasIdentity && (
         <div className="feedback err">
-          ⚠️ Вы не зарегистрированы или номер телефона не найден. Пожалуйста, зарегистрируйтесь.
+          ⚠️ Вы не зарегистрированы. Пожалуйста, зарегистрируйтесь.
           <br />
-          <a href="/#/register" style={{ color: "var(--accent)", textDecoration: "underline" }}>Перейти к регистрации</a>
-        </div>
-      )}
-
-      <div className="actions">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button
-            className="btn arrive"
-            onClick={onArrived}
-            disabled={isStartStation || arrive === "sending" || arrive === "done" || revealed}
-          >
-            {arrive === "sending"
-              ? "Отправляем…"
-              : (isStartStation || arrive === "done" || revealed)
-                ? "✓ Я прибыл (отгадал загадку)"
-                : "📍 Я прибыл (отгадал загадку)"}
-          </button>
-
-          {!isStartStation && (
-            <button
-              className="btn ghost"
-              onClick={() => setShowHintModal(true)}
-              disabled={hintLoading || hintReceived}
-            >
-              {hintLoading ? "Загружаем…" : hintReceived ? "✓ Подсказка получена" : "💡 Прошу подсказку к загадке"}
-            </button>
-          )}
-
-          {!isStartStation && (
-            <button
-              className="btn ghost"
-              onClick={onNotGuessed}
-              disabled={notGuessed}
-              style={{ borderColor: "#ff6b6b", color: notGuessed ? "#888" : "#ff6b6b" }}
-            >
-              {notGuessed ? "✓ Я не отгадал загадку" : "❌ Я не отгадал загадку"}
-            </button>
-          )}
-
-          {taskVisible && !notGuessed && (
-            <button
-              className="btn green"
-              onClick={() => setShowConfirm(true)}
-              disabled={check === "sending" || check === "done"}
-              style={{ marginTop: 8 }}
-            >
-              {check === "sending" ? "Отмечаем…" : check === "done" ? "✓ Задание отправлено" : "✅ Задание отправлено"}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Кнопка "Перейти к следующей точке" после "Не отгадал" */}
-      {!revealed && notGuessed && (
-        <div style={{ marginTop: 16 }}>
-          {station.id < QUEST.stations.length - 1 ? (
-            <button
-              className="btn green"
-              onClick={() => setConfirmNext(true)}
-              style={{ width: "100%", marginBottom: 12 }}
-            >
-              🚀 Перейти к следующей точке
-            </button>
-          ) : (
-            <p className="center muted">Это последняя точка квеста.</p>
-          )}
+          <a href="/#/register" style={{ color: "var(--accent)", textDecoration: "underline" }}>
+            Перейти к регистрации
+          </a>
         </div>
       )}
 
       {err && <div className="feedback err">{err}</div>}
 
-      {revealed && (
-        <div className="reveal">
+      <div className="actions">
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
-          {station.id < QUEST.stations.length - 1 ? (
+          {/* Стартовая точка: авто-прибытие, только ожидание и задание. */}
+          {isStartStation && !arrived && !taskComplete && (
+            <p className="muted center" style={{ fontSize: 14, margin: "8px 0" }}>
+              Фиксируем прибытие на стартовую точку…
+            </p>
+          )}
+
+          {/* Фаза 1: загадка */}
+          {canSolveRiddle && (
+            <>
+              <button
+                className="btn"
+                onClick={onSolvedRiddle}
+                disabled={solvedSending}
+              >
+                {solvedSending ? "Отмечаем…" : "🔓 Я разгадал(а) локацию"}
+              </button>
+
+              <button
+                className="btn ghost"
+                onClick={openHint}
+                disabled={hintLoading}
+              >
+                {hintLoading
+                  ? "Загружаем…"
+                  : hintReceived
+                    ? "💡 Посмотреть подсказку"
+                    : "💡 Получить подсказку к локации"}
+              </button>
+
+              <button
+                className="btn ghost"
+                onClick={() => setShowAddressConfirm(true)}
+                disabled={addressSending}
+                style={{ borderColor: "#ff6b6b", color: "#ff6b6b" }}
+              >
+                {addressSending
+                  ? "Открываем…"
+                  : "❌ Я не разгадал(а) локацию — показать адрес"}
+              </button>
+            </>
+          )}
+
+          {/* Фаза 2: загадка разгадана, но капитан ещё не доехал */}
+          {canArrive && (
+            <>
+              <div style={{
+                padding: "12px 14px",
+                borderRadius: 10,
+                background: "rgba(76, 217, 100, 0.1)",
+                border: "1px solid rgba(76, 217, 100, 0.35)",
+                color: "#b8f7c4",
+                fontSize: 14,
+                lineHeight: 1.5,
+              }}>
+                ✅ Локация разгадана. Теперь отправляйтесь на место, сделайте селфи
+                на фоне локации и подтвердите прибытие.
+              </div>
+              <button
+                className="btn arrive"
+                onClick={() => setShowArriveModal(true)}
+                disabled={arriveSending}
+              >
+                {arriveSending ? "Отправляем…" : "📍 Подтвердить прибытие"}
+              </button>
+            </>
+          )}
+
+          {/* Фаза 3: задание открыто — завершение */}
+          {canComplete && (
             <button
               className="btn green"
-              onClick={() => setConfirmNext(true)}
-              style={{ width: "100%", marginBottom: 20 }}
+              onClick={() => setShowCompleteModal(true)}
+              disabled={completeSending}
+              style={{ marginTop: 4 }}
             >
-              🚀 Перейти к следующей точке
+              {completeSending
+                ? "Отмечаем…"
+                : isFinalStation
+                  ? "✅ Завершить задание и финишировать"
+                  : "✅ Завершить задание и открыть следующую локацию"}
             </button>
-          ) : (
-            /* ===== ФИНАЛЬНЫЙ ЭКРАН (последняя точка) ===== */
-            <div className="finale-screen">
-              <div className="finale-emoji">🏆</div>
-              <h2 className="finale-title">Миссия выполнена!</h2>
-              <p className="finale-subtitle">
-                Команда{" "}
-                <strong>{getTeam() || `№${teamNo}` || ""}</strong>{" "}
-                прошла все точки квеста
-              </p>
-              <div className="finale-tagline">❤️ Алматы — моя первая любовь!</div>
-              <p className="muted" style={{ fontSize: 14, marginTop: 12, textAlign: "center" }}>
-                Организаторы уже получили уведомление. Ждите объявления победителей!
-              </p>
-              <button
-                className="btn green mt"
-                style={{ width: "100%", marginTop: 24 }}
-                onClick={() => navigate("/profile")}
-              >
-                🏠 На главную
-              </button>
-            </div>
           )}
-        </div>
-      )}
 
-      {/* Модальное окно подтверждения */}
-      {showConfirm && (
-        <div className="modal-overlay" onClick={() => setShowConfirm(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>Подтверждение</h3>
-            <p>Вы хотите подтвердить текущую точку как выполненную?</p>
-            <div className="modal-actions">
-              <button className="btn green" onClick={() => { setShowConfirm(false); onSolved(); }}>
-                Да, подтвердить
-              </button>
-              <button className="btn ghost" onClick={() => setShowConfirm(false)}>
-                Нет, отмена
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Модальное окно: подтверждение перехода к следующей точке */}
-      {confirmNext && (
-        <div className="modal-overlay" onClick={() => setConfirmNext(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>Подтверждение</h3>
-            <p>Вы уверены что хотите перейти к следующей локации?</p>
-            <div className="modal-actions">
-              <button className="btn green" onClick={() => { setConfirmNext(false); goNextStation(); }}>
-                Да
-              </button>
-              <button className="btn ghost" onClick={() => setConfirmNext(false)}>
-                Нет
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Модальное окно подсказки */}
-      {showHintModal && (
-        <div className="modal-overlay" onClick={() => setShowHintModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>💡 Подсказка к загадке</h3>
-            {hint ? (
-              <div style={{ marginTop: 12, padding: 12, background: "rgba(255,255,255,0.1)", borderRadius: 8 }}>
-                <p style={{ whiteSpace: "pre-wrap", fontSize: 15 }}>{hint}</p>
-              </div>
-            ) : (
-              <p style={{ fontSize: 14 }}>Уведомление будет отправлено организаторам.</p>
-            )}
-            <div className="modal-actions" style={{ marginTop: 16 }}>
-              {!hint && (
-                <button 
-                  className="btn green" 
-                  onClick={onGetHint}
-                  disabled={hintLoading}
+          {/* Фаза 4: точка пройдена */}
+          {taskComplete && !isFinalStation && (
+            <>
+              {hasHistory && (
+                <button
+                  className="btn ghost"
+                  onClick={() => setShowHistoryModal(true)}
                 >
-                  {hintLoading ? "Отправляем…" : "Получить подсказку"}
+                  📖 История места
                 </button>
               )}
-              <button className="btn ghost" onClick={() => setShowHintModal(false)}>
-                {hint ? "Закрыть" : "Отмена"}
+              <button className="btn green" onClick={goNextStation}>
+                🚀 Перейти к следующей точке
               </button>
-            </div>
-          </div>
+            </>
+          )}
         </div>
+      </div>
+
+      {/* ФИНАЛ */}
+      {taskComplete && isFinalStation && (
+        <div className="finale-screen">
+          <div className="finale-emoji">🏆</div>
+          <h2 className="finale-title">Миссия выполнена!</h2>
+          <p className="finale-subtitle">
+            Команда <strong>{getTeam() || `№${teamNo}` || ""}</strong> прошла все точки квеста
+          </p>
+          <div className="finale-tagline">❤️ Алматы — моя первая любовь!</div>
+          <p className="muted" style={{ fontSize: 14, marginTop: 12, textAlign: "center" }}>
+            Организаторы уже получили уведомление. Ждите объявления победителей!
+          </p>
+          {hasHistory && (
+            <button
+              className="btn ghost"
+              style={{ width: "100%", marginTop: 16 }}
+              onClick={() => setShowHistoryModal(true)}
+            >
+              📖 История места
+            </button>
+          )}
+          <button
+            className="btn green mt"
+            style={{ width: "100%", marginTop: 24 }}
+            onClick={() => navigate("/profile")}
+          >
+            🏠 На главную
+          </button>
+        </div>
+      )}
+
+      {/* ---- Модалки ---- */}
+
+      {showHintConfirm && (
+        <Modal onClose={() => !hintLoading && setShowHintConfirm(false)}>
+          <h3>💡 Подсказка к локации</h3>
+          {hintReceived ? (
+            <>
+              <div className="modal-hint">{hint || "Подсказка получена ранее."}</div>
+              <div className="modal-actions">
+                <button className="btn ghost" onClick={() => setShowHintConfirm(false)}>
+                  Закрыть
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p>
+                Использование подсказки уменьшит количество баллов за эту локацию
+                на <b>3 балла</b>.
+              </p>
+              <p>Вы уверены?</p>
+              <div className="modal-actions">
+                <button className="btn green" onClick={submitHint} disabled={hintLoading}>
+                  {hintLoading ? "Отправляем…" : "Да, получить"}
+                </button>
+                <button
+                  className="btn ghost"
+                  onClick={() => setShowHintConfirm(false)}
+                  disabled={hintLoading}
+                >
+                  Нет
+                </button>
+              </div>
+            </>
+          )}
+        </Modal>
+      )}
+
+      {showAddressConfirm && (
+        <Modal onClose={() => !addressSending && setShowAddressConfirm(false)}>
+          <h3>Показать адрес локации?</h3>
+          <p>
+            Если вы откроете адрес, баллы за самостоятельное разгадывание этой
+            локации начислены не будут. Баллы за выполнение задания сохраняются.
+          </p>
+          <div className="modal-warning">
+            Вы уверены? Открыть адрес и получить задание?
+          </div>
+          <div className="modal-actions">
+            <button className="btn green" onClick={submitAddress} disabled={addressSending}>
+              {addressSending ? "Открываем…" : "Да, показать адрес"}
+            </button>
+            <button
+              className="btn ghost"
+              onClick={() => setShowAddressConfirm(false)}
+              disabled={addressSending}
+            >
+              Нет, буду разгадывать
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showArriveModal && (
+        <Modal onClose={() => !arriveSending && setShowArriveModal(false)}>
+          <h3>Подтверждение прибытия</h3>
+          <p>
+            Перед нажатием отправьте селфи капитана на фоне локации в Telegram-бот{" "}
+            <a href={MIRROR_BOT} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>
+              Mirror Bot
+            </a>
+            . Иначе баллы не будут засчитаны.
+          </p>
+          <div className="modal-warning">📸 Фото проверяется организатором вручную.</div>
+          <div className="modal-actions">
+            <button className="btn green" onClick={submitArrived} disabled={arriveSending}>
+              {arriveSending ? "Отправляем…" : "Я отправил(а), подтвердить"}
+            </button>
+            <button
+              className="btn ghost"
+              onClick={() => setShowArriveModal(false)}
+              disabled={arriveSending}
+            >
+              Отмена
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showCompleteModal && (
+        <Modal onClose={() => !completeSending && setShowCompleteModal(false)}>
+          <h3>{isStartStation ? "Завершить стартовое задание?" : "Завершить задание?"}</h3>
+          {isStartStation ? (
+            <p>
+              Подтвердите, что пазл собран и показан Хранительнице. После этого
+              откроется следующая точка.
+            </p>
+          ) : (
+            <>
+              <p>
+                Вы уверены? Перед завершением задания отправьте фото или
+                видеоматериалы боту в Telegram-бот{" "}
+                <a href={MIRROR_BOT} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>
+                  Mirror Bot
+                </a>
+                . Иначе баллы не будут засчитаны.
+              </p>
+              <div className="modal-warning">
+                📸 Материалы проверяются организатором вручную.
+              </div>
+            </>
+          )}
+          <div className="modal-actions">
+            <button className="btn green" onClick={submitComplete} disabled={completeSending}>
+              {completeSending ? "Отмечаем…" : "Да, завершить"}
+            </button>
+            <button
+              className="btn ghost"
+              onClick={() => setShowCompleteModal(false)}
+              disabled={completeSending}
+            >
+              Нет, вернуться
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showHistoryModal && hasHistory && (
+        <Modal onClose={closeHistoryAndContinue}>
+          <h3>📖 Историческая справка</h3>
+          <div className="modal-history">{station.history}</div>
+          <div className="modal-actions">
+            <button className="btn green" onClick={closeHistoryAndContinue}>
+              Понятно, продолжить
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   );

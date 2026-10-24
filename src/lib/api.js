@@ -85,6 +85,16 @@ export async function solveStation({ stationCode, phone, teamNumber }) {
   return post("/api/solve", { stationCode, phone, teamNumber });
 }
 
+/** «Я разгадал(а) локацию» — фиксирует время разгадки до поездки. */
+export async function markSolved({ stationCode, phone, teamNumber }) {
+  return post("/api/mark-solved", { stationCode, phone, teamNumber });
+}
+
+/** Админ: засчитать прибытие команды на локацию вручную. */
+export async function adminMarkArrival({ teamNumber, stationId }) {
+  return post("/api/admin/mark-arrival", { teamNumber, stationId });
+}
+
 /** Забрать прогресс с сервера — например, при смене телефона. */
 export async function fetchProgress({ teamNumber, phone }) {
   if (!API_URL) throw new Error("Бэкенд не подключён (VITE_API_URL).");

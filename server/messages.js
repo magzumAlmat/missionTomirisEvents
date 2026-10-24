@@ -126,14 +126,14 @@ export function buildParticipantsListText(participants, { groups, loners }, stan
 }
 
 /**
- * Таблица квеста. rows приходят из store.standings() — они уже отсортированы:
- * сначала финишировавшие по времени финиша, затем по числу взятых точек.
+ * Таблица квеста. rows приходят из store.standings() — они уже отсортированы
+ * по сумме баллов, затем по времени финиша.
  *
- * Теперь показывает:
+ * Показывает:
+ *  - сумму баллов и число взятых точек
  *  - общее время квеста (старт → финиш)
  *  - время на каждой точке (прибытие → решение)
  *  - статус «в процессе» / «финиш»
- *  - место среди финишировавших
  */
 export function buildStandingsText(rows, total) {
   if (!rows.length) {
@@ -149,7 +149,7 @@ export function buildStandingsText(rows, total) {
   rows.forEach((r, i) => {
     const place = r.finishedAt ? `🏆 ${i + 1}.` : `${i + 1}.`;
     msg += `${place} <b>№${r.teamNumber || "—"} ${escapeHtml(r.teamName || "без названия")}</b>\n`;
-    msg += `   🧩 Точек: <b>${r.solved}</b>/${total}`;
+    msg += `   ⭐ Баллы: <b>${r.totalScore ?? 0}</b> · 🧩 Точек: <b>${r.solved}</b>/${total}`;
     if (r.finishedAt) {
       msg += ` · 🏁 финиш в ${time(r.finishedAt)}`;
     } else if (r.solved > 0) {
@@ -186,6 +186,6 @@ export function buildStandingsText(rows, total) {
   });
 
   msg += `───────────────\n`;
-  msg += `Победитель — команда, первой взявшая все точки. Приз выдаётся после проверки материалов капитана.`;
+  msg += `Победитель — команда с наибольшей суммой баллов; при равенстве — раньше финишировавшая. Баллы за творческие задания считаются отдельно.`;
   return msg;
 }

@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "qr": "node scripts/generate-qr.js",
+    "test:scoring": "node scripts/test-scoring.mjs",
     "server": "node server/index.js",
     "video-bot": "node server/videoBot.js",
     "deploy": "bash start.sh",

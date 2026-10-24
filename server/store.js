@@ -142,6 +142,10 @@ function blankEntry({ teamNumber, teamName, phone }) {
     phone: phone || "",
     arrivals: {},
     stations: {},
+    // Время нажатия «Я разгадал(а) локацию» — до поездки на локацию.
+    solved: {},
+    hints: {},
+    notGuessed: {},
     finishedAt: null,
     startedAt: new Date().toISOString(),
   };
@@ -161,6 +165,26 @@ export function markArrival({ key, teamNumber, teamName, phone, stationId }) {
 
   const sid = String(stationId);
   if (!entry.arrivals[sid]) entry.arrivals[sid] = { at: new Date().toISOString() };
+  all[key] = entry;
+  writeJson(PROGRESS_FILE, all);
+  return entry;
+}
+
+/**
+ * Отметить разгадку загадки («Я разгадал(а) локацию»).
+ * Капитан делает это ДО поездки: фиксируем время, чтобы потом видеть,
+ * сколько он ехал и сколько выполнял задание. Баллы это событие не начисляет.
+ */
+export function markSolved({ key, teamNumber, teamName, phone, stationId }) {
+  if (!key) return null;
+  const all = readProgress();
+  const entry = all[key] || blankEntry({ teamNumber, teamName, phone });
+  if (!entry.solved) entry.solved = {};
+  if (teamName && !entry.teamName) entry.teamName = teamName;
+  if (phone && !entry.phone) entry.phone = phone;
+
+  const sid = String(stationId);
+  if (!entry.solved[sid]) entry.solved[sid] = { at: new Date().toISOString() };
   all[key] = entry;
   writeJson(PROGRESS_FILE, all);
   return entry;
@@ -381,20 +405,83 @@ export function resetAll() {
   return counts;
 }
 
+/* ---------- баллы за локации ---------- */
+
+/**
+ * Локации, за которые начисляются баллы. Стартовая точка (0) — вне зачёта:
+ * за неё дают только задание-пазл, а не место в очереди прибытия.
+ */
+export const SCORED_STATION_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+/** Баллы за место в очереди прибытия: 1-е — 10, 8-е и далее — 3. */
+export function arrivalPoints(place) {
+  return Math.max(3, 11 - place);
+}
+
+/**
+ * Считает баллы каждой команды по каждой локации.
+ *
+ * Правила (из ТЗ):
+ *  - место определяется по времени arrivals[sid] среди всех команд;
+ *  - подсказка на локации вычитает 3 балла (один раз, сколько бы раз её ни открывали);
+ *  - меньше 0 баллов за локацию не бывает;
+ *  - команда без прибытия на локацию получает 0 за неё.
+ *
+ * Если несколько команд отметились в одну и ту же миллисекунду, они делят место
+ * и получают одинаковые баллы (а не произвольный порядок по ключу команды).
+ */
+export function computeStationScores(progress) {
+  const entries = Object.entries(progress || {});
+  const scores = {};
+  for (const [key] of entries) {
+    scores[key] = {};
+    for (const sid of SCORED_STATION_IDS) scores[key][sid] = 0;
+  }
+
+  for (const sid of SCORED_STATION_IDS) {
+    const arrivals = [];
+    for (const [key, p] of entries) {
+      const at = p?.arrivals?.[String(sid)]?.at;
+      if (at) arrivals.push({ key, at });
+    }
+    arrivals.sort((a, b) => {
+      if (a.at === b.at) return 0;
+      return a.at < b.at ? -1 : 1;
+    });
+
+    let place = 0;
+    let prevAt = null;
+    arrivals.forEach(({ key, at }, index) => {
+      if (at !== prevAt) {
+        place = index + 1;
+        prevAt = at;
+      }
+      const base = arrivalPoints(place);
+      const penalty = progress[key]?.hints?.[String(sid)] ? 3 : 0;
+      scores[key][sid] = Math.max(0, base - penalty);
+    });
+  }
+
+  return scores;
+}
+
 /* ---------- судейская таблица ---------- */
 
 /**
- * Сводка для судьи: по каждой команде — сколько точек взято, когда взята
- * последняя, финишировала ли, сколько фото/видео прислал капитан.
- * Телефоны сюда НЕ попадают — таблицу можно показывать кому угодно.
+ * Сводка для судьи: по каждой команде — баллы по локациям, сумма, сколько
+ * точек взято, когда взята последняя, финишировала ли, сколько фото/видео
+ * прислал капитан. Телефоны сюда НЕ попадают — таблицу можно показывать
+ * кому угодно.
  *
- * Порядок: сначала финишировавшие (по времени финиша), затем по числу точек,
- * при равенстве — кто раньше взял последнюю точку.
+ * Порядок: по сумме баллов (totalScore), затем по времени финиша, затем по
+ * числу точек. Баллы за творческие задания сюда не входят — их организатор
+ * считает вручную.
  */
 export function standings() {
   const progress = readProgress();
   const teams = listTeams();
   const submissions = listSubmissions();
+  const scores = computeStationScores(progress);
 
   const rows = new Map();
 
@@ -404,7 +491,6 @@ export function standings() {
         key,
         teamNumber: null,
         teamName: "",
-        phone: "",
         solved: 0,
         lastAt: null,
         finishedAt: null,
@@ -413,6 +499,9 @@ export function standings() {
         arrivals: {},
         hints: {},
         notGuessed: {},
+        riddleSolved: {},
+        scores: scores[key] ? { ...scores[key] } : {},
+        totalScore: 0,
         ...seed,
       });
     }
@@ -425,7 +514,7 @@ export function standings() {
   }
 
   for (const [key, p] of Object.entries(progress)) {
-    const row = rowFor(key, { teamNumber: p.teamNumber, teamName: p.teamName, phone: p.phone });
+    const row = rowFor(key, { teamNumber: p.teamNumber, teamName: p.teamName });
     const times = Object.values(p.stations || {}).map((s) => s.at).filter(Boolean);
     row.solved = times.length;
     row.lastAt = times.sort().slice(-1)[0] || null;
@@ -443,9 +532,12 @@ export function standings() {
     row.notGuessed = Object.fromEntries(
       Object.entries(p.notGuessed || {}).map(([id, v]) => [id, v.at || null])
     );
+    row.riddleSolved = Object.fromEntries(
+      Object.entries(p.solved || {}).map(([id, v]) => [id, v.at || null])
+    );
+    row.scores = scores[key] ? { ...scores[key] } : {};
     if (!row.teamName && p.teamName) row.teamName = p.teamName;
     if (!row.teamNumber && p.teamNumber) row.teamNumber = p.teamNumber;
-    if (!row.phone && p.phone) row.phone = p.phone;
   }
 
   for (const s of submissions) {
@@ -457,7 +549,15 @@ export function standings() {
     row.media += 1;
   }
 
+  for (const row of rows.values()) {
+    row.totalScore = SCORED_STATION_IDS.reduce(
+      (sum, sid) => sum + (Number(row.scores?.[sid]) || 0),
+      0
+    );
+  }
+
   return [...rows.values()].sort((a, b) => {
+    if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
     if (a.finishedAt && b.finishedAt) return a.finishedAt < b.finishedAt ? -1 : 1;
     if (a.finishedAt) return -1;
     if (b.finishedAt) return 1;

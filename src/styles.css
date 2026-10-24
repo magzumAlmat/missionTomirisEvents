@@ -1104,3 +1104,129 @@ table.board tr:last-child td {
   flex: 1;
   min-width: 140px;
 }
+
+/* =====================================================================
+   МОДАЛЬНЫЕ ОКНА СТАНЦИИ
+   ===================================================================== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 440px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow);
+}
+
+.modal-content h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.modal-content p {
+  margin: 0 0 16px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.modal-content p:last-child {
+  margin-bottom: 0;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.modal-actions .btn {
+  flex: 1;
+  margin-top: 0;
+}
+
+.modal-warning {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  color: #ffb3b3;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.modal-hint {
+  padding: 14px;
+  border-radius: 10px;
+  background: rgba(255, 204, 77, 0.1);
+  border: 1px solid rgba(255, 204, 77, 0.35);
+  color: #ffe6a6;
+  font-size: 15px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.modal-history {
+  padding: 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  font-size: 15px;
+  line-height: 1.6;
+  color: #e7eaf5;
+}
+
+.modal-address {
+  padding: 14px;
+  border-radius: 10px;
+  background: rgba(107, 229, 201, 0.1);
+  border: 1px solid rgba(107, 229, 201, 0.35);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #d7fff6;
+}
+
+@media (max-width: 480px) {
+  .modal-overlay {
+    padding: 12px;
+    align-items: flex-end;
+  }
+  .modal-content {
+    max-height: 88vh;
+    padding: 20px;
+    border-radius: 16px 16px 12px 12px;
+  }
+  .modal-actions {
+    flex-direction: column-reverse;
+  }
+}
+
+/* Кнопка ручного засчитывания прибытия в ячейке доски */
+.board-mini-btn {
+  width: auto;
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 3px 7px;
+  font-size: 10px;
+  line-height: 1.2;
+  border-radius: 6px;
+}

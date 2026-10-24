@@ -23,7 +23,6 @@ import {
   findTeamByNumber,
   findTeamByName,
   getProgress,
-  hasArrived,
   markArrival,
   markFinished,
   participantsByTeam,
@@ -36,6 +35,7 @@ import {
   listSubmissions,
   markHint,
   markNotGuessed,
+  markSolved,
 } from "./store.js";
 import {
   listCaptains,
@@ -163,24 +163,37 @@ function buildMessage({ event, stationId, stationName, team, phone, teamNumber, 
   let head, verb;
   switch (event) {
     case "solved":
-      head = "✅ <b>Загадка отгадана</b>";
-      verb = "отгадал(а)";
+      head = "✅ <b>ЗАДАНИЕ ЗАВЕРШЕНО</b>";
+      verb = "завершил(а) задание на";
       break;
     case "hint_used":
-      head = "💡 <b>ПОДСКАЗКА ИСПОЛЬЗОВАНА</b>";
+      head = "💡 <b>ПОДСКАЗКА ИСПОЛЬЗОВАНА (−3 балла)</b>";
       verb = "использовал(а) подсказку на";
       break;
     case "not_guessed":
-      head = "❌ <b>НЕ ОТГАДАЛ</b>";
-      verb = "не отгадал на";
+      head = "❌ <b>АДРЕС ОТКРЫТ</b>";
+      verb = "открыл(а) адрес на";
       break;
     default:
-      head = "📍 <b>Прибытие на точку</b>";
-      verb = "прибыл(а) на";
+      head = "📍 <b>ПОДТВЕРЖДЕНИЕ ПРИБЫТИЯ</b>";
+      verb = "подтвердил(а) прибытие на";
       break;
   }
 
   let msg = `${head}\n${who}\n${verb} ${point}\n`;
+
+  // Подсказки и предупреждения — только для обычных локаций (0 — стартовая).
+  if (Number(stationId) !== 0) {
+    if (event === "arrived") {
+      msg += `📸 <b>Фото:</b> проверяется вручную\n`;
+    } else if (event === "hint_used") {
+      msg += `⚠️ За эту локацию будет вычтено 3 балла.\n`;
+    } else if (event === "not_guessed") {
+      msg += `⚠️ Баллы за самостоятельное разгадывание не начисляются.\n`;
+    } else if (event === "solved") {
+      msg += `📸 <b>Фото/видео:</b> проверяются вручную\n`;
+    }
+  }
 
   // Время на точке (прибытие → сейчас) — видно, сколько команда думала.
   if (progressEntry && event !== "arrived") {
@@ -308,6 +321,56 @@ app.post("/api/notify", (req, res) => handleNotify(req, res));
 // Обратная совместимость: старый путь = событие «прибыл».
 app.post("/api/arrived", (req, res) => handleNotify(req, res, "arrived"));
 
+/**
+ * «Я разгадал(а) локацию» — капитан отмечает разгадку ДО поездки.
+ * Это промежуточный шаг: Telegram не уведомляем, баллы не начисляем.
+ * body: { stationCode, phone, teamNumber? }
+ */
+app.post("/api/mark-solved", (req, res) => {
+  const { stationCode, phone, teamNumber } = req.body || {};
+  const station = findStation(stationCode);
+  if (!station) {
+    return res.status(404).json({ ok: false, error: "Точка не найдена. Проверьте QR-код." });
+  }
+  if (station.id === 0) {
+    return res.status(400).json({
+      ok: false,
+      error: "Стартовая точка не требует разгадки — она открывается автоматически.",
+    });
+  }
+  if (!isGameStarted()) {
+    return res.status(403).json({
+      ok: false,
+      error: "Квест ещё не начался. Разгадку нельзя отметить до старта.",
+    });
+  }
+
+  const team = teamNumber ? findTeamByNumber(teamNumber) : null;
+  const key = progressKey({ teamNumber: team ? team.number : null, phone });
+  if (!key) {
+    return res.status(400).json({
+      ok: false,
+      error: "Укажите номер команды или телефон — иначе прогресс не сохранить.",
+    });
+  }
+
+  try {
+    const entry = markSolved({
+      key,
+      teamNumber: team ? team.number : null,
+      teamName: team ? team.name : "",
+      phone,
+      stationId: station.id,
+    });
+    res.json({
+      ok: true,
+      solvedAt: entry?.solved?.[String(station.id)]?.at || null,
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
 /* =====================================================================
    НАСТРОЙКИ КВЕСТА (обратный отсчёт / дата / место)
    ===================================================================== */
@@ -337,14 +400,31 @@ function readSettings() {
   };
 }
 
+/**
+ * Дата старта в questSettings хранится без часового пояса
+ * («2026-10-18T12:00:00»). Квест проходит в Алматы (UTC+5), поэтому
+ * трактуем её как алматинскую, независимо от TZ сервера.
+ */
+function parseQuestDate(value) {
+  if (!value) return null;
+  let s = String(value).trim();
+  const hasOffset = /[zZ]$/.test(s) || /[+-]\d{2}:?\d{2}$/.test(s);
+  if (!hasOffset) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) s += "T00:00:00";
+    s += "+05:00";
+  }
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 /** Проверка: наступило ли время старта или включён принудительный доступ */
 function isGameStarted() {
   const s = readSettings();
   if (s.forceOpen) return true;
   if (!s.targetDate) return true;
-  const target = new Date(s.targetDate).getTime();
-  if (isNaN(target)) return true;
-  return Date.now() >= target;
+  const target = parseQuestDate(s.targetDate);
+  if (!target) return true;
+  return Date.now() >= target.getTime();
 }
 
 function writeSettings(data) {
@@ -379,6 +459,50 @@ app.post("/api/admin/settings", (req, res) => {
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
   }
+});
+
+/**
+ * Админ: засчитать прибытие команды на локацию вручную.
+ * Нужен, когда капитан нажал «Я разгадал(а)», но не подтвердил прибытие
+ * (например, потерял связь или забыл нажать). Время фиксируется текущее.
+ * body: { teamNumber, stationId }
+ */
+app.post("/api/admin/mark-arrival", (req, res) => {
+  const { teamNumber, stationId } = req.body || {};
+  const team = findTeamByNumber(teamNumber);
+  if (!team) {
+    return res.status(404).json({ ok: false, error: "Команда не найдена." });
+  }
+  const station = findStation(stationId);
+  if (!station) {
+    return res.status(404).json({ ok: false, error: "Точка не найдена." });
+  }
+
+  const key = progressKey({ teamNumber: team.number });
+  const before = getProgress(key);
+  const sid = String(station.id);
+  const alreadyArrived = Boolean(before?.arrivals?.[sid]);
+  const riddleSolved = Boolean(before?.solved?.[sid]);
+  const addressOpened = Boolean(before?.notGuessed?.[sid]);
+
+  if (!alreadyArrived && !riddleSolved && !addressOpened) {
+    return res.status(409).json({
+      ok: false,
+      error: "Команда ещё не разгадала эту локацию и не открывала адрес.",
+    });
+  }
+
+  const entry = markArrival({
+    key,
+    teamNumber: team.number,
+    teamName: team.name,
+    stationId: station.id,
+  });
+  res.json({
+    ok: true,
+    alreadyArrived,
+    arrivalAt: entry?.arrivals?.[sid]?.at || null,
+  });
 });
 
 /** Текст «есть ли команда» для сообщений в Telegram. */
@@ -945,17 +1069,8 @@ function notifyOrganizers(text) {
     .catch((e) => console.error("[TG Queue] Необработанная ошибка:", e.message));
 }
 
-/** Как подписать участника в уведомлении. */
-function whoText({ teamNumber, teamName, phone }) {
-  const parts = [];
-  if (teamNumber) parts.push(`👥 <b>№${teamNumber}</b>`);
-  if (teamName) parts.push(escapeHtml(teamName));
-  if (phone) parts.push(`📞 ${escapeHtml(phone)}`);
-  return parts.length ? parts.join(" · ") : "👤 Участник";
-}
-
 /**
- * Отметить точку взятой (нажата кнопка «Я отгадал»).
+ * Отметить точку взятой (нажата кнопка «Завершить задание»).
  * body: { stationCode, phone, teamNumber? }
  * ответ: { ok, nextHint, solvedCount, allDone }
  */
@@ -984,9 +1099,15 @@ app.post("/api/solve", async (req, res) => {
     });
   }
 
-  // Точку засчитываем только после отметки «Я прибыл» на ней же.
-  if (!hasArrived(key, station.id)) {
-    if (station.id === 0) {
+  // Порядок действий:
+  //  - Путь А: разгадал загадку → подтвердил прибытие → выполняет задание;
+  //  - Путь Б: открыл адрес → выполняет задание. Прибытия в Пути Б нет,
+  //    поэтому засчитываем его в момент завершения задания (решение
+  //    организатора: так команда всё равно получает баллы за порядок).
+  const before = getProgress(key);
+  const sid = String(station.id);
+  if (!before?.arrivals?.[sid]) {
+    if (station.id === 0 || before?.notGuessed?.[sid]) {
       markArrival({
         key,
         teamNumber: team ? team.number : null,
@@ -997,11 +1118,12 @@ app.post("/api/solve", async (req, res) => {
     } else {
       return res.status(409).json({
         ok: false,
-        error: 'Сначала нажмите «Я прибыл» на этой точке.',
+        error: 'Сначала подтвердите прибытие на этой точке.',
       });
     }
   }
 
+  const wasSolved = Boolean(before?.stations?.[sid]);
   const entry = solveStation({
     key,
     teamNumber: team ? team.number : null,
@@ -1012,7 +1134,7 @@ app.post("/api/solve", async (req, res) => {
   const solvedCount = Object.keys(entry?.stations || {}).length;
 
   // Взяты все точки — это и есть финиш. Отдельного финального кода в квесте нет,
-  // победителя определяет время последней точки.
+  // победителя определяет сумма баллов, а при равенстве — время финиша.
   const allDone = solvedCount >= TOTAL_STATIONS;
   if (allDone) {
     markFinished({
@@ -1023,26 +1145,22 @@ app.post("/api/solve", async (req, res) => {
     });
   }
 
-  const who = whoText({ teamNumber: team?.number, teamName: team?.name, phone });
-
-  // Время на точке: прибытие → решение (если прибытие было отмечено).
-  const arrivalAt = entry?.arrivals?.[String(station.id)]?.at || null;
-  const solveAt = entry?.stations?.[String(station.id)]?.at || new Date().toISOString();
-  const stationTime = durationText(arrivalAt, solveAt);
-
-  // Место в таблице: считаем по standings() — финишировавшие выше, затем по числу точек.
-  const rows = standings();
-  const myIdx = rows.findIndex((r) => r.key === key);
-  const rank = myIdx >= 0 ? myIdx + 1 : null;
-  const totalTeams = rows.length;
-
-  // Следующая точка (если ещё не финиш).
-  const nextStation = !allDone
-    ? Object.values(STATION_SECRETS).find((s) => s.id === station.id + 1)
-    : null;
-
-  // Уведомления в Telegram только о прибытии, подсказке и "не отгадал".
-  // "Точка взята" и "Финиш" в чат админов не отправляются.
+  // Уведомляем организаторов о завершении задания. Повторный вызов для уже
+  // закрытой точки не спамит: шлём только первое взятие.
+  if (!wasSolved) {
+    const fresh = getProgress(key) || entry;
+    notifyOrganizers(
+      buildMessage({
+        event: "solved",
+        stationId: station.id,
+        stationName: station.name,
+        team: team?.name,
+        phone,
+        teamNumber: team?.number,
+        progressEntry: fresh,
+      })
+    );
+  }
 
   res.json({
     ok: true,
@@ -1075,6 +1193,7 @@ app.get("/api/progress", (req, res) => {
     arrivals: entry?.arrivals || {},
     hints: entry?.hints || {},
     notGuessed: entry?.notGuessed || {},
+    solved: entry?.solved || {},
     finishedAt: entry?.finishedAt || null,
   });
 });
@@ -1497,7 +1616,7 @@ async function pollTelegramUpdates() {
               `• ${questStatus}\n\n` +
               `📌 <b>Доступные команды:</b>\n` +
               `• /list или /список — Показать список зарегистрированных участников со всеми данными.\n` +
-              `• /standings или /таблица — Таблица квеста: кто сколько точек взял и кто финишировал.\n` +
+              `• /standings или /таблица — Таблица квеста: баллы, число точек и время финиша.\n` +
               `• /finish_quest или /finish — Завершить квест и очистить список участников.`;
             const reply_markup = {
               inline_keyboard: [
@@ -1527,7 +1646,7 @@ async function setupBotMenu() {
       body: JSON.stringify({
         commands: [
           { command: "list", description: "Показать список участников" },
-          { command: "standings", description: "Таблица квеста: точки, финиш, материалы" },
+          { command: "standings", description: "Таблица квеста: баллы, точки, финиш" },
           { command: "finish_quest", description: "Завершить квест и очистить участников" },
           { command: "help", description: "Справка по боту" },
         ],

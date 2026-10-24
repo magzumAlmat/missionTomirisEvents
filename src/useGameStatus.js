@@ -1,11 +1,28 @@
 import { useState, useEffect } from "react";
-import { fetchSettings, HAS_BACKEND } from "./lib/api.js";
+import { fetchSettings } from "./lib/api.js";
 import { QUEST } from "./questConfig.js";
 
+/**
+ * В questSettings дата хранится без часового пояса («2026-10-18T12:00:00»).
+ * Квест проходит в Алматы (UTC+5), поэтому трактуем её явно как алматинскую,
+ * а не как локальную зону устройства.
+ */
+function parseQuestDate(value) {
+  if (!value) return null;
+  let s = String(value).trim();
+  const hasOffset = /[zZ]$/.test(s) || /[+-]\d{2}:?\d{2}$/.test(s);
+  if (!hasOffset) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) s += "T00:00:00";
+    s += "+05:00";
+  }
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function calculateTimeLeft(targetDateStr) {
-  if (!targetDateStr) return { days: 0, hours: 0, minutes: 0, seconds: 0, expired: true };
-  const target = new Date(targetDateStr).getTime();
-  if (isNaN(target)) return { days: 0, hours: 0, minutes: 0, seconds: 0, expired: true };
+  const parsed = parseQuestDate(targetDateStr);
+  if (!parsed) return { days: 0, hours: 0, minutes: 0, seconds: 0, expired: true };
+  const target = parsed.getTime();
   const now = Date.now();
   const diff = Math.max(0, target - now);
 
