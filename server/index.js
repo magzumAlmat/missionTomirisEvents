@@ -22,6 +22,7 @@ import {
   findOrCreateTeam,
   findTeamByNumber,
   findTeamByName,
+  teamKey,
   getProgress,
   markArrival,
   markFinished,
@@ -39,6 +40,7 @@ import {
 } from "./store.js";
 import {
   listCaptains,
+  findCaptainByPhone,
   createCaptain,
   subscribeToCaptain,
   updateCaptainSlots,
@@ -513,9 +515,26 @@ function teamText(p) {
   return `Да 👥 ${num}«${escapeHtml(p.teamName || "—")}»${size}`;
 }
 
-/** Получить список всех команд (для выпадающего списка при регистрации) */
+/** Получить список всех команд (для выпадающего списка при регистрации и профиля). */
 app.get("/api/teams", (_req, res) => {
-  const teams = listTeams().map(t => ({ name: t.name, size: t.size }));
+  const participants = readParticipants();
+  const teams = listTeams().map((t) => ({
+    teamNumber: t.number,
+    name: t.name,
+    size: t.size,
+    captainName: t.captainName,
+    participants: participants
+      .filter((p) =>
+        p.teamName
+          ? teamKey(p.teamName) === teamKey(t.name)
+          : Number(p.teamNumber) === Number(t.number)
+      )
+      .map((p) => ({
+        name: p.name,
+        phone: p.phone,
+        hasCar: !!p.hasCar,
+      })),
+  }));
   res.json({ ok: true, teams });
 });
 
@@ -594,9 +613,41 @@ app.post("/api/register", async (req, res) => {
     return res.status(400).json({ ok: false, error: "Введите название команды." });
   }
   const existingTeam = inTeam ? findTeamByName(teamNameClean) : null;
+
+  // Размер команды — свойство самой команды, а не отдельной заявки.
+  // Капитан задаёт его при создании, участник не должен его уменьшать.
   let teamSizeNum = Number(teamSize);
-  if (!Number.isFinite(teamSizeNum) || teamSizeNum < 1) {
-    teamSizeNum = existingTeam ? (existingTeam.size || 1) : 1;
+  if (existingTeam) {
+    teamSizeNum = Math.max(
+      Number(existingTeam.size) || 0,
+      Number.isFinite(teamSizeNum) ? teamSizeNum : 0,
+      1
+    );
+  } else if (!Number.isFinite(teamSizeNum) || teamSizeNum < 1) {
+    teamSizeNum = 1;
+  }
+
+  // Вступление в команду капитана: обновляем занятые слоты в captains.json.
+  // Капитан при своей регистрации сюда не попадает — команды ещё не существует.
+  const existingCaptain =
+    existingTeam && existingTeam.captainPhone
+      ? findCaptainByPhone(existingTeam.captainPhone)
+      : null;
+  if (existingCaptain) {
+    const alreadySubscribed = (existingCaptain.participants || []).some(
+      (p) => normalizePhone(p.phone) === normalizePhone(phone)
+    );
+    if (!alreadySubscribed) {
+      const sub = subscribeToCaptain({
+        captainId: existingCaptain.id,
+        name: name.trim(),
+        phone: phone.trim(),
+        hasCar: !!hasCar,
+      });
+      if (sub.error) {
+        return res.status(400).json({ ok: false, error: sub.error });
+      }
+    }
   }
 
   const carText = hasCar ? "Да 🚗 (на своей машине)" : "Нет 🚶 (без машины)";
@@ -729,13 +780,13 @@ app.post("/api/captains/create", async (req, res) => {
   }
   // Уведомить админов
   try {
-    const free = Math.max(0, result.captain.slots - result.captain.currentParticipants);
+    const free = Math.max(0, result.captain.slots - 1 - result.captain.currentParticipants);
     const totalCaptains = listCaptains().length;
     const text = `👑 <b>НОВЫЙ КАПИТАН</b>\n\n` +
       `👤 <b>Имя:</b> ${escapeHtml(result.captain.name)}\n` +
       `📞 <b>Телефон:</b> ${escapeHtml(result.captain.phone)}\n` +
       `🚘 <b>Машина:</b> ${result.captain.hasCar ? "Да 🚗" : "Нет 🚶"}\n` +
-      `👥 <b>Слотов:</b> ${result.captain.slots} (занято: ${result.captain.currentParticipants}, свободно: ${free})\n` +
+      `👥 <b>Слотов:</b> ${result.captain.slots} (занято: ${result.captain.currentParticipants + 1}, свободно: ${free})\n` +
       `📊 <b>Всего капитанов:</b> ${totalCaptains}\n` +
       `🕒 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}`;
     await fetch(API("sendMessage"), {
@@ -764,12 +815,12 @@ app.post("/api/subscribe-to-captain", async (req, res) => {
   }
   // Уведомить админов о подписке
   try {
-    const free = Math.max(0, result.captain.slots - result.captain.currentParticipants);
+    const free = Math.max(0, result.captain.slots - 1 - result.captain.currentParticipants);
     const text = `✅ <b>ПОДПИСКА НА КАПИТАНА</b>\n\n` +
       `👤 <b>Участник:</b> ${escapeHtml(name)}\n` +
       `📞 <b>Телефон:</b> ${escapeHtml(phone)}\n` +
       `👑 <b>Капитан:</b> ${escapeHtml(result.captain.name)}\n` +
-      `👥 <b>Слоты:</b> ${result.captain.currentParticipants}/${result.captain.slots} (свободно: ${free})\n` +
+      `👥 <b>Слоты:</b> ${result.captain.currentParticipants + 1}/${result.captain.slots} (свободно: ${free})\n` +
       `🚘 <b>Машина:</b> ${hasCar ? "Да 🚗" : "Нет 🚶"}\n` +
       `🕒 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}`;
     await fetch(API("sendMessage"), {
@@ -798,10 +849,10 @@ app.post("/api/admin/update-slots", async (req, res) => {
   }
   // Уведомить админов
   try {
-    const free = Math.max(0, result.captain.slots - result.captain.currentParticipants);
+    const free = Math.max(0, result.captain.slots - 1 - result.captain.currentParticipants);
     const text = `🔧 <b>ОБНОВЛЕНИЕ СЛОТОВ</b>\n\n` +
       `👑 <b>Капитан:</b> ${escapeHtml(result.captain.name)}\n` +
-      `👥 <b>Слоты:</b> ${result.captain.slots} (занято: ${result.captain.currentParticipants}, свободно: ${free})\n` +
+      `👥 <b>Слоты:</b> ${result.captain.slots} (занято: ${result.captain.currentParticipants + 1}, свободно: ${free})\n` +
       `🕒 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}`;
     await fetch(API("sendMessage"), {
       method: "POST",
@@ -854,12 +905,12 @@ app.post("/api/admin/move-user", async (req, res) => {
     }
 
     try {
-      const free = Math.max(0, subResult.captain.slots - subResult.captain.currentParticipants);
+      const free = Math.max(0, subResult.captain.slots - 1 - subResult.captain.currentParticipants);
       const text = `🔄 <b>ПОДПИСКА НА КАПИТАНА</b>\n\n` +
         `👤 <b>Пользователь:</b> ${escapeHtml(userName)}\n` +
         `📞 <b>Телефон:</b> ${escapeHtml(phone)}\n` +
         `👑 <b>В:</b> ${escapeHtml(subResult.captain.name)}\n` +
-        `👥 <b>Слоты:</b> ${subResult.captain.currentParticipants}/${subResult.captain.slots} (свободно: ${free})\n` +
+        `👥 <b>Слоты:</b> ${subResult.captain.currentParticipants + 1}/${subResult.captain.slots} (свободно: ${free})\n` +
         `🕒 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}`;
       await fetch(API("sendMessage"), {
         method: "POST",
@@ -876,13 +927,13 @@ app.post("/api/admin/move-user", async (req, res) => {
   }
   // Уведомить админов
   try {
-    const free = Math.max(0, result.toCaptain.slots - result.toCaptain.currentParticipants);
+    const free = Math.max(0, result.toCaptain.slots - 1 - result.toCaptain.currentParticipants);
     const text = `🔄 <b>ПЕРЕМЕЩЕНИЕ МЕЖДУ КАПИТАНАМИ</b>\n\n` +
       `👤 <b>Пользователь:</b> ${escapeHtml(result.moved.name)}\n` +
       `📞 <b>Телефон:</b> ${escapeHtml(result.moved.phone)}\n` +
       `👑 <b>Из:</b> ${escapeHtml(result.fromCaptain.name)}\n` +
       `👑 <b>В:</b> ${escapeHtml(result.toCaptain.name)}\n` +
-      `👥 <b>Слоты:</b> ${result.toCaptain.currentParticipants}/${result.toCaptain.slots} (свободно: ${free})\n` +
+      `👥 <b>Слоты:</b> ${result.toCaptain.currentParticipants + 1}/${result.toCaptain.slots} (свободно: ${free})\n` +
       `🕒 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}`;
     await fetch(API("sendMessage"), {
       method: "POST",
@@ -910,12 +961,12 @@ app.post("/api/admin/unsubscribe", async (req, res) => {
   }
   // Уведомить админов
   try {
-    const free = Math.max(0, result.captain.slots - result.captain.currentParticipants);
+    const free = Math.max(0, result.captain.slots - 1 - result.captain.currentParticipants);
     const text = `❌ <b>ОТПИСКА ОТ КАПИТАНА</b>\n\n` +
       `👤 <b>Пользователь:</b> ${escapeHtml(result.removed.name)}\n` +
       `📞 <b>Телефон:</b> ${escapeHtml(result.removed.phone)}\n` +
       `👑 <b>Капитан:</b> ${escapeHtml(result.captain.name)}\n` +
-      `👥 <b>Слоты:</b> ${result.captain.currentParticipants}/${result.captain.slots} (свободно: ${free})\n` +
+      `👥 <b>Слоты:</b> ${result.captain.currentParticipants + 1}/${result.captain.slots} (свободно: ${free})\n` +
       `🕒 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" })}`;
     await fetch(API("sendMessage"), {
       method: "POST",

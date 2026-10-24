@@ -71,6 +71,9 @@ export function createCaptain({ name, phone, slots, hasCar }) {
     name: String(name || "").trim(),
     phone: String(phone || "").trim(),
     slots: numSlots,
+    // currentParticipants — только приглашённые участники БЕЗ капитана.
+    // slots считаются «включая капитана», поэтому при расчёте свободных мест
+    // всегда вычитаем одно место под самого капитана.
     currentParticipants: 0,
     participants: [],
     hasCar: !!hasCar,
@@ -99,7 +102,7 @@ export function canSubscribeToCaptain(captainId) {
   const captain = findCaptainById(captainId);
   if (!captain) return { error: "Капитан не найден" };
   if (!captain.active) return { error: "Приём на этот капитан закрыт" };
-  if (captain.currentParticipants >= captain.slots) {
+  if (captain.currentParticipants >= Math.max(0, captain.slots - 1)) {
     return { error: "Места закончились" };
   }
   return { ok: true, captain };
@@ -161,7 +164,7 @@ export function moveUserBetweenCaptains({ fromCaptainId, toCaptainId, phone }) {
     return (p.phone || "").replace(/\D/g, "").slice(-10) === phoneClean;
   });
   if (idx === -1) return { error: "Пользователь не найден в исходной команде" };
-  if (toCaptain.currentParticipants >= toCaptain.slots) {
+  if (toCaptain.currentParticipants >= Math.max(0, toCaptain.slots - 1)) {
     return { error: "У целевого капитана нет свободных мест" };
   }
   const alreadyInTarget = toCaptain.participants.some((p) => {
@@ -184,7 +187,7 @@ export function getCaptainsSummary() {
     phone: c.phone,
     slots: c.slots,
     currentParticipants: c.currentParticipants,
-    availableSlots: c.slots - c.currentParticipants,
+    availableSlots: Math.max(0, c.slots - 1 - c.currentParticipants),
     hasCar: c.hasCar,
     participants: c.participants.map((p) => ({
       name: p.name,

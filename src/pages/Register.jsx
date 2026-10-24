@@ -333,7 +333,7 @@ export default function Register() {
             hasCar,
             hasTeam: true,
             teamName: teamName.trim(),
-            teamSize: 1,
+            teamSize: slotsNum,
           });
           if (resCreate?.teamNumber) {
             setTeamNumberState(resCreate.teamNumber);
