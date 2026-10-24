@@ -120,6 +120,17 @@ export async function fetchStandings() {
   return data;
 }
 
+/** Материалы капитанов с локацией — для админ-дэшборда. */
+export async function fetchSubmissions() {
+  if (!API_URL) throw new Error("Бэкенд не подключён (VITE_API_URL).");
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/submissions`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "Не удалось получить материалы.");
+  }
+  return data;
+}
+
 /* =====================================================================
    КАПИТАНЫ: API функции
    ===================================================================== */

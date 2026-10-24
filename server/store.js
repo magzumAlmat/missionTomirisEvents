@@ -264,13 +264,25 @@ export function listSubmissions() {
   return Array.isArray(list) ? list : [];
 }
 
-export function addSubmission({ teamNumber, teamName, captainName, kind }) {
+export function addSubmission({
+  teamNumber,
+  teamName,
+  captainName,
+  kind,
+  station,
+  location,
+  text,
+}) {
   const list = listSubmissions();
   const entry = {
     teamNumber: Number(teamNumber) || null,
     teamName: teamName || "",
     captainName: captainName || "",
     kind: kind || "video",
+    // Локацию капитан пишет текстом в боте — показываем её в дэшборде.
+    location: String(location || "").trim(),
+    station: station != null && station !== "" ? String(station) : null,
+    text: text != null ? String(text) : "",
     at: new Date().toISOString(),
   };
   list.push(entry);

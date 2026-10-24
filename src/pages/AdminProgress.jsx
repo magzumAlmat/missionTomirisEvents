@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
-import { fetchStandings, deleteTeam, resetQuest, adminMarkArrival, HAS_BACKEND } from "../lib/api.js";
+import { fetchStandings, fetchSubmissions, deleteTeam, resetQuest, adminMarkArrival, HAS_BACKEND } from "../lib/api.js";
 import PasswordGate, { isUnlocked } from "../components/PasswordGate.jsx";
 
 const REFRESH_MS = 15000;
@@ -30,6 +30,19 @@ const CELL_STYLE = {
   empty: { background: "rgba(255,255,255,0.04)", color: "var(--muted)", label: "" },
 };
 
+const KIND_LABEL = {
+  video: "🎬 видео",
+  photo: "📸 фото",
+  text: "💬 текст",
+};
+
+/** Что показать как локацию материала: текст капитана или номер точки. */
+function materialLocationText(m) {
+  if (m.location) return m.location;
+  if (m.station != null && m.station !== "") return `Точка ${m.station}`;
+  return "Локация не указана";
+}
+
 /**
  * Доска прогресса для организаторов: все команды и все точки на одном экране.
  * Обновляется сама раз в 15 секунд — можно оставить открытой на планшете.
@@ -38,6 +51,7 @@ export default function AdminProgress() {
   const navigate = useNavigate();
   const [unlocked, setUnlocked] = useState(isUnlocked);
   const [rows, setRows] = useState([]);
+  const [submissions, setSubmissions] = useState([]);
   const [total, setTotal] = useState(QUEST.stations.length);
   const [updatedAt, setUpdatedAt] = useState(null);
   const [err, setErr] = useState("");
@@ -73,6 +87,9 @@ export default function AdminProgress() {
       await deleteTeam(row.teamNumber);
       const data = await fetchStandings();
       setRows(data.rows || []);
+      setSubmissions((prev) =>
+        prev.filter((s) => Number(s.teamNumber) !== Number(row.teamNumber))
+      );
       setErr("");
     } catch (e) {
       setErr(e.message || "Не удалось удалить команду.");
@@ -107,6 +124,7 @@ export default function AdminProgress() {
       );
       const fresh = await fetchStandings();
       setRows(fresh.rows || []);
+      setSubmissions([]);
       setErr("");
     } catch (e) {
       setErr(e.message || "Не удалось удалить квест.");
@@ -121,12 +139,24 @@ export default function AdminProgress() {
 
     async function load() {
       try {
-        const data = await fetchStandings();
+        const [standingsRes, materialsRes] = await Promise.allSettled([
+          fetchStandings(),
+          fetchSubmissions(),
+        ]);
         if (stop) return;
-        setRows(data.rows || []);
-        setTotal(data.total || QUEST.stations.length);
-        setUpdatedAt(new Date());
-        setErr("");
+
+        if (standingsRes.status === "fulfilled") {
+          setRows(standingsRes.value.rows || []);
+          setTotal(standingsRes.value.total || QUEST.stations.length);
+          setUpdatedAt(new Date());
+          setErr("");
+        } else {
+          setErr(standingsRes.reason?.message || "Не удалось получить данные.");
+        }
+
+        if (materialsRes.status === "fulfilled") {
+          setSubmissions(materialsRes.value.submissions || []);
+        }
       } catch (e) {
         if (!stop) setErr(e.message || "Не удалось получить данные.");
       }
@@ -151,6 +181,15 @@ export default function AdminProgress() {
       Object.keys(r.hints || {}).length
   );
   const finished = rows.filter((r) => r.finishedAt);
+
+  // Последний материал команды — показываем локацию прямо в строке таблицы.
+  // submissions уже отсортированы сервером: сначала новые.
+  const latestByTeam = new Map();
+  for (const m of submissions) {
+    if (m.teamNumber && !latestByTeam.has(Number(m.teamNumber))) {
+      latestByTeam.set(Number(m.teamNumber), m);
+    }
+  }
 
   return (
     <div className="card admin board-card">
@@ -216,6 +255,11 @@ export default function AdminProgress() {
                       <>
                         <b>Одиночка |</b> {r.teamName || "без названия"}
                       </>
+                    )}
+                    {r.teamNumber && latestByTeam.get(Number(r.teamNumber)) && (
+                      <div className="muted tiny" style={{ marginTop: 4, whiteSpace: "normal" }}>
+                        📍 {materialLocationText(latestByTeam.get(Number(r.teamNumber)))}
+                      </div>
                     )}
                   </td>
                   {QUEST.stations.map((s) => {
@@ -310,6 +354,41 @@ export default function AdminProgress() {
           </table>
         </div>
       )}
+
+      <div className="materials-panel">
+        <div className="materials-head">
+          <h3>📎 Материалы капитанов</h3>
+          <span className="muted tiny">
+            {submissions.length > 0 ? `${submissions.length} шт.` : "пока нет"}
+          </span>
+        </div>
+        {submissions.length === 0 ? (
+          <p className="muted tiny" style={{ margin: 0 }}>
+            Как только капитан пришлёт видео и напишет локацию текстом, она появится здесь.
+          </p>
+        ) : (
+          <div className="materials-list">
+            {submissions.map((m, i) => (
+              <div
+                className="material-item"
+                key={`${m.at || ""}-${m.teamNumber || ""}-${i}`}
+              >
+                <div className="material-top">
+                  <b>
+                    {m.teamNumber ? `№${m.teamNumber}` : "Одиночка"}
+                    {m.teamName ? ` · ${m.teamName}` : ""}
+                  </b>
+                  <span className="muted tiny">
+                    {KIND_LABEL[m.kind] || m.kind || "материал"} · {time(m.at)}
+                  </span>
+                </div>
+                <div className="material-location">📍 {materialLocationText(m)}</div>
+                {m.text && <div className="material-text">📝 {m.text}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="mt" style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
         <button className="btn ghost no-print" onClick={() => navigate("/admin")}>

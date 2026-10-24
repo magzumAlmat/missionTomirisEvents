@@ -1230,3 +1230,59 @@ table.board tr:last-child td {
   line-height: 1.2;
   border-radius: 6px;
 }
+
+/* Материалы капитанов в админ-дэшборде */
+.materials-panel {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.materials-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.materials-head h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.materials-list {
+  display: grid;
+  gap: 10px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.material-item {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.material-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.material-location {
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #d7fff6;
+  line-height: 1.45;
+}
+.material-text {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+@media (max-width: 600px) {
+  .materials-list { max-height: none; }
+}

@@ -1203,6 +1203,17 @@ app.get("/api/standings", (_req, res) => {
   res.json({ ok: true, total: TOTAL_STATIONS, rows: standings() });
 });
 
+/** Материалы капитанов вместе с текстом локации — для админ-дэшборда. */
+app.get("/api/submissions", (req, res) => {
+  const { teamNumber } = req.query || {};
+  let list = listSubmissions();
+  if (teamNumber) {
+    list = list.filter((s) => Number(s.teamNumber) === Number(teamNumber));
+  }
+  list = [...list].sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+  res.json({ ok: true, submissions: list });
+});
+
 const BOT_OFFSET_FILE = path.join(__dirname, "botOffset.json");
 
 function readBotOffset() {

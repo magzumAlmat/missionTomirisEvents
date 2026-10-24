@@ -7,7 +7,8 @@
  *     автоматически, если капитан пришлёт свой номер — он ищется в
  *     participants.json среди зарегистрированных на сайте).
  *  3. Любое присланное видео (обычное, кружок или файл) бот пересылает в
- *     общую группу и подписывает: что за команда и как зовут капитана.
+ *     общую группу и подписывает: команда, капитан и локация, которую капитан
+ *     написал текстом (она же видна в админ-дэшборде).
  *
  * Запуск: вместе с основным сервером (`npm run server`) или отдельно:
  *         node server/videoBot.js
@@ -230,11 +231,12 @@ function buildCaptainKeyboard() {
 
 const HELP_TEXT =
   `🎬 <b>Бот для видео капитанов</b>\n\n` +
-  `Пришлите сюда видео (или фото) с точки — я передам его организаторам и ` +
+  `Пришлите сюда видео (или фото) с локации — я передам его организаторам и ` +
   `подпишу, от какой оно команды.\n\n` +
-  `💡 <b>Совет:</b> напишите в подписи к видео номер точки ` +
-  `(например, «точка 3») — организаторам будет проще проверить материалы.\n` +
-  `Если в подписи нет номера, я спрошу его отдельно — можно пропустить.\n\n` +
+  `💡 <b>Совет:</b> напишите в подписи к видео локацию — адрес или название ` +
+  `места (например, «Театр оперы и балета»). Этот текст увидит организатор ` +
+  `в дэшборде.\n` +
+  `Если подписи нет, я попрошу написать локацию отдельным сообщением.\n\n` +
   `<b>Команды:</b>\n` +
   `• /start — начать / назвать номер команды\n` +
   `• /reset — изменить команду или имя\n` +
@@ -298,8 +300,8 @@ function finishRegistration(chatId, senders) {
       `👥 <b>Команда:</b> ${num}${escapeHtml(s.teamName)}${teamSize}\n` +
       `👤 <b>Капитан:</b> ${escapeHtml(s.captainName)}${phoneLine}${countLine}\n\n` +
       `Теперь просто присылайте видео — я передам их организаторам.\n` +
-      `💡 Напишите в подписи к видео номер точки (например, «точка 3»).\n` +
-      `Если в подписи нет номера — я спрошу отдельно, можно пропустить.\n` +
+      `💡 Напишите в подписи к видео локацию — адрес или название места.\n` +
+      `Если подписи нет, я попрошу написать её отдельно.\n` +
       `Если что-то указано неверно — команда /reset.`,
     { reply_markup: HIDE_KEYBOARD }
   );
@@ -320,14 +322,25 @@ function mediaKind(msg) {
   return null;
 }
 
-async function forwardVideo(msg, sender, kind, stationNumOverride = null) {
+/**
+ * Переслать материал в группу организаторов.
+ * options.location — текст локации, который капитан написал в боте или в подписи.
+ * options.station — номер точки, если его удалось распознать (необязательно).
+ */
+async function forwardVideo(msg, sender, kind, { station = null, location = "" } = {}) {
   const { CHAT_ID } = getEnv();
   const time = new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" });
-  const caption = msg.caption ? `\n💬 <b>Подпись:</b> ${escapeHtml(msg.caption)}` : "";
+  const locationText = String(location || msg.caption || "").trim();
+  // Подпись показываем отдельно только если она не была использована как локация.
+  const caption =
+    msg.caption && msg.caption.trim() !== locationText
+      ? `\n💬 <b>Подпись:</b> ${escapeHtml(msg.caption)}`
+      : "";
   const title = kind === "photo" ? "📸 <b>ФОТО ОТ КОМАНДЫ</b>" : "🎬 <b>ВИДЕО ОТ КОМАНДЫ</b>";
 
-  // Определяем номер точки: переданный явно, либо из подписи, либо из прогресса команды на сайте
-  const st = stationNumOverride || extractStation(msg.caption);
+  // Номер точки — из явного значения или из текста локации; если не нашли,
+  // formatStationLabel попробует взять последнюю точку из прогресса команды.
+  const st = station != null && station !== "" ? station : extractStation(locationText);
   const stationLabel = formatStationLabel(st, sender.teamNumber);
 
   // Сколько материалов уже прислала эта команда.
@@ -343,7 +356,8 @@ async function forwardVideo(msg, sender, kind, stationNumOverride = null) {
     `👥 <b>Команда:</b> ${num}${escapeHtml(sender.teamName)}${teamSize}\n` +
     `👤 <b>Капитан:</b> ${escapeHtml(sender.captainName)}\n` +
     (sender.phone ? `📞 <b>Телефон:</b> ${escapeHtml(sender.phone)}\n` : "") +
-    `📍 <b>Точка:</b> ${stationLabel}\n` +
+    `📍 <b>Локация:</b> ${escapeHtml(locationText || "не указана")}\n` +
+    `🏷 <b>Точка:</b> ${stationLabel}\n` +
     `📎 <b>Материал №:</b> ${submissionNum} от этой команды\n` +
     `🕒 <b>Время:</b> ${time}` +
     caption;
@@ -366,8 +380,9 @@ async function forwardVideo(msg, sender, kind, stationNumOverride = null) {
         captainName: sender.captainName,
         kind,
         station: st || getTeamCurrentStation(sender.teamNumber) || null,
+        location: locationText,
       });
-      return { ok: true };
+      return { ok: true, location: locationText, stationLabel };
     }
   }
 
@@ -392,8 +407,9 @@ async function forwardVideo(msg, sender, kind, stationNumOverride = null) {
     captainName: sender.captainName,
     kind,
     station: st || getTeamCurrentStation(sender.teamNumber) || null,
+    location: locationText,
   });
-  return { ok: true };
+  return { ok: true, location: locationText, stationLabel };
 }
 
 /* ---------- обработка callback query (inline-кнопки) ---------- */
@@ -449,28 +465,35 @@ async function handleMessage(msg) {
   if (text.startsWith("/help")) return send(chatId, HELP_TEXT);
   if (text.startsWith("/reset")) return startRegistration(chatId, senders);
 
-  // --- ответ на вопрос «с какой точки?» (после получения медиа) ---
-  if (sender && sender.step === "ask_station" && sender.pendingMsg) {
+  // --- ответ на вопрос «с какой локации?» (после получения медиа) ---
+  if (
+    sender &&
+    (sender.step === "ask_station" || sender.step === "ask_location") &&
+    sender.pendingMsg
+  ) {
     const pendingMsg = sender.pendingMsg;
     const pendingKind = sender.pendingKind || "video";
     const what = pendingKind === "photo" ? "Фото" : "Видео";
     const { CHAT_ID } = getEnv();
 
-    // Пропуск — отправляем без явного номера (точка возьмётся из прогресса, если есть).
-    if (text.toLowerCase() === "пропустить" || text.toLowerCase() === "skip") {
-      senders[chatId] = { ...(sender || {}), step: "ready" };
-      delete senders[chatId].pendingMsg;
-      delete senders[chatId].pendingKind;
-      saveSenders(senders);
-      if (!CHAT_ID) return send(chatId, `⚠️ Не настроена группа для видео.`);
-      const result = await forwardVideo(pendingMsg, sender, pendingKind, null);
-      if (!result.ok) return send(chatId, `❌ Не получилось отправить: ${escapeHtml(result.error)}`);
-      const stLabel = formatStationLabel(null, sender.teamNumber);
-      return send(chatId, `✅ ${what} отправлено организаторам (Точка: ${stLabel}). Спасибо!`);
+    if (!text) {
+      return send(
+        chatId,
+        `📍 Напишите локацию текстом — адрес или название места, где снят материал.`
+      );
     }
 
-    const foundStation = extractStation(text);
-    const stationToUse = foundStation || text;
+    // Локацию просим именно текстом: она попадёт и в группу, и в дэшборд.
+    if (text.toLowerCase() === "пропустить" || text.toLowerCase() === "skip") {
+      return send(
+        chatId,
+        `📍 Пожалуйста, напишите локацию текстом (адрес или название места) — ` +
+          `организаторам нужно понимать, где снят материал.`
+      );
+    }
+
+    const locationText = text;
+    const station = extractStation(text);
 
     senders[chatId] = { ...(sender || {}), step: "ready" };
     delete senders[chatId].pendingMsg;
@@ -478,12 +501,17 @@ async function handleMessage(msg) {
     saveSenders(senders);
 
     if (!CHAT_ID) return send(chatId, `⚠️ Не настроена группа для видео.`);
-    const result = await forwardVideo(pendingMsg, sender, pendingKind, stationToUse);
+    const result = await forwardVideo(pendingMsg, sender, pendingKind, {
+      station,
+      location: locationText,
+    });
     if (!result.ok) {
       return send(chatId, `❌ Не получилось отправить: ${escapeHtml(result.error)}`);
     }
-    const stLabel = formatStationLabel(stationToUse, sender.teamNumber);
-    return send(chatId, `✅ ${what} отправлено организаторам (Точка: ${stLabel}). Спасибо!`);
+    return send(
+      chatId,
+      `✅ ${what} отправлено организаторам (Локация: ${escapeHtml(locationText)}). Спасибо!`
+    );
   }
 
   // --- номер телефона через кнопку «Отправить мой номер» ---
@@ -542,28 +570,43 @@ async function handleMessage(msg) {
       return send(chatId, `⚠️ Не настроена группа для видео (TELEGRAM_VIDEO_CHAT_ID).`);
     }
 
-    // Если в подписи к медиа уже есть номер точки — отправляем сразу!
-    const captionStation = extractStation(msg.caption);
-    if (captionStation) {
-      const result = await forwardVideo(msg, sender, kind, captionStation);
+    // Если в подписи уже есть текст — считаем его локацией и отправляем сразу.
+    const captionText = String(msg.caption || "").trim();
+    if (captionText) {
+      const result = await forwardVideo(msg, sender, kind, {
+        station: extractStation(captionText),
+        location: captionText,
+      });
       if (!result.ok) {
         console.error("videoBot: не удалось отправить материал в группу:", result.error);
         return send(chatId, `❌ Не получилось отправить организаторам: ${escapeHtml(result.error)}`);
       }
-      const stLabel = formatStationLabel(captionStation, sender.teamNumber);
-      return send(chatId, `✅ ${what} успешно отправлено организаторам (Точка: ${stLabel})! Спасибо!`);
+      return send(
+        chatId,
+        `✅ ${what} успешно отправлено организаторам (Локация: ${escapeHtml(captionText)})! Спасибо!`
+      );
     }
 
-    // Если точки в подписи нет — сохраняем и спрашиваем у капитана
-    senders[chatId] = { ...(sender || {}), step: "ask_station", pendingMsg: msg, pendingKind: kind };
+    // Подписи нет — сохраняем медиа и просим написать локацию текстом.
+    senders[chatId] = {
+      ...(sender || {}),
+      step: "ask_location",
+      pendingMsg: msg,
+      pendingKind: kind,
+    };
     saveSenders(senders);
 
     const currentSid = getTeamCurrentStation(sender.teamNumber);
-    const hintText = currentSid != null ? ` (по игре ваша команда на точке ${currentSid})` : "";
+    const hintText =
+      currentSid != null
+        ? `\nЕсли не помните название — подойдёт и номер точки (сейчас по игре у вас точка ${currentSid}).`
+        : "";
     return send(
       chatId,
-      `📍 <b>С какой точки этот материал?</b>\n` +
-        `Напишите номер точки (например, «2»)${hintText} или слово «пропустить».`,
+      `📍 <b>С какой локации этот материал?</b>\n` +
+        `Напишите адрес или название места текстом — например, «Театр оперы и балета» ` +
+        `или «Кабанбай батыра, 83». Этот текст увидит организатор в дэшборде.` +
+        hintText,
       { reply_markup: HIDE_KEYBOARD }
     );
   }
