@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
 import { useProgress } from "../useProgress.js";
@@ -30,6 +30,24 @@ const MIRROR_BOT = "https://t.me/thisMirrorbot";
 
 const phoneDigits = (v) => String(v || "").replace(/\D/g, "").slice(-10);
 
+/** Кэш промежуточных состояний точки в localStorage — переживает обновление страницы. */
+const STATION_CACHE_KEY = "event_tomiris_station_cache";
+
+function readStationCache(stationId) {
+  try {
+    const all = JSON.parse(localStorage.getItem(STATION_CACHE_KEY) || "{}");
+    return all[String(stationId)] || {};
+  } catch { return {}; }
+}
+
+function writeStationCache(stationId, patch) {
+  try {
+    const all = JSON.parse(localStorage.getItem(STATION_CACHE_KEY) || "{}");
+    all[String(stationId)] = { ...(all[String(stationId)] || {}), ...patch };
+    localStorage.setItem(STATION_CACHE_KEY, JSON.stringify(all));
+  } catch { /* ignore */ }
+}
+
 export default function Station() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -47,15 +65,27 @@ export default function Station() {
   const phoneOk = isValidPhone(phone);
   const hasIdentity = phoneOk || Boolean(teamNo);
 
-  // Состояние сценария. Все флаги приходят с сервера и переживают перезагрузку.
-  const [riddleSolved, setRiddleSolved] = useState(false); // «Я разгадал(а)» нажато
-  const [arrived, setArrived] = useState(false); // «Подтвердить прибытие» нажато
-  const [addressRevealed, setAddressRevealed] = useState(false); // открыт адрес (Путь Б)
-  const [taskComplete, setTaskComplete] = useState(false); // задание завершено
+  // Состояние сценария. Кэшируется в localStorage и восстанавливается с сервера.
+  const cached = station ? readStationCache(station.id) : {};
+  const [riddleSolved, setRiddleSolvedRaw] = useState(!!cached.riddleSolved);
+  const [arrived, setArrivedRaw] = useState(!!cached.arrived);
+  const [addressRevealed, setAddressRevealedRaw] = useState(!!cached.addressRevealed);
+  const [taskComplete, setTaskCompleteRaw] = useState(() => {
+    if (cached.taskComplete) return true;
+    return station ? isSolved(station.id) : false;
+  });
 
-  const [hint, setHint] = useState("");
-  const [hintReceived, setHintReceived] = useState(false);
+  const [hint, setHint] = useState(cached.hint || "");
+  const [hintReceived, setHintReceivedRaw] = useState(!!cached.hintReceived);
   const [hintLoading, setHintLoading] = useState(false);
+
+  // Обёртки для сеттеров — пишут в localStorage при изменении.
+  const curStationId = station?.id;
+  const setRiddleSolved = useCallback((v) => { setRiddleSolvedRaw(v); if (curStationId != null) writeStationCache(curStationId, { riddleSolved: v }); }, [curStationId]);
+  const setArrived = useCallback((v) => { setArrivedRaw(v); if (curStationId != null) writeStationCache(curStationId, { arrived: v }); }, [curStationId]);
+  const setAddressRevealed = useCallback((v) => { setAddressRevealedRaw(v); if (curStationId != null) writeStationCache(curStationId, { addressRevealed: v }); }, [curStationId]);
+  const setTaskComplete = useCallback((v) => { setTaskCompleteRaw(v); if (curStationId != null) writeStationCache(curStationId, { taskComplete: v }); }, [curStationId]);
+  const setHintReceived = useCallback((v) => { setHintReceivedRaw(v); if (curStationId != null) writeStationCache(curStationId, { hintReceived: v }); }, [curStationId]);
 
   const [solvedSending, setSolvedSending] = useState(false);
   const [arriveSending, setArriveSending] = useState(false);
@@ -75,14 +105,18 @@ export default function Station() {
   // Действия на точках разрешены только капитану команды.
   const [captainStatus, setCaptainStatus] = useState("checking");
 
-  // При переходе на другую точку сбрасываем локальное состояние.
+  // При переходе на другую точку — восстанавливаем из кэша.
   useEffect(() => {
-    setRiddleSolved(false);
-    setArrived(false);
-    setAddressRevealed(false);
-    setTaskComplete(station ? isSolved(station.id) : false);
-    setHint("");
-    setHintReceived(false);
+    const c = station ? readStationCache(station.id) : {};
+    setRiddleSolvedRaw(!!c.riddleSolved);
+    setArrivedRaw(!!c.arrived);
+    setAddressRevealedRaw(!!c.addressRevealed);
+    setTaskCompleteRaw(() => {
+      if (c.taskComplete) return true;
+      return station ? isSolved(station.id) : false;
+    });
+    setHint(c.hint || "");
+    setHintReceivedRaw(!!c.hintReceived);
     setHintLoading(false);
     setSolvedSending(false);
     setArriveSending(false);
@@ -160,6 +194,11 @@ export default function Station() {
         if (cancelled) return;
         // Синхронизируем локальный прогресс — от него зависит «Продолжить квест».
         applyServer(data.stations, data.finishedAt);
+        if (data.stations) {
+          for (const stId of Object.keys(data.stations)) {
+            writeStationCache(stId, { taskComplete: true, arrived: true, riddleSolved: true });
+          }
+        }
 
         const sid = String(station.id);
         if (data.solved?.[sid]) setRiddleSolved(true);
@@ -262,6 +301,7 @@ export default function Station() {
         ...teamPayload(),
       });
       setHint(station.hint || "Подсказка отсутствует.");
+      if (curStationId != null) writeStationCache(curStationId, { hint: station.hint || "Подсказка отсутствует." });
       setHintReceived(true);
     } catch (e) {
       setErr(e.message || "Не удалось получить подсказку.");
@@ -340,6 +380,9 @@ export default function Station() {
       setTaskComplete(true);
       setArrived(true); // в Пути Б сервер фиксирует прибытие в этот момент
       solve(station.id);
+      if (curStationId != null) {
+        writeStationCache(curStationId, { taskComplete: true, arrived: true, riddleSolved: true });
+      }
 
       const hasHistory = Boolean(station.history && station.history.trim());
 

@@ -56,8 +56,20 @@ export default function Start() {
       {HAS_BACKEND && null}
 
       <div className="btn-row">
+        {started && (
+          <button
+            className="btn green"
+            style={{ marginBottom: 4 }}
+            onClick={() => {
+              const nextStation = QUEST.stations[solvedCount] || QUEST.stations[0];
+              navigate(`/s/${nextStation.code || nextStation.id}`);
+            }}
+          >
+            🚀 Продолжить квест (Локация {QUEST.stations[solvedCount]?.id ?? solvedCount})
+          </button>
+        )}
         {phone ? (
-          <button className="btn green" onClick={() => navigate("/profile")}>
+          <button className={started ? "btn ghost" : "btn green"} onClick={() => navigate("/profile")}>
             👤 Мой профиль и статус квеста
           </button>
         ) : (

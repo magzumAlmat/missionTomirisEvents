@@ -357,7 +357,7 @@ async function forwardVideo(msg, sender, kind, { station = null, location = "" }
     `👤 <b>Капитан:</b> ${escapeHtml(sender.captainName)}\n` +
     (sender.phone ? `📞 <b>Телефон:</b> ${escapeHtml(sender.phone)}\n` : "") +
     `📍 <b>Локация:</b> ${escapeHtml(locationText || "не указана")}\n` +
-    `🏷 <b>Точка:</b> ${stationLabel}\n` +
+    `🏷 <b>Локация №:</b> ${stationLabel}\n` +
     `📎 <b>Материал №:</b> ${submissionNum} от этой команды\n` +
     `🕒 <b>Время:</b> ${time}` +
     caption;
@@ -599,7 +599,7 @@ async function handleMessage(msg) {
     const currentSid = getTeamCurrentStation(sender.teamNumber);
     const hintText =
       currentSid != null
-        ? `\nЕсли не помните название — подойдёт и номер точки (сейчас по игре у вас точка ${currentSid}).`
+        ? `\nЕсли не помните название — подойдёт и номер локации (сейчас по игре у вас локация ${currentSid}).`
         : "";
     return send(
       chatId,
@@ -687,7 +687,7 @@ async function handleMessage(msg) {
         `👥 <b>Команда:</b> ${num}${escapeHtml(sender.teamName)}\n` +
         `👤 <b>Капитан:</b> ${escapeHtml(sender.captainName)}\n` +
         (sender.phone ? `📞 <b>Телефон:</b> ${escapeHtml(sender.phone)}\n` : "") +
-        `📍 <b>Точка:</b> ${stationText}\n` +
+        `📍 <b>Локация:</b> ${stationText}\n` +
         `📎 <b>Материал №:</b> ${submissionNum} от этой команды\n` +
         `🕒 <b>Время:</b> ${time}\n\n` +
         `📝 <b>Текст:</b>\n${escapeHtml(text)}`;

@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { getPhone } from "../lib/phone.js";
-import { getName, getTeam, getTeamNumber } from "../lib/team.js";
+import { getName, setName, getTeam, setTeam, getTeamNumber, setTeamNumber } from "../lib/team.js";
 import { fetchTeams, fetchCaptains, fetchProgress, HAS_BACKEND } from "../lib/api.js";
 import { QUEST } from "../questConfig.js";
 import { useProgress } from "../useProgress.js";
 import { useGameStatus } from "../useGameStatus.js";
 import CountdownTimer from "../components/CountdownTimer.jsx";
+import Modal from "../components/Modal.jsx";
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -20,6 +21,7 @@ export default function Profile() {
     isCaptain: false,
   });
   const [teammates, setTeammates] = useState([]);
+  const [selectedHistoryStation, setSelectedHistoryStation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -67,8 +69,22 @@ export default function Profile() {
     let cancelled = false;
     fetchProgress({ teamNumber, phone })
       .then((data) => {
-        if (!cancelled && data.stations) {
-          applyServer(data.stations, data.finishedAt);
+        if (!cancelled && data) {
+          if (data.stations) {
+            applyServer(data.stations, data.finishedAt);
+          }
+          if (data.teamNumber && !getTeamNumber()) {
+            setTeamNumber(data.teamNumber);
+            setProfile(prev => ({ ...prev, teamNumber: data.teamNumber }));
+          }
+          if (data.teamName && !getTeam()) {
+            setTeam(data.teamName);
+            setProfile(prev => ({ ...prev, teamName: data.teamName }));
+          }
+          if (data.userName && !getName()) {
+            setName(data.userName);
+            setProfile(prev => ({ ...prev, name: data.userName }));
+          }
         }
       })
       .catch(() => {
@@ -97,8 +113,9 @@ export default function Profile() {
   }
 
   return (
-    <div className="card">
-      <div className="eyebrow">Мой профиль</div>
+    <>
+      <div className="card">
+        <div className="eyebrow">Мой профиль</div>
       <h2 style={{ marginBottom: 8 }}>{profile.name || "Участник"}</h2>
 
       <div className="reveal" style={{ marginTop: 20 }}>
@@ -232,21 +249,96 @@ export default function Profile() {
             );
           }
 
-          return (
-            <button
-              className="btn green mt"
-              style={{ width: "100%", marginTop: 32 }}
-              onClick={() => {
-                navigate(`/s/${nextStation?.code || nextStation?.id}`);
-              }}
+              return (
+                <button
+                  className="btn green mt"
+                  style={{ width: "100%", marginTop: 32 }}
+                  onClick={() => {
+                    navigate(`/s/${nextStation?.code || nextStation?.id}`);
+                  }}
+                >
+                  {solvedCount === 0
+                    ? "🚀 Начать квест (Точка 0)"
+                    : `🚀 Продолжить квест (Точка ${nextStation?.id ?? solvedCount})`}
+                </button>
+              );
+            })()}
+
+            {/* Список пройденных локаций и история */}
+            {solvedCount > 0 && (
+              <div style={{ marginTop: 28, paddingTop: 18, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+                <h3 style={{ fontSize: 16, marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span>📍 Пройденные локации:</span>
+                  <span style={{ fontSize: 13, color: "var(--ok)", fontWeight: 700 }}>
+                    {solvedCount} из {QUEST.stations.length}
+                  </span>
+                </h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {QUEST.stations.slice(0, solvedCount).map((st) => (
+                    <div
+                      key={st.id}
+                      style={{
+                        padding: "12px 14px",
+                        background: "rgba(255, 255, 255, 0.04)",
+                        border: "1px solid rgba(76, 217, 100, 0.25)",
+                        borderRadius: 12,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontWeight: 700, fontSize: 14 }}>
+                          ✓ Локация {st.id}. {st.name}
+                        </span>
+                        {st.history && (
+                          <button
+                            className="btn ghost small"
+                            style={{ width: "auto", margin: 0, padding: "4px 10px", fontSize: 12 }}
+                            onClick={() => setSelectedHistoryStation(st)}
+                          >
+                            📖 Справка
+                          </button>
+                        )}
+                      </div>
+                      {st.history && (
+                        <div
+                          className="muted tiny"
+                          style={{
+                            lineHeight: 1.4,
+                            margin: 0,
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                          }}
+                        >
+                          {st.history}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {selectedHistoryStation && (
+          <Modal onClose={() => setSelectedHistoryStation(null)}>
+            <div className="eyebrow">Историческая справка · Локация {selectedHistoryStation.id}</div>
+            <h3 style={{ marginBottom: 12 }}>{selectedHistoryStation.name}</h3>
+            <div
+              className="modal-history"
+              style={{ fontSize: 14, lineHeight: 1.6, color: "rgba(255,255,255,0.9)", whiteSpace: "pre-line" }}
             >
-              {solvedCount === 0
-                ? "🚀 Начать квест (Точка 0)"
-                : `🚀 Продолжить квест (Точка ${nextStation?.id ?? solvedCount})`}
+              {selectedHistoryStation.history}
+            </div>
+            <button className="btn green mt" onClick={() => setSelectedHistoryStation(null)}>
+              Закрыть
             </button>
-          );
-        })()}
-      </div>
-    </div>
-  );
-}
+          </Modal>
+        )}
+      </>
+    );
+  }

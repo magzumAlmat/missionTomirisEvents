@@ -167,8 +167,8 @@ function buildMessage({ event, stationId, stationName, team, phone, teamNumber, 
   const who = parts.length ? parts.join("\n") : "👤 Участник";
 
   const point = stationName
-    ? `точку ${escapeHtml(String(stationId))} · ${escapeHtml(stationName)}`
-    : `точку ${escapeHtml(String(stationId))}`;
+    ? `локацию ${escapeHtml(String(stationId))} · ${escapeHtml(stationName)}`
+    : `локацию ${escapeHtml(String(stationId))}`;
   const time = new Date().toLocaleString("ru-RU", { timeZone: "Asia/Almaty" });
 
   let head, verb;
@@ -206,21 +206,21 @@ function buildMessage({ event, stationId, stationName, team, phone, teamNumber, 
     }
   }
 
-  // Время на точке (прибытие → сейчас) — видно, сколько команда думала.
+  // Время на локации (прибытие → сейчас) — видно, сколько команда думала.
   if (progressEntry && event !== "arrived") {
     const sid = String(stationId);
     const arrivalAt = progressEntry.arrivals?.[sid]?.at || null;
     if (arrivalAt) {
       const elapsed = durationText(arrivalAt, new Date().toISOString());
-      if (elapsed !== "—") msg += `⏱ <b>Время на точке:</b> ${elapsed}\n`;
+      if (elapsed !== "—") msg += `⏱ <b>Время на локации:</b> ${elapsed}\n`;
     }
   }
 
-  // Текущий прогресс: сколько точек уже взято.
+  // Текущий прогресс: сколько локаций уже пройдено.
   if (progressEntry) {
     const solved = Object.keys(progressEntry.stations || {}).length;
     if (solved > 0) {
-      msg += `🧩 <b>Точек взято:</b> ${solved} из ${TOTAL_STATIONS}\n`;
+      msg += `🧩 <b>Пройдено локаций:</b> ${solved} из ${TOTAL_STATIONS}\n`;
     }
     // Следующая точка (если ещё не финиш).
     const nextId = Number(stationId) + 1;
@@ -713,8 +713,7 @@ app.post("/api/register", async (req, res) => {
   const teamMembersAfter = teamMembersBefore + 1;
 
   const teamLine = team
-    ? `👥 <b>Команда:</b> №${team.number} «${escapeHtml(team.name)}» (${newEntry.teamSize} чел.)\n` +
-      `   👤 В команде сейчас: <b>${teamMembersAfter}</b> чел.\n`
+    ? `👥 <b>Команда:</b> №${team.number} «${escapeHtml(team.name)}» (${newEntry.teamSize} чел.)\n`
     : `👥 <b>Команда:</b> Нет 🙋 (без команды)\n`;
 
   const text =
@@ -1256,9 +1255,24 @@ app.post("/api/solve", async (req, res) => {
  * query: ?teamNumber=7 или ?phone=+7700...
  */
 app.get("/api/progress", (req, res) => {
-  const { teamNumber, phone } = req.query || {};
-  const team = teamNumber ? findTeamByNumber(teamNumber) : null;
-  const key = progressKey({ teamNumber: team ? team.number : null, phone });
+  let { teamNumber, phone } = req.query || {};
+  let participant = null;
+  if (phone) {
+    const phoneNorm = String(phone).replace(/\D/g, "").slice(-10);
+    const parts = readParticipants();
+    participant = parts.find((p) => String(p.phone || "").replace(/\D/g, "").slice(-10) === phoneNorm);
+    if (participant && !teamNumber && participant.teamNumber) {
+      teamNumber = participant.teamNumber;
+    }
+  }
+
+  let team = teamNumber ? findTeamByNumber(teamNumber) : null;
+  if (!team && phone) {
+    team = findTeamByCaptainPhone(phone);
+    if (team) teamNumber = team.number;
+  }
+
+  const key = progressKey({ teamNumber: team ? team.number : (teamNumber || null), phone });
   if (!key) {
     return res.status(400).json({ ok: false, error: "Нужен номер команды или телефон." });
   }
@@ -1266,8 +1280,10 @@ app.get("/api/progress", (req, res) => {
   res.json({
     ok: true,
     total: TOTAL_STATIONS,
-    teamNumber: team ? team.number : null,
-    teamName: team ? team.name : entry?.teamName || "",
+    teamNumber: team ? team.number : (participant?.teamNumber || null),
+    teamName: team ? team.name : (participant?.teamName || entry?.teamName || ""),
+    userName: participant?.name || "",
+    captainName: team?.captainName || "",
     stations: entry?.stations || {},
     arrivals: entry?.arrivals || {},
     hints: entry?.hints || {},

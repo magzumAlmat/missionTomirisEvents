@@ -84,13 +84,13 @@ export function buildParticipantsListText(participants, { groups, loners }, stan
       team.captainPhone || "—"
     )}</code>\n`;
 
-    // Прогресс по точкам (если квест уже идёт).
+    // Прогресс по локациям (если квест уже идёт).
     const prog = team.number ? progressByTeam.get(team.number) : null;
     if (prog && prog.solved > 0) {
       const status = prog.finishedAt
         ? `🏁 финиш в ${time(prog.finishedAt)}`
         : `🏃 в процессе (последняя: ${time(prog.lastAt)})`;
-      msg += `   🧩 <b>Точек: ${prog.solved}</b> · ${status}\n`;
+      msg += `   🧩 <b>Пройдено: ${prog.solved}</b> · ${status}\n`;
     }
 
     if (members.length === 0) {
@@ -130,9 +130,9 @@ export function buildParticipantsListText(participants, { groups, loners }, stan
  * по сумме баллов, затем по времени финиша.
  *
  * Показывает:
- *  - сумму баллов и число взятых точек
+ *  - сумму баллов и число взятых локаций
  *  - общее время квеста (старт → финиш)
- *  - время на каждой точке (прибытие → решение)
+ *  - время на каждой локации (прибытие → решение)
  *  - статус «в процессе» / «финиш»
  */
 export function buildStandingsText(rows, total) {
@@ -142,14 +142,14 @@ export function buildStandingsText(rows, total) {
 
   const finishedCount = rows.filter((r) => r.finishedAt).length;
 
-  let msg = `🏁 <b>ТАБЛИЦА КВЕСТА</b> (точек всего: ${total})\n`;
+  let msg = `🏁 <b>ТАБЛИЦА КВЕСТА</b> (всего локаций: ${total})\n`;
   if (finishedCount) msg += `🏆 Финишировало: ${finishedCount} из ${rows.length}\n`;
   msg += `\n`;
 
   rows.forEach((r, i) => {
     const place = r.finishedAt ? `🏆 ${i + 1}.` : `${i + 1}.`;
     msg += `${place} <b>№${r.teamNumber || "—"} ${escapeHtml(r.teamName || "без названия")}</b>\n`;
-    msg += `   ⭐ Баллы: <b>${r.totalScore ?? 0}</b> · 🧩 Точек: <b>${r.solved}</b>/${total}`;
+    msg += `   ⭐ Баллы: <b>${r.totalScore ?? 0}</b> · 🧩 Пройдено: <b>${r.solved}</b>/${total}`;
     if (r.finishedAt) {
       msg += ` · 🏁 финиш в ${time(r.finishedAt)}`;
     } else if (r.solved > 0) {
@@ -165,9 +165,9 @@ export function buildStandingsText(rows, total) {
       }
     }
 
-    msg += `   🕒 Последняя точка: ${time(r.lastAt)}\n`;
+    msg += `   🕒 Последняя локация: ${time(r.lastAt)}\n`;
 
-    // Время на каждой точке (прибытие → решение).
+    // Время на каждой локации (прибытие → решение).
     if (r.stations && Object.keys(r.stations).length > 0) {
       const stationIds = Object.keys(r.stations).sort((a, b) => Number(a) - Number(b));
       const parts = stationIds.map((id) => {
@@ -179,7 +179,7 @@ export function buildStandingsText(rows, total) {
         }
         return `${id}(${time(solveAt)})`;
       });
-      msg += `   📍 По точкам: ${parts.join(" ")}\n`;
+      msg += `   📍 По локациям: ${parts.join(" ")}\n`;
     }
 
     msg += `   📸 Материалов от капитана: ${r.media}\n\n`;

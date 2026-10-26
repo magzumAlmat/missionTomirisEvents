@@ -522,7 +522,7 @@ export function standings() {
 
   // Все зарегистрированные команды видны в таблице, даже если ещё не стартовали.
   for (const t of teams) {
-    rowFor(`t${t.number}`, { teamNumber: t.number, teamName: t.name });
+    rowFor(`t${t.number}`, { teamNumber: t.number, teamName: t.name, captainName: t.captainName || "", captainPhone: t.captainPhone || "" });
   }
 
   for (const [key, p] of Object.entries(progress)) {
@@ -562,6 +562,23 @@ export function standings() {
   }
 
   for (const row of rows.values()) {
+    if (row.teamNumber) {
+      const t = teams.find((item) => Number(item.number) === Number(row.teamNumber));
+      if (t) {
+        if (!row.teamName || row.teamName === "без названия") row.teamName = t.name;
+        if (!row.captainName) row.captainName = t.captainName || "";
+        if (!row.captainPhone) row.captainPhone = t.captainPhone || "";
+      }
+    }
+    if (!row.captainName && row.teamNumber) {
+      const sub = submissions.find((s) => Number(s.teamNumber) === Number(row.teamNumber) && s.captainName);
+      if (sub) {
+        row.captainName = sub.captainName;
+        if (sub.teamName && (!row.teamName || row.teamName === "без названия")) {
+          row.teamName = sub.teamName;
+        }
+      }
+    }
     row.totalScore = SCORED_STATION_IDS.reduce(
       (sum, sid) => sum + (Number(row.scores?.[sid]) || 0),
       0

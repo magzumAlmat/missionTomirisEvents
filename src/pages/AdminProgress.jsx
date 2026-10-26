@@ -230,165 +230,190 @@ export default function AdminProgress() {
           <table className="board">
             <thead>
               <tr>
-                <th className="board-team">Команда</th>
+                <th className="board-team">Команда и капитан</th>
                 {QUEST.stations.map((s) => (
                   <th key={s.id} title={s.name}>
                     {s.id}
                   </th>
                 ))}
                 <th>Итог</th>
-                <th>Точек</th>
+                <th>Пройдено</th>
                 <th>Последняя</th>
+                <th style={{ minWidth: 220 }}>Материалы капитанов</th>
                 <th className="no-print">Действия</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <tr key={r.key}>
-                  <td className="board-team">
-                    {r.finishedAt && <span className="board-cup">🏆</span>}
-                    {r.teamNumber ? (
-                      <>
-                        <b>№{r.teamNumber} |</b> {r.teamName || "без названия"}
-                      </>
-                    ) : (
-                      <>
-                        <b>Одиночка |</b> {r.teamName || "без названия"}
-                      </>
-                    )}
-                    {r.teamNumber && latestByTeam.get(Number(r.teamNumber)) && (
-                      <div className="muted tiny" style={{ marginTop: 4, whiteSpace: "normal" }}>
-                        📍 {materialLocationText(latestByTeam.get(Number(r.teamNumber)))}
+              {rows.map((r) => {
+                const teamMaterials = submissions.filter(
+                  (m) => Number(m.teamNumber) === Number(r.teamNumber)
+                );
+
+                return (
+                  <tr key={r.key}>
+                    <td className="board-team">
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+                        {r.finishedAt && <span className="board-cup">🏆</span>}
+                        <span style={{ fontWeight: 800, fontSize: 14 }}>
+                          {r.teamNumber ? `№${r.teamNumber}` : "Одиночка"}
+                        </span>
+                        <span style={{ color: "var(--txt)", fontWeight: 700, fontSize: 14 }}>
+                          {r.teamName ? `«${r.teamName}»` : "(без названия)"}
+                        </span>
                       </div>
-                    )}
-                  </td>
-                  {QUEST.stations.map((s) => {
-                    const state = cellState(r, s.id);
-                    const style = CELL_STYLE[state];
-                    const sid = String(s.id);
-                    const arrivalAt = typeof r.arrivals?.[sid] === "object" ? r.arrivals[sid]?.at : r.arrivals?.[sid];
-                    const solvedAt = typeof r.stations?.[sid] === "object" ? r.stations[sid]?.at : r.stations?.[sid];
-                    const riddleAt = typeof r.riddleSolved?.[sid] === "object" ? r.riddleSolved[sid]?.at : r.riddleSolved?.[sid];
-                    const hintAt = typeof r.hints?.[sid] === "object" ? r.hints[sid]?.at : r.hints?.[sid];
-                    const notGuessedAt = typeof r.notGuessed?.[sid] === "object" ? r.notGuessed[sid]?.at : r.notGuessed?.[sid];
-                    const stationScore = Number(r.scores?.[sid] ?? 0);
-                    const scoreText = s.id === 0 ? "—" : `${stationScore} б.`;
-
-                    // Собираем ВСЕ действия с временами (не стираем по мере прогресса)
-                    const actions = [];
-                    if (riddleAt) actions.push({ icon: "🔓", label: "Разгадал", t: time(riddleAt) });
-                    if (arrivalAt) actions.push({ icon: "📍", label: "Прибыл", t: time(arrivalAt) });
-                    if (hintAt) actions.push({ icon: "💡", label: "Подсказка", t: time(hintAt) });
-                    if (notGuessedAt) actions.push({ icon: "❌", label: "Адрес открыт", t: time(notGuessedAt) });
-                    if (solvedAt) actions.push({ icon: "✓", label: "Задание", t: time(solvedAt) });
-
-                    // Ручное прибытие: капитан разгадал, но не подтвердил прибытие.
-                    const canMarkArrival = Boolean(
-                      r.teamNumber && riddleAt && !arrivalAt && !notGuessedAt
-                    );
-                    const markKey = `${r.key}-${s.id}`;
-
-                    // Tooltip: все действия с временами и баллы
-                    const titleParts = [s.name, `⭐ Баллы: ${scoreText}`];
-                    for (const a of actions) {
-                      titleParts.push(`${a.icon} ${a.label}: ${a.t}`);
-                    }
-
-                    return (
-                      <td key={s.id} className="board-cell">
-                        <div
-                          className="board-dot"
-                          style={{ background: style.background, color: style.color }}
-                          title={titleParts.join("\n")}
-                        >
-                          {actions.length === 0 ? (
-                            style.label
-                          ) : (
-                            actions.map((a, i) => (
-                              <div key={i}>
-                                {a.icon} {a.label} {a.t}
-                              </div>
-                            ))
-                          )}
-                          <div style={{ marginTop: 4, fontWeight: 800, fontSize: 11 }}>
-                            ⭐ {scoreText}
-                          </div>
-                          {canMarkArrival && (
-                            <button
-                              className="btn board-mini-btn"
-                              disabled={marking === markKey}
-                              onClick={() => handleMarkArrival(r, s.id)}
-                              title="Засчитать прибытие этой команды сейчас"
-                            >
-                              {marking === markKey ? "…" : "📍 Засчитать"}
-                            </button>
-                          )}
+                      {r.captainName ? (
+                        <div style={{ fontSize: 12, color: "#ffcc4d", marginTop: 3, display: "flex", alignItems: "center", gap: 4 }}>
+                          <span>👑</span>
+                          <span><b>{r.captainName}</b></span>
+                          {r.captainPhone && <span className="muted tiny" style={{ margin: 0 }}>({r.captainPhone})</span>}
                         </div>
-                      </td>
-                    );
-                  })}
-                  <td className="board-num">
-                    <b>{r.totalScore ?? 0}</b> б.
-                  </td>
-                  <td className="board-num">
-                    {r.solved}/{total}
-                  </td>
-                  <td className="board-num">
-                    {r.finishedAt ? `🏁 ${time(r.finishedAt)}` : time(r.lastAt) || "—"}
-                  </td>
-                  <td className="board-num no-print">
-                    {r.teamNumber && (
-                      <button
-                        className="btn btn-del-team"
-                        disabled={deleting === r.key}
-                        onClick={() => handleDelete(r)}
-                        title="Удалить команду (вместе с прогрессом и материалами)"
-                      >
-                        {deleting === r.key ? "…" : "🗑️"}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                      ) : (
+                        <div className="muted tiny" style={{ marginTop: 2 }}>
+                          Капитан не указан
+                        </div>
+                      )}
+                    </td>
+                    {QUEST.stations.map((s) => {
+                      const state = cellState(r, s.id);
+                      const style = CELL_STYLE[state];
+                      const sid = String(s.id);
+                      const arrivalAt = typeof r.arrivals?.[sid] === "object" ? r.arrivals[sid]?.at : r.arrivals?.[sid];
+                      const solvedAt = typeof r.stations?.[sid] === "object" ? r.stations[sid]?.at : r.stations?.[sid];
+                      const riddleAt = typeof r.riddleSolved?.[sid] === "object" ? r.riddleSolved[sid]?.at : r.riddleSolved?.[sid];
+                      const hintAt = typeof r.hints?.[sid] === "object" ? r.hints[sid]?.at : r.hints?.[sid];
+                      const notGuessedAt = typeof r.notGuessed?.[sid] === "object" ? r.notGuessed[sid]?.at : r.notGuessed?.[sid];
+                      const stationScore = Number(r.scores?.[sid] ?? 0);
+                      const scoreText = s.id === 0 ? "—" : `${stationScore} б.`;
+
+                      // Собираем ВСЕ действия с временами (не стираем по мере прогресса)
+                      const actions = [];
+                      if (riddleAt) actions.push({ icon: "🔓", label: "Разгадал", t: time(riddleAt) });
+                      if (arrivalAt) actions.push({ icon: "📍", label: "Прибыл", t: time(arrivalAt) });
+                      if (hintAt) actions.push({ icon: "💡", label: "Подсказка", t: time(hintAt) });
+                      if (notGuessedAt) actions.push({ icon: "❌", label: "Адрес открыт", t: time(notGuessedAt) });
+                      if (solvedAt) actions.push({ icon: "✓", label: "Задание", t: time(solvedAt) });
+
+                      // Проверяем материалы для этой конкретной станции
+                      const stMaterials = teamMaterials.filter(
+                        (m) => Number(m.station) === s.id || String(m.station) === sid
+                      );
+
+                      // Ручное прибытие: капитан разгадал, но не подтвердил прибытие.
+                      const canMarkArrival = Boolean(
+                        r.teamNumber && riddleAt && !arrivalAt && !notGuessedAt
+                      );
+                      const markKey = `${r.key}-${s.id}`;
+
+                      // Tooltip: все действия с временами и баллы
+                      const titleParts = [s.name, `⭐ Баллы: ${scoreText}`];
+                      for (const a of actions) {
+                        titleParts.push(`${a.icon} ${a.label}: ${a.t}`);
+                      }
+                      if (stMaterials.length) {
+                        titleParts.push(`📎 Материалов: ${stMaterials.length}`);
+                      }
+
+                      return (
+                        <td key={s.id} className="board-cell">
+                          <div
+                            className="board-dot"
+                            style={{ background: style.background, color: style.color }}
+                            title={titleParts.join("\n")}
+                          >
+                            {actions.length === 0 ? (
+                              style.label
+                            ) : (
+                              actions.map((a, i) => (
+                                <div key={i}>
+                                  {a.icon} {a.label} {a.t}
+                                </div>
+                              ))
+                            )}
+                            <div style={{ marginTop: 4, fontWeight: 800, fontSize: 11 }}>
+                              ⭐ {scoreText}
+                            </div>
+                            {stMaterials.length > 0 && (
+                              <div style={{ marginTop: 2, fontSize: 10, color: "var(--accent)" }}>
+                                📎 {stMaterials.length}
+                              </div>
+                            )}
+                            {canMarkArrival && (
+                              <button
+                                className="btn board-mini-btn"
+                                disabled={marking === markKey}
+                                onClick={() => handleMarkArrival(r, s.id)}
+                                title="Засчитать прибытие этой команды сейчас"
+                              >
+                                {marking === markKey ? "…" : "📍 Засчитать"}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      );
+                    })}
+                    <td className="board-num">
+                      <b>{r.totalScore ?? 0}</b> б.
+                    </td>
+                    <td className="board-num">
+                      {r.solved}/{total}
+                    </td>
+                    <td className="board-num">
+                      {r.finishedAt ? `🏁 ${time(r.finishedAt)}` : time(r.lastAt) || "—"}
+                    </td>
+                    <td style={{ textAlign: "left", minWidth: 220, maxWidth: 320, whiteSpace: "normal", verticalAlign: "top" }}>
+                      {teamMaterials.length === 0 ? (
+                        <span className="muted tiny">пока нет</span>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 200, overflowY: "auto", paddingRight: 4 }}>
+                          {teamMaterials.map((m, idx) => (
+                            <div
+                              key={idx}
+                              style={{
+                                padding: "6px 8px",
+                                background: "rgba(255, 255, 255, 0.04)",
+                                border: "1px solid rgba(255, 255, 255, 0.08)",
+                                borderRadius: 6,
+                                fontSize: 12,
+                              }}
+                            >
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
+                                <span style={{ fontWeight: 700, color: "var(--accent)" }}>
+                                  {KIND_LABEL[m.kind] || m.kind || "материал"}
+                                </span>
+                                <span className="muted tiny" style={{ margin: 0 }}>{time(m.at)}</span>
+                              </div>
+                              <div style={{ color: "#d7fff6", fontWeight: 600, marginTop: 2 }}>
+                                📍 {materialLocationText(m)}
+                              </div>
+                              {m.text && (
+                                <div className="muted tiny" style={{ marginTop: 2, whiteSpace: "pre-wrap" }}>
+                                  📝 {m.text}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="board-num no-print">
+                      {r.teamNumber && (
+                        <button
+                          className="btn btn-del-team"
+                          disabled={deleting === r.key}
+                          onClick={() => handleDelete(r)}
+                          title="Удалить команду (вместе с прогрессом и материалами)"
+                        >
+                          {deleting === r.key ? "…" : "🗑️"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
-
-      <div className="materials-panel">
-        <div className="materials-head">
-          <h3>📎 Материалы капитанов</h3>
-          <span className="muted tiny">
-            {submissions.length > 0 ? `${submissions.length} шт.` : "пока нет"}
-          </span>
-        </div>
-        {submissions.length === 0 ? (
-          <p className="muted tiny" style={{ margin: 0 }}>
-            Как только капитан пришлёт видео и напишет локацию текстом, она появится здесь.
-          </p>
-        ) : (
-          <div className="materials-list">
-            {submissions.map((m, i) => (
-              <div
-                className="material-item"
-                key={`${m.at || ""}-${m.teamNumber || ""}-${i}`}
-              >
-                <div className="material-top">
-                  <b>
-                    {m.teamNumber ? `№${m.teamNumber}` : "Одиночка"}
-                    {m.teamName ? ` · ${m.teamName}` : ""}
-                  </b>
-                  <span className="muted tiny">
-                    {KIND_LABEL[m.kind] || m.kind || "материал"} · {time(m.at)}
-                  </span>
-                </div>
-                <div className="material-location">📍 {materialLocationText(m)}</div>
-                {m.text && <div className="material-text">📝 {m.text}</div>}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
 
       <div className="mt" style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
         <button className="btn ghost no-print" onClick={() => navigate("/admin")}>
