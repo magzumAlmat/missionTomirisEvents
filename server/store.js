@@ -89,6 +89,12 @@ export function findTeamByName(name) {
   return listTeams().find((t) => t.key === key) || null;
 }
 
+export function findTeamByCaptainPhone(phone) {
+  const key = phoneKey(phone);
+  if (!key) return null;
+  return listTeams().find((t) => phoneKey(t.captainPhone) === key) || null;
+}
+
 /**
  * Найти команду по названию или завести новую с очередным номером.
  * Повторная регистрация того же названия НЕ плодит дубликат — участник

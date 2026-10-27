@@ -22,6 +22,7 @@ import {
   findOrCreateTeam,
   findTeamByNumber,
   findTeamByName,
+  findTeamByCaptainPhone,
   teamKey,
   getProgress,
   markArrival,
