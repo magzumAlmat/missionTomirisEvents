@@ -3,7 +3,8 @@ import QRCode from "qrcode";
 import { useNavigate } from "react-router-dom";
 import { QUEST, INCLUDE_START_QR } from "../questConfig.js";
 import PasswordGate, { isUnlocked } from "../components/PasswordGate.jsx";
-import { fetchCaptains, createCaptain, updateCaptainSlots, moveUserBetweenCaptains, unsubscribeFromCaptain, fetchSoloUsers, deleteAllCaptains, deleteAllParticipants, fetchSettings, saveSettings } from "../lib/api.js";
+import { fetchCaptains, createCaptain, updateCaptainSlots, moveUserBetweenCaptains, unsubscribeFromCaptain, fetchSoloUsers, deleteAllCaptains, deleteAllParticipants, deleteCaptain, deleteParticipant, fetchSettings, saveSettings } from "../lib/api.js";
+import { clearAllLocalUserData } from "../lib/questSync.js";
 
 /** Список точек, для которых генерируем QR. */
 function buildItems(base) {
@@ -209,12 +210,45 @@ export default function Admin() {
     }
   }
 
+  // Удалить одного капитана
+  async function onDeleteCaptain(captainId, name) {
+    if (!window.confirm(`⚠️ Удалить капитана «${name}»? Все связанные данные команды и авторизация будут сброшены.`)) return;
+    setCaptainMsg("");
+    try {
+      await deleteCaptain(captainId);
+      setCaptainMsg("✅ Капитан удален!");
+      const data = await fetchCaptains();
+      setCaptains(data.captains || []);
+      const solo = await fetchSoloUsers();
+      setSoloUsers(solo.users || []);
+    } catch (e) {
+      setCaptainMsg("❌ " + e.message);
+    }
+  }
+
+  // Удалить одного участника
+  async function onDeleteParticipant(phone, name) {
+    if (!window.confirm(`⚠️ Удалить участника «${name || phone}»? Авторизация пользователя будет аннулирована.`)) return;
+    setCaptainMsg("");
+    try {
+      await deleteParticipant({ phone });
+      setCaptainMsg("✅ Участник удален!");
+      const data = await fetchCaptains();
+      setCaptains(data.captains || []);
+      const solo = await fetchSoloUsers();
+      setSoloUsers(solo.users || []);
+    } catch (e) {
+      setCaptainMsg("❌ " + e.message);
+    }
+  }
+
   // Удалить всех капитанов
   async function onDeleteAllCaptains() {
     if (!window.confirm("⚠️ Удалить ВСЕХ капитанов? Это действие необратимо.")) return;
     setCaptainMsg("");
     try {
       await deleteAllCaptains();
+      clearAllLocalUserData();
       setCaptainMsg("✅ Все капитаны удалены!");
       setCaptains([]);
       // Перезагружаем участников
@@ -264,9 +298,12 @@ export default function Admin() {
     setCaptainMsg("");
     try {
       await deleteAllParticipants();
+      clearAllLocalUserData();
       setCaptainMsg("✅ Все участники удалены!");
       const data = await fetchSoloUsers();
       setSoloUsers(data.users || []);
+      const capData = await fetchCaptains();
+      setCaptains(capData.captains || []);
     } catch (e) {
       setCaptainMsg("❌ " + e.message);
     }
@@ -375,7 +412,7 @@ export default function Admin() {
                       <strong>{cap.name || cap.phone}</strong>
                       <span style={{ marginLeft: 12, color: "#aaa" }}>{cap.phone}</span>
                     </div>
-                    <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <span style={{ 
                         padding: "4px 8px", 
                         borderRadius: 4, 
@@ -385,6 +422,14 @@ export default function Admin() {
                         {cap.availableSlots} / {cap.slots} мест
                         {cap.hasCar ? " 🚗" : ""}
                       </span>
+                      <button
+                        className="btn ghost"
+                        title="Удалить капитана"
+                        style={{ padding: "4px 8px", fontSize: 12, borderColor: "rgba(255,107,107,0.5)", color: "#ff6b6b" }}
+                        onClick={() => onDeleteCaptain(cap.id, cap.name || cap.phone)}
+                      >
+                        🗑
+                      </button>
                     </div>
                   </div>
                   {cap.participants && cap.participants.length > 0 && (
@@ -719,6 +764,14 @@ export default function Admin() {
                   <span style={{ marginLeft: 12, color: "#aaa", fontSize: 12 }}>
                     {new Date(u.registeredAt).toLocaleString("ru-RU")}
                   </span>
+                  <button
+                    className="btn ghost"
+                    title="Удалить участника"
+                    style={{ float: "right", padding: "2px 8px", fontSize: 11, borderColor: "rgba(255,107,107,0.5)", color: "#ff6b6b" }}
+                    onClick={() => onDeleteParticipant(u.phone, u.name)}
+                  >
+                    🗑 Удалить
+                  </button>
                 </div>
               ))}
             </div>

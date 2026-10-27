@@ -232,9 +232,19 @@ export async function deleteAllCaptains() {
   return post("/api/admin/delete-all-captains", {});
 }
 
+/** Удалить одного капитана (админ) */
+export async function deleteCaptain(captainId) {
+  return post("/api/admin/delete-captain", { captainId });
+}
+
 /** Удалить всех участников (админ) */
 export async function deleteAllParticipants() {
   return post("/api/admin/delete-all-participants", {});
+}
+
+/** Удалить одного участника (админ) */
+export async function deleteParticipant({ phone, captainId }) {
+  return post("/api/admin/delete-participant", { phone, captainId });
 }
 
 /* =====================================================================

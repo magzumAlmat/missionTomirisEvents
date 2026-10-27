@@ -25,6 +25,12 @@ export function getQuestState() {
   return data && data.questId ? data : fallback;
 }
 
+export function bumpQuestState() {
+  const newState = { questId: Date.now(), resetAt: new Date().toISOString() };
+  writeJson(QUEST_STATE_FILE, newState);
+  return newState;
+}
+
 /* ---------- низкий уровень ---------- */
 
 function readJson(file, fallback) {

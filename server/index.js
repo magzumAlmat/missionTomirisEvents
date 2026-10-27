@@ -52,6 +52,8 @@ import {
   listSoloUsers,
   deleteAllCaptains,
   deleteAllParticipants,
+  deleteCaptain,
+  deleteParticipant,
 } from "./captains.js";
 import { checkPhoneRegistration, normalizePhone } from "./phoneValidator.js";
 
@@ -584,25 +586,17 @@ app.post("/api/admin/reset-quest", (req, res) => {
   } catch (e) {
     console.error("Error clearing captains on reset-quest:", e);
   }
-  const participants = readParticipants();
-  let partsModified = false;
-  participants.forEach((p) => {
-    if (p.teamNumber || p.teamName || p.hasTeam) {
-      p.teamNumber = null;
-      p.teamName = "";
-      p.hasTeam = false;
-      partsModified = true;
-    }
-  });
-  if (partsModified) {
-    saveParticipants(participants);
+  try {
+    deleteAllParticipants();
+  } catch (e) {
+    console.error("Error clearing participants on reset-quest:", e);
   }
-  const kept = participants.length;
+  saveParticipants([]);
   const questState = getQuestState();
   res.json({
     ok: true,
     removed: counts,
-    keptParticipants: kept,
+    keptParticipants: 0,
     questId: questState.questId,
   });
 });
@@ -1102,10 +1096,30 @@ app.post("/api/admin/delete-all-captains", (req, res) => {
   res.json({ ok: true, ...result });
 });
 
+/** Удалить одного капитана (админ) */
+app.post("/api/admin/delete-captain", (req, res) => {
+  if (!requireToken(res)) return;
+  const { captainId } = req.body || {};
+  if (!captainId) return res.status(400).json({ ok: false, error: "Не указан captainId" });
+  const result = deleteCaptain(captainId);
+  if (result.error) return res.status(400).json({ ok: false, error: result.error });
+  res.json({ ok: true, ...result });
+});
+
 /** Удалить ВСЕХ участников (админ) */
 app.post("/api/admin/delete-all-participants", (req, res) => {
   if (!requireToken(res)) return;
   const result = deleteAllParticipants();
+  res.json({ ok: true, ...result });
+});
+
+/** Удалить одного участника (админ) */
+app.post("/api/admin/delete-participant", (req, res) => {
+  if (!requireToken(res)) return;
+  const { phone, captainId } = req.body || {};
+  if (!phone) return res.status(400).json({ ok: false, error: "Не указан телефон" });
+  const result = deleteParticipant({ phone, captainId });
+  if (result.error) return res.status(400).json({ ok: false, error: result.error });
   res.json({ ok: true, ...result });
 });
 
@@ -1278,23 +1292,26 @@ app.post("/api/solve", async (req, res) => {
  */
 app.get("/api/progress", (req, res) => {
   let { teamNumber, phone } = req.query || {};
+  const phoneClean = phone ? normalizePhone(phone) : "";
   let participant = null;
-  if (phone) {
-    const phoneNorm = String(phone).replace(/\D/g, "").slice(-10);
+  if (phoneClean) {
     const parts = readParticipants();
-    participant = parts.find((p) => String(p.phone || "").replace(/\D/g, "").slice(-10) === phoneNorm);
+    participant = parts.find((p) => normalizePhone(p.phone) === phoneClean);
     if (participant && !teamNumber && participant.teamNumber) {
       teamNumber = participant.teamNumber;
     }
   }
 
   let team = teamNumber ? findTeamByNumber(teamNumber) : null;
-  if (!team && phone) {
-    team = findTeamByCaptainPhone(phone);
+  if (!team && phoneClean) {
+    team = findTeamByCaptainPhone(phoneClean);
     if (team) teamNumber = team.number;
   }
 
-  const key = progressKey({ teamNumber: team ? team.number : (teamNumber || null), phone });
+  const check = phoneClean ? checkPhoneRegistration(phoneClean) : { registered: false };
+  const isRegistered = check.registered || !!participant || !!team;
+
+  const key = progressKey({ teamNumber: team ? team.number : (teamNumber || null), phone: phoneClean || phone });
   if (!key) {
     return res.status(400).json({ ok: false, error: "Нужен номер команды или телефон." });
   }
@@ -1305,11 +1322,12 @@ app.get("/api/progress", (req, res) => {
   res.json({
     ok: true,
     questId: questState.questId,
-    reset: isReset,
+    registered: isRegistered,
+    reset: isReset || !isRegistered,
     total: TOTAL_STATIONS,
     teamNumber: team ? team.number : (participant?.teamNumber || null),
     teamName: team ? team.name : (participant?.teamName || entry?.teamName || ""),
-    userName: participant?.name || "",
+    userName: participant?.name || check.details?.name || "",
     captainName: team?.captainName || "",
     stations: entry?.stations || {},
     arrivals: entry?.arrivals || {},

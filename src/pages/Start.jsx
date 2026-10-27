@@ -5,7 +5,7 @@ import { useProgress } from "../useProgress.js";
 import { HAS_BACKEND, fetchProgress } from "../lib/api.js";
 import { getTeam, getTeamNumber } from "../lib/team.js";
 import { getPhone } from "../lib/phone.js";
-import { syncQuestEpoch, clearLocalQuestProgress } from "../lib/questSync.js";
+import { syncQuestEpoch, clearLocalQuestProgress, clearAllLocalUserData } from "../lib/questSync.js";
 
 export default function Start() {
   const navigate = useNavigate();
@@ -15,8 +15,22 @@ export default function Start() {
   const poster = QUEST.poster || {};
   const started = solvedCount > 0;
 
-  // Проверяем актуальный статус квеста на сервере — если квест был сброшен,
-  // локальный прогресс очищается, а кнопка «Продолжить квест» исчезает.
+  // Реагируем на сброс авторизации и квеста в реальном времени
+  useEffect(() => {
+    function handleReset() {
+      setPhoneState("");
+      setTeamState("");
+    }
+    window.addEventListener("quest_reset", handleReset);
+    window.addEventListener("user_reset", handleReset);
+    return () => {
+      window.removeEventListener("quest_reset", handleReset);
+      window.removeEventListener("user_reset", handleReset);
+    };
+  }, []);
+
+  // Проверяем актуальный статус квеста на сервере — если квест, капитан или игрок
+  // были удалены админом, авторизация очищается, а кнопки квеста исчезают.
   useEffect(() => {
     const savedPhone = getPhone();
     const savedTeam = getTeamNumber();
@@ -27,9 +41,16 @@ export default function Start() {
           if (data.questId) {
             const wasReset = syncQuestEpoch(data.questId);
             if (wasReset) {
+              setPhoneState("");
               setTeamState("");
               return;
             }
+          }
+          if (data.registered === false) {
+            clearAllLocalUserData();
+            setPhoneState("");
+            setTeamState("");
+            return;
           }
           if (data.reset || (!data.teamNumber && (!data.stations || Object.keys(data.stations).length === 0))) {
             if (solvedCount > 0 || savedTeam) {

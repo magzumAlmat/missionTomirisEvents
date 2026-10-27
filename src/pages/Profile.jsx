@@ -8,7 +8,7 @@ import { useProgress } from "../useProgress.js";
 import { useGameStatus } from "../useGameStatus.js";
 import CountdownTimer from "../components/CountdownTimer.jsx";
 import Modal from "../components/Modal.jsx";
-import { syncQuestEpoch, clearLocalQuestProgress } from "../lib/questSync.js";
+import { syncQuestEpoch, clearLocalQuestProgress, clearAllLocalUserData } from "../lib/questSync.js";
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -26,10 +26,23 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Реакция на сброс авторизации пользователя
+  useEffect(() => {
+    function handleReset() {
+      navigate("/register", { replace: true });
+    }
+    window.addEventListener("user_reset", handleReset);
+    return () => window.removeEventListener("user_reset", handleReset);
+  }, [navigate]);
+
   useEffect(() => {
     async function loadProfile() {
       try {
         const phone = getPhone();
+        if (!phone) {
+          navigate("/register", { replace: true });
+          return;
+        }
 
         // 1. Check if captain
         const captainsData = await fetchCaptains();
@@ -57,10 +70,10 @@ export default function Profile() {
     }
 
     loadProfile();
-  }, []);
+  }, [navigate]);
 
 // Подтягиваем прогресс с сервера: на новом устройстве localStorage пуст,
-// а при удалении квеста админом — очищаем локальные данные.
+// а при удалении квеста или пользователя админом — очищаем локальные данные.
   useEffect(() => {
     if (!HAS_BACKEND) return;
     const teamNumber = getTeamNumber();
@@ -74,9 +87,14 @@ export default function Profile() {
           if (data.questId) {
             const wasReset = syncQuestEpoch(data.questId);
             if (wasReset) {
-              setProfile(prev => ({ ...prev, teamNumber: "", teamName: "" }));
+              navigate("/register", { replace: true });
               return;
             }
+          }
+          if (data.registered === false) {
+            clearAllLocalUserData();
+            navigate("/register", { replace: true });
+            return;
           }
           if (data.reset || (!data.teamNumber && (!data.stations || Object.keys(data.stations).length === 0))) {
             clearLocalQuestProgress();

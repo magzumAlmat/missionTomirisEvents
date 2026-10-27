@@ -14,7 +14,7 @@ import { getTeamNumber, getTeam } from "../lib/team.js";
 import { getPhone, isValidPhone } from "../lib/phone.js";
 import { useGameStatus } from "../useGameStatus.js";
 import CountdownTimer from "../components/CountdownTimer.jsx";
-import { syncQuestEpoch, clearLocalQuestProgress } from "../lib/questSync.js";
+import { syncQuestEpoch, clearLocalQuestProgress, clearAllLocalUserData } from "../lib/questSync.js";
 
 /** Небольшая обёртка, чтобы все окна выглядели одинаково. */
 function Modal({ children, onClose }) {
@@ -197,9 +197,14 @@ export default function Station() {
         if (data.questId) {
           const wasReset = syncQuestEpoch(data.questId);
           if (wasReset) {
-            navigate("/");
+            navigate("/register");
             return;
           }
+        }
+        if (data.registered === false) {
+          clearAllLocalUserData();
+          navigate("/register");
+          return;
         }
         if (data.reset || (!data.teamNumber && (!data.stations || Object.keys(data.stations).length === 0))) {
           clearLocalQuestProgress();

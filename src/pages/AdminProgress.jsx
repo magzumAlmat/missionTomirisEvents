@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
 import { fetchStandings, fetchSubmissions, deleteTeam, resetQuest, adminMarkArrival, HAS_BACKEND } from "../lib/api.js";
 import PasswordGate, { isUnlocked } from "../components/PasswordGate.jsx";
-import { clearLocalQuestProgress, syncQuestEpoch } from "../lib/questSync.js";
+import { clearLocalQuestProgress, clearAllLocalUserData, syncQuestEpoch } from "../lib/questSync.js";
 
 const REFRESH_MS = 15000;
 
@@ -115,7 +115,7 @@ export default function AdminProgress() {
     try {
       const data = await resetQuest();
       const removed = data.removed || {};
-      clearLocalQuestProgress();
+      clearAllLocalUserData();
       if (data.questId) {
         syncQuestEpoch(data.questId);
       }
