@@ -6,6 +6,18 @@ const PROGRESS_KEY = "event_tomiris_progress_v1";
 const CACHE_KEY = "event_tomiris_station_cache";
 
 /**
+ * Сохранить текущий questId в localStorage (например, при успешной регистрации).
+ */
+export function setLocalQuestId(questId) {
+  if (!questId) return;
+  try {
+    localStorage.setItem(QUEST_ID_KEY, String(questId));
+  } catch (e) {
+    /* ignore */
+  }
+}
+
+/**
  * Очистить только прогресс по точкам и команду.
  */
 export function clearLocalQuestProgress() {
@@ -41,10 +53,13 @@ export function clearAllLocalUserData() {
 
 /**
  * Синхронизирует questId от сервера.
- * Если на сервере questId изменился (квест/капитаны/участники удалены админом),
- * сбрасывает ВСЮ авторизацию и локальные данные пользователя.
+ * Если на сервере questId изменился:
+ * - если пользователь зарегистрирован в этом квесте (isRegistered === true),
+ *   то просто обновляем localQuestId, сохраняя сессию пользователя;
+ * - если пользователь НЕ зарегистрирован в новом квесте (isRegistered === false),
+ *   сбрасывает ВСЮ старую авторизацию.
  */
-export function syncQuestEpoch(serverQuestId) {
+export function syncQuestEpoch(serverQuestId, isRegistered = true) {
   if (!serverQuestId) return false;
   try {
     const local = localStorage.getItem(QUEST_ID_KEY);
@@ -53,6 +68,10 @@ export function syncQuestEpoch(serverQuestId) {
       return false;
     }
     if (String(local) !== String(serverQuestId)) {
+      if (isRegistered) {
+        localStorage.setItem(QUEST_ID_KEY, String(serverQuestId));
+        return false;
+      }
       clearAllLocalUserData();
       localStorage.setItem(QUEST_ID_KEY, String(serverQuestId));
       return true;

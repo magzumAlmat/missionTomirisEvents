@@ -44,9 +44,13 @@ export default function Profile() {
           return;
         }
 
+        const normPhone = (phone || "").replace(/\D/g, "").slice(-10);
+
         // 1. Check if captain
         const captainsData = await fetchCaptains();
-        const isCaptain = (captainsData.captains || []).some(c => c.phone === phone);
+        const isCaptain = (captainsData.captains || []).some(
+          c => (c.phone || "").replace(/\D/g, "").slice(-10) === normPhone
+        );
 
         // 2. Fetch teammates
         const teamNumber = getTeamNumber();
@@ -55,7 +59,9 @@ export default function Profile() {
           const teamsData = await fetchTeams();
           const myTeam = (teamsData.teams || []).find(t => String(t.teamNumber) === String(teamNumber));
           if (myTeam && myTeam.participants) {
-            members = myTeam.participants.filter(p => p.phone !== phone);
+            members = myTeam.participants.filter(
+              p => (p.phone || "").replace(/\D/g, "").slice(-10) !== normPhone
+            );
           }
         }
 
@@ -84,24 +90,26 @@ export default function Profile() {
     fetchProgress({ teamNumber, phone })
       .then((data) => {
         if (!cancelled && data) {
-          if (data.questId) {
-            const wasReset = syncQuestEpoch(data.questId);
-            if (wasReset) {
-              navigate("/register", { replace: true });
-              return;
-            }
-          }
           if (data.registered === false) {
             clearAllLocalUserData();
             navigate("/register", { replace: true });
             return;
           }
-          if (data.reset || (!data.teamNumber && (!data.stations || Object.keys(data.stations).length === 0))) {
+          if (data.questId) {
+            syncQuestEpoch(data.questId, true);
+          }
+          if (data.reset && !data.teamNumber && (!data.stations || Object.keys(data.stations).length === 0)) {
             clearLocalQuestProgress();
             setProfile(prev => ({ ...prev, teamNumber: "", teamName: "" }));
             return;
           }
           applyServer(data.stations, data.finishedAt);
+          if (data.captainName && data.userName) {
+            const capMatch = data.captainName.trim().toLowerCase() === data.userName.trim().toLowerCase();
+            if (capMatch) {
+              setProfile(prev => ({ ...prev, isCaptain: true }));
+            }
+          }
           if (data.teamNumber) {
             setTeamNumber(data.teamNumber);
             setProfile(prev => ({ ...prev, teamNumber: data.teamNumber }));

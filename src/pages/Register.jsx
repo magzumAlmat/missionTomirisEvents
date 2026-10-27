@@ -5,6 +5,7 @@ import { getPhone, setPhone, isValidPhone } from "../lib/phone.js";
 import { getTeam, setTeam, getName, setName, setTeamNumber } from "../lib/team.js";
 import { useProgress } from "../useProgress.js";
 import { useGameStatus } from "../useGameStatus.js";
+import { setLocalQuestId } from "../lib/questSync.js";
 
 /** Кнопка-переключатель «Да/Нет». */
 function ChoiceButton({ active, onClick, children }) {
@@ -383,6 +384,10 @@ export default function Register() {
       }
 
       // Сохраняем в localStorage только при успешной регистрации
+      const serverQuestId = resCreate?.questId || resJoin?.questId || res?.questId;
+      if (serverQuestId) {
+        setLocalQuestId(serverQuestId);
+      }
       setPhone(trimmedPhone);
       setName(trimmedName);
       if (registrationType === "SOLO") {

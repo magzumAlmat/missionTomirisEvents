@@ -38,19 +38,14 @@ export default function Start() {
       fetchProgress({ teamNumber: savedTeam, phone: savedPhone })
         .then((data) => {
           if (!data) return;
-          if (data.questId) {
-            const wasReset = syncQuestEpoch(data.questId);
-            if (wasReset) {
-              setPhoneState("");
-              setTeamState("");
-              return;
-            }
-          }
           if (data.registered === false) {
             clearAllLocalUserData();
             setPhoneState("");
             setTeamState("");
             return;
+          }
+          if (data.questId) {
+            syncQuestEpoch(data.questId, true);
           }
           if (data.reset || (!data.teamNumber && (!data.stations || Object.keys(data.stations).length === 0))) {
             if (solvedCount > 0 || savedTeam) {

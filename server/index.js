@@ -758,11 +758,13 @@ app.post("/api/register", async (req, res) => {
     if (!data.ok) {
       return res.status(502).json({ ok: false, error: data.description || "Telegram error" });
     }
+    const questState = getQuestState();
     res.json({
       ok: true,
       participant: newEntry,
       totalCount,
       teamNumber: team ? team.number : null,
+      questId: questState.questId,
     });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
@@ -833,7 +835,8 @@ app.post("/api/captains/create", async (req, res) => {
       body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: "HTML" }),
     });
   } catch (e) {}
-  res.json({ ok: true, captain: result.captain });
+  const questState = getQuestState();
+  res.json({ ok: true, captain: result.captain, questId: questState.questId });
 });
 
 /** Подписаться на капитана */
@@ -867,7 +870,8 @@ app.post("/api/subscribe-to-captain", async (req, res) => {
       body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: "HTML" }),
     });
   } catch (e) {}
-  res.json({ ok: true, captain: result.captain });
+  const questStateSub = getQuestState();
+  res.json({ ok: true, captain: result.captain, questId: questStateSub.questId });
 });
 
 /** Обновить количество слотов капитана (для админов) */

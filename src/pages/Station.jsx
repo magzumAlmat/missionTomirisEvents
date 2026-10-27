@@ -193,18 +193,13 @@ export default function Station() {
     fetchProgress({ teamNumber: savedTeam, phone: savedPhone })
       .then((data) => {
         if (cancelled) return;
-        // Если квест был сброшен админом — очистить и уйти на главную.
-        if (data.questId) {
-          const wasReset = syncQuestEpoch(data.questId);
-          if (wasReset) {
-            navigate("/register");
-            return;
-          }
-        }
         if (data.registered === false) {
           clearAllLocalUserData();
           navigate("/register");
           return;
+        }
+        if (data.questId) {
+          syncQuestEpoch(data.questId, true);
         }
         if (data.reset || (!data.teamNumber && (!data.stations || Object.keys(data.stations).length === 0))) {
           clearLocalQuestProgress();
