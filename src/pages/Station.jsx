@@ -14,6 +14,7 @@ import { getTeamNumber, getTeam } from "../lib/team.js";
 import { getPhone, isValidPhone } from "../lib/phone.js";
 import { useGameStatus } from "../useGameStatus.js";
 import CountdownTimer from "../components/CountdownTimer.jsx";
+import { syncQuestEpoch, clearLocalQuestProgress } from "../lib/questSync.js";
 
 /** Небольшая обёртка, чтобы все окна выглядели одинаково. */
 function Modal({ children, onClose }) {
@@ -192,6 +193,19 @@ export default function Station() {
     fetchProgress({ teamNumber: savedTeam, phone: savedPhone })
       .then((data) => {
         if (cancelled) return;
+        // Если квест был сброшен админом — очистить и уйти на главную.
+        if (data.questId) {
+          const wasReset = syncQuestEpoch(data.questId);
+          if (wasReset) {
+            navigate("/");
+            return;
+          }
+        }
+        if (data.reset || (!data.teamNumber && (!data.stations || Object.keys(data.stations).length === 0))) {
+          clearLocalQuestProgress();
+          navigate("/");
+          return;
+        }
         // Синхронизируем локальный прогресс — от него зависит «Продолжить квест».
         applyServer(data.stations, data.finishedAt);
         if (data.stations) {

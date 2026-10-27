@@ -1,18 +1,49 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
 import { useProgress } from "../useProgress.js";
-import { HAS_BACKEND } from "../lib/api.js";
-import { getTeam } from "../lib/team.js";
+import { HAS_BACKEND, fetchProgress } from "../lib/api.js";
+import { getTeam, getTeamNumber } from "../lib/team.js";
 import { getPhone } from "../lib/phone.js";
+import { syncQuestEpoch, clearLocalQuestProgress } from "../lib/questSync.js";
 
 export default function Start() {
   const navigate = useNavigate();
-  const { solvedCount } = useProgress();
+  const { solvedCount, applyServer } = useProgress();
   const [team, setTeamState] = useState(getTeam());
   const [phone, setPhoneState] = useState(getPhone());
   const poster = QUEST.poster || {};
   const started = solvedCount > 0;
+
+  // Проверяем актуальный статус квеста на сервере — если квест был сброшен,
+  // локальный прогресс очищается, а кнопка «Продолжить квест» исчезает.
+  useEffect(() => {
+    const savedPhone = getPhone();
+    const savedTeam = getTeamNumber();
+    if (HAS_BACKEND && (savedPhone || savedTeam || solvedCount > 0)) {
+      fetchProgress({ teamNumber: savedTeam, phone: savedPhone })
+        .then((data) => {
+          if (!data) return;
+          if (data.questId) {
+            const wasReset = syncQuestEpoch(data.questId);
+            if (wasReset) {
+              setTeamState("");
+              return;
+            }
+          }
+          if (data.reset || (!data.teamNumber && (!data.stations || Object.keys(data.stations).length === 0))) {
+            if (solvedCount > 0 || savedTeam) {
+              clearLocalQuestProgress();
+              setTeamState("");
+            }
+            return;
+          }
+          applyServer(data.stations, data.finishedAt);
+          if (data.teamName) setTeamState(data.teamName);
+        })
+        .catch(() => {});
+    }
+  }, [applyServer, solvedCount]);
 
   return (
     <div className="card poster">

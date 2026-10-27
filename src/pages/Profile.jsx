@@ -8,6 +8,7 @@ import { useProgress } from "../useProgress.js";
 import { useGameStatus } from "../useGameStatus.js";
 import CountdownTimer from "../components/CountdownTimer.jsx";
 import Modal from "../components/Modal.jsx";
+import { syncQuestEpoch, clearLocalQuestProgress } from "../lib/questSync.js";
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -58,8 +59,8 @@ export default function Profile() {
     loadProfile();
   }, []);
 
-  // Подтягиваем прогресс с сервера: на новом устройстве localStorage пуст,
-  // а «Продолжить квест» должен вести на правильную точку.
+// Подтягиваем прогресс с сервера: на новом устройстве localStorage пуст,
+// а при удалении квеста админом — очищаем локальные данные.
   useEffect(() => {
     if (!HAS_BACKEND) return;
     const teamNumber = getTeamNumber();
@@ -70,18 +71,34 @@ export default function Profile() {
     fetchProgress({ teamNumber, phone })
       .then((data) => {
         if (!cancelled && data) {
-          if (data.stations) {
-            applyServer(data.stations, data.finishedAt);
+          if (data.questId) {
+            const wasReset = syncQuestEpoch(data.questId);
+            if (wasReset) {
+              setProfile(prev => ({ ...prev, teamNumber: "", teamName: "" }));
+              return;
+            }
           }
-          if (data.teamNumber && !getTeamNumber()) {
+          if (data.reset || (!data.teamNumber && (!data.stations || Object.keys(data.stations).length === 0))) {
+            clearLocalQuestProgress();
+            setProfile(prev => ({ ...prev, teamNumber: "", teamName: "" }));
+            return;
+          }
+          applyServer(data.stations, data.finishedAt);
+          if (data.teamNumber) {
             setTeamNumber(data.teamNumber);
             setProfile(prev => ({ ...prev, teamNumber: data.teamNumber }));
+          } else {
+            setTeamNumber("");
+            setProfile(prev => ({ ...prev, teamNumber: "" }));
           }
-          if (data.teamName && !getTeam()) {
+          if (data.teamName) {
             setTeam(data.teamName);
             setProfile(prev => ({ ...prev, teamName: data.teamName }));
+          } else {
+            setTeam("");
+            setProfile(prev => ({ ...prev, teamName: "" }));
           }
-          if (data.userName && !getName()) {
+          if (data.userName) {
             setName(data.userName);
             setProfile(prev => ({ ...prev, name: data.userName }));
           }

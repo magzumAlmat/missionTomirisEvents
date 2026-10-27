@@ -17,6 +17,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEAMS_FILE = path.join(__dirname, "teams.json");
 const PROGRESS_FILE = path.join(__dirname, "progress.json");
 const SUBMISSIONS_FILE = path.join(__dirname, "submissions.json");
+const QUEST_STATE_FILE = path.join(__dirname, "quest_state.json");
+
+export function getQuestState() {
+  const fallback = { questId: 1, resetAt: null };
+  const data = readJson(QUEST_STATE_FILE, fallback);
+  return data && data.questId ? data : fallback;
+}
 
 /* ---------- низкий уровень ---------- */
 
@@ -414,6 +421,10 @@ export function resetAll() {
   writeJson(TEAMS_FILE, []);
   writeJson(PROGRESS_FILE, {});
   writeJson(SUBMISSIONS_FILE, []);
+
+  const newState = { questId: Date.now(), resetAt: new Date().toISOString() };
+  writeJson(QUEST_STATE_FILE, newState);
+
   return counts;
 }
 

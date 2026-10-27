@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { QUEST } from "./questConfig.js";
 
 const STORE_KEY = "event_tomiris_progress_v1";
@@ -28,6 +28,15 @@ function write(obj) {
 export function useProgress() {
   const [state, setState] = useState(read);
 
+  // Слушаем событие сброса квеста админом — моментально сбрасывает состояние
+  useEffect(() => {
+    function onReset() {
+      setState({});
+    }
+    window.addEventListener("quest_reset", onReset);
+    return () => window.removeEventListener("quest_reset", onReset);
+  }, []);
+
   const isSolved = useCallback((id) => !!state["s" + id], [state]);
 
   /** Отметить точку взятой. */
@@ -39,10 +48,14 @@ export function useProgress() {
     });
   }, []);
 
-  /** Принять прогресс, полученный с сервера (восстановление на новом устройстве). */
+  /** Принять прогресс, полученный с сервера (восстановление на новом устройстве / сброс). */
   const applyServer = useCallback((stations, finishedAt) => {
-    setState((prev) => {
-      const next = { ...prev };
+    setState(() => {
+      if (!stations || Object.keys(stations).length === 0) {
+        write({});
+        return {};
+      }
+      const next = {};
       for (const [id, info] of Object.entries(stations || {})) {
         next["s" + id] = { at: info.at || null };
       }

@@ -29,6 +29,7 @@ import {
   participantsByTeam,
   progressKey,
   resetAll,
+  getQuestState,
   solveStation,
   standings,
   listTeams,
@@ -458,7 +459,8 @@ function writeSettings(data) {
 app.get("/api/settings", (_req, res) => {
   try {
     const settings = readSettings();
-    res.json({ ok: true, settings, isGameStarted: isGameStarted() });
+    const questState = getQuestState();
+    res.json({ ok: true, settings, isGameStarted: isGameStarted(), questId: questState.questId });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
   }
@@ -577,11 +579,31 @@ app.delete("/api/teams/:number", (req, res) => {
 app.post("/api/admin/reset-quest", (req, res) => {
   if (!requireToken(res)) return;
   const counts = resetAll();
-  const kept = readParticipants().length;
+  try {
+    deleteAllCaptains();
+  } catch (e) {
+    console.error("Error clearing captains on reset-quest:", e);
+  }
+  const participants = readParticipants();
+  let partsModified = false;
+  participants.forEach((p) => {
+    if (p.teamNumber || p.teamName || p.hasTeam) {
+      p.teamNumber = null;
+      p.teamName = "";
+      p.hasTeam = false;
+      partsModified = true;
+    }
+  });
+  if (partsModified) {
+    saveParticipants(participants);
+  }
+  const kept = participants.length;
+  const questState = getQuestState();
   res.json({
     ok: true,
     removed: counts,
     keptParticipants: kept,
+    questId: questState.questId,
   });
 });
 
@@ -1277,8 +1299,13 @@ app.get("/api/progress", (req, res) => {
     return res.status(400).json({ ok: false, error: "Нужен номер команды или телефон." });
   }
   const entry = getProgress(key);
+  const questState = getQuestState();
+  const isReset = !team && (!entry || !entry.stations || Object.keys(entry.stations).length === 0);
+
   res.json({
     ok: true,
+    questId: questState.questId,
+    reset: isReset,
     total: TOTAL_STATIONS,
     teamNumber: team ? team.number : (participant?.teamNumber || null),
     teamName: team ? team.name : (participant?.teamName || entry?.teamName || ""),
@@ -1597,7 +1624,25 @@ async function askFinishConfirmation(targetChatId, options = {}) {
  */
 async function handleFinishQuestCommand(targetChatId, options = {}) {
   const counts = resetAll();
-  const kept = readParticipants().length;
+  try {
+    deleteAllCaptains();
+  } catch (e) {
+    console.error("Error clearing captains on /finish_quest:", e);
+  }
+  const participants = readParticipants();
+  let partsModified = false;
+  participants.forEach((p) => {
+    if (p.teamNumber || p.teamName || p.hasTeam) {
+      p.teamNumber = null;
+      p.teamName = "";
+      p.hasTeam = false;
+      partsModified = true;
+    }
+  });
+  if (partsModified) {
+    saveParticipants(participants);
+  }
+  const kept = participants.length;
   const text =
     `🏁 <b>КВЕСТ ЗАВЕРШЁН</b>\n\n` +
     `🗑 Удалено:\n` +
