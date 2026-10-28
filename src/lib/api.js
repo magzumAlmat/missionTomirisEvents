@@ -147,8 +147,8 @@ export async function fetchCaptains() {
 }
 
 /** Создать нового капитана */
-export async function createCaptain({ name, phone, slots, hasCar }) {
-  return post("/api/captains/create", { name, phone, slots, hasCar });
+export async function createCaptain({ name, phone, slots, hasCar, teamName }) {
+  return post("/api/captains/create", { name, phone, slots, hasCar, teamName });
 }
 
 /** Подписаться на капитана */

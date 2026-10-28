@@ -100,6 +100,12 @@ export function checkPhoneRegistration(phone, options = {}) {
       if (Array.isArray(cap.participants)) {
         const member = cap.participants.find((p) => normalizePhone(p.phone) === norm);
         if (member) {
+          if (options.ignoreRecentSubscribedMs && member.subscribedAt) {
+            const age = Date.now() - new Date(member.subscribedAt).getTime();
+            if (age < options.ignoreRecentSubscribedMs) {
+              continue;
+            }
+          }
           return {
             registered: true,
             details: {

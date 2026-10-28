@@ -305,10 +305,12 @@ export default function Register() {
       const trimmedName = name.trim();
       const trimmedPhone = phone.trim();
 
+      let regResult = null;
+
       switch (registrationType) {
-        case "SOLO":
+        case "SOLO": {
           await addSoloUser({ name: trimmedName, phone: trimmedPhone, hasCar });
-          await registerParticipant({
+          regResult = await registerParticipant({
             name: trimmedName,
             phone: trimmedPhone,
             hasCar,
@@ -317,8 +319,9 @@ export default function Register() {
             teamSize: 0,
           });
           break;
+        }
 
-        case "CREATE_TEAM":
+        case "CREATE_TEAM": {
           if (!slotsOk) {
             throw new Error("Количество участников в команде должно быть от 2 до 5 человек.");
           }
@@ -327,8 +330,9 @@ export default function Register() {
             phone: trimmedPhone,
             slots: slotsNum,
             hasCar,
+            teamName: teamName.trim(),
           });
-          const resCreate = await registerParticipant({
+          regResult = await registerParticipant({
             name: trimmedName,
             phone: trimmedPhone,
             hasCar,
@@ -336,55 +340,53 @@ export default function Register() {
             teamName: teamName.trim(),
             teamSize: slotsNum,
           });
-          if (resCreate?.teamNumber) {
-            setTeamNumberState(resCreate.teamNumber);
-            setTeamNumber(resCreate.teamNumber);
-          }
           break;
+        }
 
         case "JOIN_CAPTAIN":
-          const selectedCap = captains.find(c => c.id === selectedCaptainId);
-          await subscribeToCaptain({
-            captainId: selectedCaptainId,
-            name: trimmedName,
-            phone: trimmedPhone,
-            hasCar,
-          });
-          const resJoin = await registerParticipant({
-            name: trimmedName,
-            phone: trimmedPhone,
-            hasCar,
-            hasTeam: true,
-            teamName: selectedCap?.teamName || `Команда ${selectedCap?.name || selectedCaptainId}`,
-            teamSize: 0,
-          });
-          if (resJoin?.teamNumber) {
-            setTeamNumberState(resJoin.teamNumber);
-            setTeamNumber(resJoin.teamNumber);
+        case "JOIN_TEAM": {
+          const selectedCap = selectedCaptainId ? captains.find(c => c.id === selectedCaptainId) : null;
+          if (selectedCaptainId && selectedCap) {
+            const capTeam = selectedCap.teamName || (selectedCap.name ? `Команда ${selectedCap.name}` : `Команда ${selectedCaptainId}`);
+            setTeamNameState(capTeam);
+            await subscribeToCaptain({
+              captainId: selectedCaptainId,
+              name: trimmedName,
+              phone: trimmedPhone,
+              hasCar,
+            });
+            regResult = await registerParticipant({
+              name: trimmedName,
+              phone: trimmedPhone,
+              hasCar,
+              hasTeam: true,
+              teamName: capTeam,
+              teamSize: 0,
+            });
+          } else {
+            regResult = await registerParticipant({
+              name: trimmedName,
+              phone: trimmedPhone,
+              hasCar,
+              hasTeam: true,
+              teamName: teamName.trim(),
+              teamSize: 1,
+            });
           }
           break;
-
-        case "JOIN_TEAM":
-          const res = await registerParticipant({
-            name: trimmedName,
-            phone: trimmedPhone,
-            hasCar,
-            hasTeam: true,
-            teamName: teamName.trim(),
-            teamSize: 1,
-          });
-          if (res?.teamNumber) {
-            setTeamNumberState(res.teamNumber);
-            setTeamNumber(res.teamNumber);
-          }
-          break;
+        }
 
         default:
           throw new Error("Выберите тип регистрации");
       }
 
+      if (regResult?.teamNumber) {
+        setTeamNumberState(regResult.teamNumber);
+        setTeamNumber(regResult.teamNumber);
+      }
+
       // Сохраняем в localStorage только при успешной регистрации
-      const serverQuestId = resCreate?.questId || resJoin?.questId || res?.questId;
+      const serverQuestId = regResult?.questId;
       if (serverQuestId) {
         setLocalQuestId(serverQuestId);
       }

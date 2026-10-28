@@ -636,7 +636,11 @@ app.post("/api/register", async (req, res) => {
   }
 
   // Валидация: проверка на повторную регистрацию того же номера телефона
-  const regCheck = checkPhoneRegistration(phone, { ignoreRecentCaptainsMs: 60000, ignoreRecentSoloMs: 60000 });
+  const regCheck = checkPhoneRegistration(phone, {
+    ignoreRecentCaptainsMs: 60000,
+    ignoreRecentSoloMs: 60000,
+    ignoreRecentSubscribedMs: 60000,
+  });
   if (regCheck.registered) {
     return res.status(400).json({
       ok: false,
@@ -810,11 +814,11 @@ app.post("/api/captains/create", async (req, res) => {
   if (!CHAT_ID) {
     return res.status(500).json({ ok: false, error: "TELEGRAM_CHAT_ID не задан" });
   }
-  const { name, phone, slots, hasCar } = req.body || {};
+  const { name, phone, slots, hasCar, teamName } = req.body || {};
   if (!name || !phone) {
     return res.status(400).json({ ok: false, error: "Нужны имя и телефон капитана" });
   }
-  const result = createCaptain({ name, phone, slots, hasCar });
+  const result = createCaptain({ name, phone, slots, hasCar, teamName });
   if (result.error) {
     return res.status(400).json({ ok: false, error: result.error });
   }

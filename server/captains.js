@@ -52,7 +52,7 @@ export function findCaptainByPhone(phone) {
   return listCaptains().find((c) => (c.phone || "").replace(/\D/g, "").slice(-10) === phoneClean) || null;
 }
 
-export function createCaptain({ name, phone, slots, hasCar }) {
+export function createCaptain({ name, phone, slots, hasCar, teamName }) {
   const captains = listCaptains();
   const id = `cap_${Date.now()}`;
 
@@ -74,6 +74,7 @@ export function createCaptain({ name, phone, slots, hasCar }) {
     id,
     name: String(name || "").trim(),
     phone: String(phone || "").trim(),
+    teamName: String(teamName || "").trim(),
     slots: numSlots,
     // currentParticipants — только приглашённые участники БЕЗ капитана.
     // slots считаются «включая капитана», поэтому при расчёте свободных мест
