@@ -191,7 +191,7 @@ export default function Landing() {
         </div>
         <div className="stat-card">
           <span className="stat-icon">👥</span>
-          <span className="stat-value">1-5</span>
+          <span className="stat-value">2-5</span>
           <span className="stat-label">Игроков в команде</span>
         </div>
       </div>
@@ -255,7 +255,7 @@ export default function Landing() {
             <div className="step-content">
               <h3>Прибытие и задание</h3>
               <p className="muted" style={{ margin: "2px 0 0", fontSize: "14px", lineHeight: "1.5" }}>
-                Доберитесь до указанной локации. Получите там задание.
+                Доберитесь до угаданной локации. Получите там задание.
               </p>
             </div>
           </div>
@@ -272,9 +272,9 @@ export default function Landing() {
                   rel="noreferrer"
                   style={{ color: "var(--accent)", textDecoration: "underline", fontWeight: 600 }}
                 >
-                  @thisMirrorbot
+                  @thisMirrorbot 
                 </a>{" "}
-                и общается с Хранительницей. Остальные участники могут свободно переписываться в общем чате.
+                и общается с Хранительницей. Остальные участники могут свободно общаться в общем чате.
               </p>
             </div>
           </div>
