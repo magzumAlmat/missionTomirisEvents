@@ -27,7 +27,7 @@ export async function notify(event, { stationId, stationName, phone, team, teamN
  * Регистрация нового участника.
  * payload: { name, phone, hasCar, hasTeam, teamName?, teamSize? }
  */
-export async function registerParticipant({ name, phone, hasCar, hasTeam, teamName, teamSize }) {
+export async function registerParticipant({ name, phone, hasCar, hasTeam, teamName, teamSize, isCaptain }) {
   if (!API_URL) {
     throw new Error(
       "Бэкенд не подключён: не задан VITE_API_URL. Перезапусти `npm run server` после правки .env."
@@ -36,7 +36,7 @@ export async function registerParticipant({ name, phone, hasCar, hasTeam, teamNa
   const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, phone, hasCar, hasTeam, teamName, teamSize }),
+    body: JSON.stringify({ name, phone, hasCar, hasTeam, teamName, teamSize, isCaptain }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {

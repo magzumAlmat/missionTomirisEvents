@@ -54,14 +54,7 @@ export function findCaptainByPhone(phone) {
 
 export function createCaptain({ name, phone, slots, hasCar, teamName }) {
   const captains = listCaptains();
-  const id = `cap_${Date.now()}`;
-
-  const regCheck = checkPhoneRegistration(phone);
-  if (regCheck.registered) {
-    return {
-      error: `Номер телефона ${phone} уже зарегистрирован (${regCheck.details?.description || "в квесте"}). Повторная регистрация невозможна.`,
-    };
-  }
+  const phoneNorm = normalizePhone(phone);
 
   const numSlots = Number(slots);
   if (!numSlots || numSlots < 2 || numSlots > 5) {
@@ -70,15 +63,42 @@ export function createCaptain({ name, phone, slots, hasCar, teamName }) {
     };
   }
 
+  // Проверяем, зарегистрирован ли уже этот номер в завершённых регистрациях (participants.json)
+  const participants = readJson(DB_FILE, []);
+  const inParticipants = Array.isArray(participants) && participants.some((p) => normalizePhone(p.phone) === phoneNorm);
+  if (inParticipants) {
+    return {
+      error: `Номер телефона ${phone} уже зарегистрирован в квесте. Повторная регистрация невозможна.`,
+    };
+  }
+
+  // Если капитан с таким номером уже есть в captains.json (например, от предыдущей незавершённой попытки) — обновляем его данные
+  const existingCap = captains.find((c) => normalizePhone(c.phone) === phoneNorm);
+  if (existingCap) {
+    existingCap.name = String(name || "").trim();
+    existingCap.slots = numSlots;
+    existingCap.hasCar = !!hasCar;
+    existingCap.teamName = String(teamName || "").trim();
+    existingCap.createdAt = new Date().toISOString();
+    writeJson(CAPTAINS_FILE, captains);
+    return { captain: existingCap };
+  }
+
+  // Обычная проверка на случай, если телефон числится где-то ещё (например, в подписчиках другого капитана)
+  const regCheck = checkPhoneRegistration(phone);
+  if (regCheck.registered) {
+    return {
+      error: `Номер телефона ${phone} уже зарегистрирован (${regCheck.details?.description || "в квесте"}). Повторная регистрация невозможна.`,
+    };
+  }
+
+  const id = `cap_${Date.now()}`;
   const captain = {
     id,
     name: String(name || "").trim(),
     phone: String(phone || "").trim(),
     teamName: String(teamName || "").trim(),
     slots: numSlots,
-    // currentParticipants — только приглашённые участники БЕЗ капитана.
-    // slots считаются «включая капитана», поэтому при расчёте свободных мест
-    // всегда вычитаем одно место под самого капитана.
     currentParticipants: 0,
     participants: [],
     hasCar: !!hasCar,

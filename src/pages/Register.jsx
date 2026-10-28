@@ -339,6 +339,7 @@ export default function Register() {
             hasTeam: true,
             teamName: teamName.trim(),
             teamSize: slotsNum,
+            isCaptain: true,
           });
           break;
         }

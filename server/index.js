@@ -627,7 +627,7 @@ app.post("/api/register", async (req, res) => {
     return res.status(500).json({ ok: false, error: "TELEGRAM_CHAT_ID не задан в .env" });
   }
 
-  const { name, phone, hasCar, hasTeam, teamName, teamSize } = req.body || {};
+  const { name, phone, hasCar, hasTeam, teamName, teamSize, isCaptain } = req.body || {};
   if (!name || !name.trim()) {
     return res.status(400).json({ ok: false, error: "Введите имя участника." });
   }
@@ -657,6 +657,14 @@ app.post("/api/register", async (req, res) => {
   }
   const existingTeam = inTeam ? findTeamByName(teamNameClean) : null;
 
+  // Если капитан создаёт команду с уже занятым другим капитаном названием:
+  if (isCaptain && existingTeam && normalizePhone(existingTeam.captainPhone) !== normalizePhone(phone)) {
+    return res.status(400).json({
+      ok: false,
+      error: `Команда с названием «${teamNameClean}» уже создана другим капитаном. Пожалуйста, укажите другое название команды или выберите «Присоединиться к команде».`,
+    });
+  }
+
   // Размер команды — свойство самой команды, а не отдельной заявки.
   // Капитан задаёт его при создании, участник не должен его уменьшать.
   let teamSizeNum = Number(teamSize);
@@ -670,10 +678,9 @@ app.post("/api/register", async (req, res) => {
     teamSizeNum = 1;
   }
 
-  // Вступление в команду капитана: обновляем занятые слоты в captains.json.
-  // Капитан при своей регистрации сюда не попадает — команды ещё не существует.
+  // Вступление в команду капитана: только для УЧАСТНИКОВ (не для создающего команду капитана)
   const existingCaptain =
-    existingTeam && existingTeam.captainPhone
+    !isCaptain && existingTeam && existingTeam.captainPhone
       ? findCaptainByPhone(existingTeam.captainPhone)
       : null;
   if (existingCaptain) {
