@@ -331,6 +331,20 @@ export default function Landing() {
         </button>
       </div>
 
+      {/* ← КНОПКА НАЗАД */}
+      <div style={{ display: "flex", justifyContent: "center", margin: "24px 0 8px" }}>
+        <button
+          className="btn ghost"
+          onClick={() => {
+            if (window.history.length > 1) navigate(-1);
+            else navigate("/");
+          }}
+          style={{ minWidth: 180 }}
+        >
+          ← Назад
+        </button>
+      </div>
+
       {/* 📌 ЗАКРЕПЛЕННАЯ ПЛАШКА ДЛЯ МОБИЛЬНЫХ */}
       <div className="sticky-mobile-bar">
         <div className="sticky-timer">

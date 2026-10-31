@@ -367,6 +367,19 @@ export default function Profile() {
           </div>
         </div>
 
+        <div style={{ display: "flex", justifyContent: "center", margin: "24px 0 8px" }}>
+          <button
+            className="btn ghost"
+            onClick={() => {
+              if (window.history.length > 1) navigate(-1);
+              else navigate("/");
+            }}
+            style={{ minWidth: 180 }}
+          >
+            ← Назад
+          </button>
+        </div>
+
         {selectedHistoryStation && (
           <Modal onClose={() => setSelectedHistoryStation(null)}>
             <div className="eyebrow">Историческая справка · Локация {selectedHistoryStation.id}</div>

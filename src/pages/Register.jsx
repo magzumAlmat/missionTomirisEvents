@@ -499,6 +499,13 @@ export default function Register() {
         >
           Зарегистрировать ещё одного участника
         </button>
+        <button
+          className="btn ghost"
+          style={{ marginTop: 8 }}
+          onClick={() => navigate("/")}
+        >
+          ← Назад
+        </button>
       </div>
     );
   }
@@ -805,9 +812,12 @@ export default function Register() {
         <button
           className="btn ghost mt"
           style={{ marginTop: 12 }}
-          onClick={() => navigate("/profile")}
+          onClick={() => {
+            if (window.history.length > 1) navigate(-1);
+            else navigate("/");
+          }}
         >
-          На главную
+          ← Назад
         </button>
     </div>
   );

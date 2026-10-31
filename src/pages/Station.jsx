@@ -440,6 +440,16 @@ export default function Station() {
         <button className="btn ghost" onClick={() => navigate("/profile")}>
           На главную
         </button>
+        <button
+          className="btn ghost"
+          style={{ marginTop: 8 }}
+          onClick={() => {
+            if (window.history.length > 1) navigate(-1);
+            else navigate("/");
+          }}
+        >
+          ← Назад
+        </button>
       </div>
     );
   }
@@ -487,6 +497,15 @@ export default function Station() {
           <button className="btn ghost" onClick={() => navigate("/landing")}>
             ℹ️ О квесте
           </button>
+          <button
+            className="btn ghost"
+            onClick={() => {
+              if (window.history.length > 1) navigate(-1);
+              else navigate("/");
+            }}
+          >
+            ← Назад
+          </button>
         </div>
       </div>
     );
@@ -512,6 +531,16 @@ export default function Station() {
         <button className="btn" onClick={() => navigate("/profile")}>
           👤 Мой профиль и команда
         </button>
+        <button
+          className="btn ghost"
+          style={{ marginTop: 8 }}
+          onClick={() => {
+            if (window.history.length > 1) navigate(-1);
+            else navigate("/");
+          }}
+        >
+          ← Назад
+        </button>
       </div>
     );
   }
@@ -528,7 +557,7 @@ export default function Station() {
   return (
     <div className="card">
       {taskComplete && <span className="done-badge">✓ Точка пройдена</span>}
-      {riddleSolved && !taskComplete && <span className="done-badge">✓ Локация разгадана</span>}
+      {riddleSolved && !taskComplete && station?.id !== 1 && <span className="done-badge">✓ Локация разгадана</span>}
 
       <div className="eyebrow">
         Точка {station.id} из {QUEST.stations.length}
@@ -539,8 +568,8 @@ export default function Station() {
         <h2 style={{ marginBottom: 12 }}>{station.name}</h2>
       )}
 
-      {/* ЗАГАДКА */}
-      {riddleText && !isStartStation && (
+      {/* ЗАГАДКА (на точке 1 текст загадки скрыт) */}
+      {riddleText && !isStartStation && station?.id !== 1 && (
         <div className="task riddle-block" style={{ whiteSpace: "pre-wrap" }}>
           <div className="eyebrow" style={{ color: "var(--accent)", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
             <span>🔮</span> ЗАГАДКА
@@ -606,16 +635,26 @@ export default function Station() {
             </p>
           )}
 
-          {/* Фаза 1: загадка */}
+          {/* Фаза 1: загадка (для точки 1 — сразу кнопка подтверждения прибытия, без кнопки разгадки) */}
           {canSolveRiddle && (
             <>
-              <button
-                className="btn"
-                onClick={onSolvedRiddle}
-                disabled={solvedSending}
-              >
-                {solvedSending ? "Отмечаем…" : "🔓 Я разгадал(а) локацию"}
-              </button>
+              {station?.id === 1 ? (
+                <button
+                  className="btn arrive"
+                  onClick={() => setShowArriveModal(true)}
+                  disabled={arriveSending}
+                >
+                  {arriveSending ? "Отправляем…" : "📍 Подтвердить прибытие"}
+                </button>
+              ) : (
+                <button
+                  className="btn"
+                  onClick={onSolvedRiddle}
+                  disabled={solvedSending}
+                >
+                  {solvedSending ? "Отмечаем…" : "🔓 Я разгадал(а) локацию"}
+                </button>
+              )}
 
               <button
                 className="btn ghost"
@@ -645,18 +684,20 @@ export default function Station() {
           {/* Фаза 2: загадка разгадана, но капитан ещё не доехал */}
           {canArrive && (
             <>
-              <div style={{
-                padding: "12px 14px",
-                borderRadius: 10,
-                background: "rgba(76, 217, 100, 0.1)",
-                border: "1px solid rgba(76, 217, 100, 0.35)",
-                color: "#b8f7c4",
-                fontSize: 14,
-                lineHeight: 1.5,
-              }}>
-                ✅ Локация разгадана. Теперь отправляйтесь на место, сделайте селфи
-                на фоне локации и подтвердите прибытие.
-              </div>
+              {station?.id !== 1 && (
+                <div style={{
+                  padding: "12px 14px",
+                  borderRadius: 10,
+                  background: "rgba(76, 217, 100, 0.1)",
+                  border: "1px solid rgba(76, 217, 100, 0.35)",
+                  color: "#b8f7c4",
+                  fontSize: 14,
+                  lineHeight: 1.5,
+                }}>
+                  ✅ Локация разгадана. Теперь отправляйтесь на место, сделайте селфи
+                  на фоне локации и подтвердите прибытие.
+                </div>
+              )}
               <button
                 className="btn arrive"
                 onClick={() => setShowArriveModal(true)}
@@ -732,6 +773,20 @@ export default function Station() {
           </button>
         </div>
       )}
+
+      {/* ← КНОПКА НАЗАД */}
+      <div style={{ display: "flex", justifyContent: "center", margin: "24px 0 8px" }}>
+        <button
+          className="btn ghost"
+          onClick={() => {
+            if (window.history.length > 1) navigate(-1);
+            else navigate("/profile");
+          }}
+          style={{ minWidth: 180 }}
+        >
+          ← Назад
+        </button>
+      </div>
 
       {/* ---- Модалки ---- */}
 

@@ -305,7 +305,7 @@ export default function AdminProgress() {
 
                       // Ручное прибытие: капитан разгадал, но не подтвердил прибытие.
                       const canMarkArrival = Boolean(
-                        r.teamNumber && riddleAt && !arrivalAt && !notGuessedAt
+                        r.teamNumber && (riddleAt || s.id === 1 || s.id === 0) && !arrivalAt && !notGuessedAt
                       );
                       const markKey = `${r.key}-${s.id}`;
 

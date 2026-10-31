@@ -513,7 +513,7 @@ app.post("/api/admin/mark-arrival", (req, res) => {
   const riddleSolved = Boolean(before?.solved?.[sid]);
   const addressOpened = Boolean(before?.notGuessed?.[sid]);
 
-  if (!alreadyArrived && !riddleSolved && !addressOpened) {
+  if (station.id !== 1 && station.id !== 0 && !alreadyArrived && !riddleSolved && !addressOpened) {
     return res.status(409).json({
       ok: false,
       error: "Команда ещё не разгадала эту локацию и не открывала адрес.",
