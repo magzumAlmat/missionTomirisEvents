@@ -44,8 +44,65 @@ function materialLocationText(m) {
     if (st) return `Точка ${m.station}: ${st.name}`;
     return `Точка ${m.station}`;
   }
-  if (m.location) return m.location;
+  if (m.location) {
+    const locLower = m.location.toLowerCase();
+    for (const st of QUEST.stations) {
+      if (
+        locLower === String(st.id) ||
+        locLower === `точка ${st.id}` ||
+        locLower === `точка ${st.name.toLowerCase()}` ||
+        locLower.includes(st.name.toLowerCase())
+      ) {
+        return `Точка ${st.id}: ${st.name}`;
+      }
+    }
+    return m.location;
+  }
   return "Локация не указана";
+}
+
+/** Определение последней пройденной локации и времени активности команды */
+function getLastStationInfo(row, latestMaterial) {
+  const allActions = [];
+  const addActions = (dict, type) => {
+    for (const [sid, val] of Object.entries(dict || {})) {
+      const t = typeof val === "object" ? val?.at : val;
+      if (t) allActions.push({ sid: Number(sid), time: t, type });
+    }
+  };
+  addActions(row.stations, "Задание");
+  addActions(row.arrivals, "Прибытие");
+  addActions(row.riddleSolved, "Разгадка");
+  addActions(row.notGuessed, "Адрес");
+
+  allActions.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+
+  if (allActions.length > 0) {
+    const top = allActions[0];
+    const st = QUEST.stations.find((s) => Number(s.id) === top.sid);
+    return {
+      time: top.time,
+      stationId: top.sid,
+      stationName: st ? st.name : `Точка ${top.sid}`,
+      type: top.type,
+      isFinished: !!row.finishedAt,
+    };
+  }
+
+  if (latestMaterial) {
+    const st = latestMaterial.station != null
+      ? QUEST.stations.find((s) => String(s.id) === String(latestMaterial.station))
+      : null;
+    return {
+      time: latestMaterial.at,
+      stationId: latestMaterial.station,
+      stationName: st ? st.name : materialLocationText(latestMaterial),
+      type: "Материал",
+      isFinished: false,
+    };
+  }
+
+  return null;
 }
 
 /** Сопоставление материала со станцией по id или тексту локации */
@@ -286,7 +343,7 @@ export default function AdminProgress() {
               ))}
               <th>Итог</th>
               <th>Пройдено</th>
-              <th>Последняя</th>
+              <th style={{ minWidth: 155 }}>Последняя локация</th>
               <th style={{ minWidth: 260 }}>Материалы капитанов и время</th>
               <th className="no-print">Действия</th>
             </tr>
@@ -303,9 +360,13 @@ export default function AdminProgress() {
               </tr>
             ) : (
               rows.map((r) => {
-                const teamMaterials = submissions.filter(
-                  (m) => Number(m.teamNumber) === Number(r.teamNumber)
-                );
+                const teamMaterials = submissions.filter((m) => {
+                  if (r.teamNumber && m.teamNumber && Number(m.teamNumber) === Number(r.teamNumber)) return true;
+                  if (r.captainName && m.captainName && r.captainName.trim().toLowerCase() === m.captainName.trim().toLowerCase()) return true;
+                  if (r.teamName && m.teamName && r.teamName.trim().toLowerCase() === m.teamName.trim().toLowerCase()) return true;
+                  return false;
+                });
+                const lastInfo = getLastStationInfo(r, latestByTeam.get(Number(r.teamNumber)));
 
                 return (
                   <tr key={r.key}>
@@ -441,8 +502,19 @@ export default function AdminProgress() {
                     <td className="board-num">
                       {r.solved}/{total}
                     </td>
-                    <td className="board-num">
-                      {r.finishedAt ? `🏁 ${time(r.finishedAt)}` : time(r.lastAt) || "—"}
+                    <td className="board-num" style={{ textAlign: "center", minWidth: 155, fontSize: 12 }}>
+                      {lastInfo ? (
+                        <div>
+                          <div style={{ fontWeight: 700, color: lastInfo.isFinished ? "#4cd964" : "#ffcc4d" }}>
+                            {lastInfo.isFinished ? "🏁 Финиш" : `Точка ${lastInfo.stationId}: ${lastInfo.stationName}`}
+                          </div>
+                          <div className="muted tiny" style={{ marginTop: 2 }}>
+                            🕒 {time(lastInfo.time)} {lastInfo.type ? `(${lastInfo.type})` : ""}
+                          </div>
+                        </div>
+                      ) : (
+                        time(r.lastAt) || "—"
+                      )}
                     </td>
                     <td style={{ textAlign: "left", minWidth: 260, maxWidth: 360, whiteSpace: "normal", verticalAlign: "top" }}>
                       {teamMaterials.length === 0 ? (

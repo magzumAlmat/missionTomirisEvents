@@ -317,7 +317,7 @@ export default function Admin() {
       <h2>Панель администратора</h2>
 
       {/* Табы */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: 10 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: 10, flexWrap: "wrap" }}>
         {[
           { key: "qr", label: "📱 QR-коды" },
           { key: "captains", label: "👑 Капитаны" },
@@ -333,6 +333,14 @@ export default function Admin() {
             {tab.label}
           </button>
         ))}
+        <button
+          className="btn ghost"
+          onClick={() => navigate("/admin/progress")}
+          style={{ flex: 1, borderColor: "var(--accent)", color: "var(--accent)" }}
+          title="Открыть дэшборд прогресса команд"
+        >
+          📊 Дэшборд
+        </button>
       </div>
 
       {/* QR-коды */}
