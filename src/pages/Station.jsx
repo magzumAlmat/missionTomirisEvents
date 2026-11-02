@@ -684,20 +684,51 @@ export default function Station() {
           {/* Фаза 2: загадка разгадана, но капитан ещё не доехал */}
           {canArrive && (
             <>
-              {station?.id !== 1 && (
-                <div style={{
-                  padding: "12px 14px",
-                  borderRadius: 10,
-                  background: "rgba(76, 217, 100, 0.1)",
-                  border: "1px solid rgba(76, 217, 100, 0.35)",
-                  color: "#b8f7c4",
-                  fontSize: 14,
-                  lineHeight: 1.5,
-                }}>
-                  ✅ Локация разгадана. Теперь отправляйтесь на место, сделайте селфи
-                  на фоне локации и подтвердите прибытие.
-                </div>
-              )}
+              <div style={{
+                padding: "12px 14px",
+                borderRadius: 10,
+                background: "rgba(76, 217, 100, 0.1)",
+                border: "1px solid rgba(76, 217, 100, 0.35)",
+                color: "#b8f7c4",
+                fontSize: 14,
+                lineHeight: 1.5,
+              }}>
+                {station?.id === 1 ? (
+                  <>
+                    📍 Отправляйтесь на место, сделайте селфи на фоне локации, отправьте его в Telegram-бот{" "}
+                    <a
+                      href={MIRROR_BOT}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        color: "var(--accent)",
+                        fontWeight: 700,
+                        textDecoration: "underline",
+                      }}
+                    >
+                      @thisMirrorbot
+                    </a>{" "}
+                    и подтвердите прибытие.
+                  </>
+                ) : (
+                  <>
+                    ✅ Локация разгадана. Теперь отправляйтесь на место, сделайте селфи на фоне локации, отправьте его в Telegram-бот{" "}
+                    <a
+                      href={MIRROR_BOT}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        color: "var(--accent)",
+                        fontWeight: 700,
+                        textDecoration: "underline",
+                      }}
+                    >
+                      @thisMirrorbot
+                    </a>{" "}
+                    и подтвердите прибытие.
+                  </>
+                )}
+              </div>
               <button
                 className="btn arrive"
                 onClick={() => setShowArriveModal(true)}
@@ -856,8 +887,8 @@ export default function Station() {
           <h3>Подтверждение прибытия</h3>
           <p>
             Перед нажатием отправьте селфи капитана на фоне локации в Telegram-бот{" "}
-            <a href={MIRROR_BOT} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>
-              Mirror Bot
+            <a href={MIRROR_BOT} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", textDecoration: "underline", fontWeight: 700 }}>
+              @thisMirrorbot
             </a>
             . Иначе баллы не будут засчитаны.
           </p>
@@ -889,9 +920,9 @@ export default function Station() {
             <>
               <p>
                 Вы уверены? Перед завершением задания отправьте фото или
-                видеоматериалы боту в Telegram-бот{" "}
-                <a href={MIRROR_BOT} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>
-                  Mirror Bot
+                видеоматериалы в Telegram-бот{" "}
+                <a href={MIRROR_BOT} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", textDecoration: "underline", fontWeight: 700 }}>
+                  @thisMirrorbot
                 </a>
                 . Иначе баллы не будут засчитаны.
               </p>
