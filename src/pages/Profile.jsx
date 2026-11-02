@@ -151,6 +151,18 @@ export default function Profile() {
     return (
       <div className="card">
         <div className="feedback err">{error}</div>
+        <div style={{ display: "flex", justifyContent: "center", margin: "16px 0 8px" }}>
+          <button
+            className="btn ghost"
+            onClick={() => {
+              if (window.history.length > 1) navigate(-1);
+              else navigate("/");
+            }}
+            style={{ minWidth: 180 }}
+          >
+            ← Назад
+          </button>
+        </div>
       </div>
     );
   }

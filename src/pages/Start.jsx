@@ -132,6 +132,20 @@ export default function Start() {
       {poster.organizer && (
         <div className="poster-org">{poster.organizer}</div>
       )}
+
+      {/* ← КНОПКА НАЗАД */}
+      <div style={{ display: "flex", justifyContent: "center", margin: "20px 0 8px" }}>
+        <button
+          className="btn ghost"
+          onClick={() => {
+            if (window.history.length > 1) navigate(-1);
+            else navigate("/profile");
+          }}
+          style={{ minWidth: 180 }}
+        >
+          ← Назад
+        </button>
+      </div>
     </div>
   );
 }

@@ -778,6 +778,20 @@ export default function Admin() {
           )}
         </div>
       )}
+
+      {/* ← КНОПКА НАЗАД */}
+      <div style={{ display: "flex", justifyContent: "center", margin: "24px 0 8px" }}>
+        <button
+          className="btn ghost no-print"
+          onClick={() => {
+            if (window.history.length > 1) navigate(-1);
+            else navigate("/");
+          }}
+          style={{ minWidth: 180 }}
+        >
+          ← Назад
+        </button>
+      </div>
     </div>
   );
 }

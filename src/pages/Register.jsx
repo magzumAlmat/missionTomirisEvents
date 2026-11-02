@@ -499,13 +499,18 @@ export default function Register() {
         >
           Зарегистрировать ещё одного участника
         </button>
-        <button
-          className="btn ghost"
-          style={{ marginTop: 8 }}
-          onClick={() => navigate("/")}
-        >
-          ← Назад
-        </button>
+        <div style={{ display: "flex", justifyContent: "center", margin: "16px 0 8px" }}>
+          <button
+            className="btn ghost"
+            onClick={() => {
+              if (window.history.length > 1) navigate(-1);
+              else navigate("/");
+            }}
+            style={{ minWidth: 180 }}
+          >
+            ← Назад
+          </button>
+        </div>
       </div>
     );
   }
@@ -809,16 +814,25 @@ export default function Register() {
         </div>
       </form>
 
+      {/* ← КНОПКА НАЗАД */}
+      <div style={{ display: "flex", justifyContent: "center", margin: "20px 0 8px" }}>
         <button
-          className="btn ghost mt"
-          style={{ marginTop: 12 }}
+          type="button"
+          className="btn ghost"
           onClick={() => {
-            if (window.history.length > 1) navigate(-1);
-            else navigate("/");
+            if (currentStep > 1) {
+              setCurrentStep(currentStep - 1);
+            } else if (window.history.length > 1) {
+              navigate(-1);
+            } else {
+              navigate("/");
+            }
           }}
+          style={{ minWidth: 180 }}
         >
           ← Назад
         </button>
+      </div>
     </div>
   );
 }

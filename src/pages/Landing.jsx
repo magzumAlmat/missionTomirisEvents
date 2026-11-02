@@ -332,7 +332,7 @@ export default function Landing() {
       </div>
 
       {/* ← КНОПКА НАЗАД */}
-      <div style={{ display: "flex", justifyContent: "center", margin: "24px 0 8px" }}>
+      <div style={{ display: "flex", justifyContent: "center", margin: "24px 0 75px" }}>
         <button
           className="btn ghost"
           onClick={() => {

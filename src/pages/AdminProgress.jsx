@@ -37,11 +37,34 @@ const KIND_LABEL = {
   text: "💬 текст",
 };
 
-/** Что показать как локацию материала: текст капитана или номер точки. */
+/** Что показать как локацию материала: текст капитана или номер точки с названием. */
 function materialLocationText(m) {
+  if (m.station != null && m.station !== "") {
+    const st = QUEST.stations.find((s) => String(s.id) === String(m.station));
+    if (st) return `Точка ${m.station}: ${st.name}`;
+    return `Точка ${m.station}`;
+  }
   if (m.location) return m.location;
-  if (m.station != null && m.station !== "") return `Точка ${m.station}`;
   return "Локация не указана";
+}
+
+/** Сопоставление материала со станцией по id или тексту локации */
+function matchSubmissionToStation(m, station) {
+  const sid = String(station.id);
+  if (m.station != null && String(m.station) === sid) return true;
+  if (m.location) {
+    const loc = m.location.toLowerCase();
+    const stName = station.name.toLowerCase();
+    if (
+      loc.includes(stName) ||
+      loc.includes(`точка ${sid}`) ||
+      loc.includes(`точка ${station.id}`) ||
+      loc.includes(`локация ${sid}`)
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -237,14 +260,39 @@ export default function AdminProgress() {
               <tr>
                 <th className="board-team">Команда и капитан</th>
                 {QUEST.stations.map((s) => (
-                  <th key={s.id} title={s.name}>
-                    {s.id}
+                  <th
+                    key={s.id}
+                    title={`${s.id}. ${s.name}`}
+                    style={{
+                      minWidth: 125,
+                      maxWidth: 160,
+                      padding: "8px 6px",
+                      verticalAlign: "top",
+                      textAlign: "center",
+                    }}
+                  >
+                    <div style={{ fontWeight: 800, fontSize: 13, color: "var(--accent)" }}>
+                      Точка {s.id}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "#d7fff6",
+                        lineHeight: 1.25,
+                        marginTop: 3,
+                        whiteSpace: "normal",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {s.name}
+                    </div>
                   </th>
                 ))}
                 <th>Итог</th>
                 <th>Пройдено</th>
                 <th>Последняя</th>
-                <th style={{ minWidth: 220 }}>Материалы капитанов</th>
+                <th style={{ minWidth: 260 }}>Материалы капитанов и время</th>
                 <th className="no-print">Действия</th>
               </tr>
             </thead>
@@ -299,9 +347,7 @@ export default function AdminProgress() {
                       if (solvedAt) actions.push({ icon: "✓", label: "Задание", t: time(solvedAt) });
 
                       // Проверяем материалы для этой конкретной станции
-                      const stMaterials = teamMaterials.filter(
-                        (m) => Number(m.station) === s.id || String(m.station) === sid
-                      );
+                      const stMaterials = teamMaterials.filter((m) => matchSubmissionToStation(m, s));
 
                       // Ручное прибытие: капитан разгадал, но не подтвердил прибытие.
                       const canMarkArrival = Boolean(
@@ -316,6 +362,9 @@ export default function AdminProgress() {
                       }
                       if (stMaterials.length) {
                         titleParts.push(`📎 Материалов: ${stMaterials.length}`);
+                        for (const sm of stMaterials) {
+                          titleParts.push(`  • ${KIND_LABEL[sm.kind] || sm.kind}: ${time(sm.at)}`);
+                        }
                       }
 
                       return (
@@ -338,8 +387,33 @@ export default function AdminProgress() {
                               ⭐ {scoreText}
                             </div>
                             {stMaterials.length > 0 && (
-                              <div style={{ marginTop: 2, fontSize: 10, color: "var(--accent)" }}>
-                                📎 {stMaterials.length}
+                              <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 3 }}>
+                                {stMaterials.map((sm, smIdx) => (
+                                  <div
+                                    key={smIdx}
+                                    style={{
+                                      background: "rgba(107, 229, 201, 0.18)",
+                                      border: "1px solid rgba(107, 229, 201, 0.35)",
+                                      color: "#b8f7c4",
+                                      borderRadius: 4,
+                                      padding: "2px 4px",
+                                      fontSize: 10,
+                                      fontWeight: 600,
+                                      textAlign: "left",
+                                      lineHeight: 1.2,
+                                    }}
+                                  >
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 3 }}>
+                                      <span>{sm.kind === "video" ? "🎬" : sm.kind === "photo" ? "📸" : "💬"}</span>
+                                      <span style={{ fontSize: 9, opacity: 0.9 }}>{time(sm.at)}</span>
+                                    </div>
+                                    {sm.text && (
+                                      <div style={{ fontSize: 8, opacity: 0.8, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 90 }}>
+                                        {sm.text}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
                               </div>
                             )}
                             {canMarkArrival && (
@@ -365,33 +439,44 @@ export default function AdminProgress() {
                     <td className="board-num">
                       {r.finishedAt ? `🏁 ${time(r.finishedAt)}` : time(r.lastAt) || "—"}
                     </td>
-                    <td style={{ textAlign: "left", minWidth: 220, maxWidth: 320, whiteSpace: "normal", verticalAlign: "top" }}>
+                    <td style={{ textAlign: "left", minWidth: 260, maxWidth: 360, whiteSpace: "normal", verticalAlign: "top" }}>
                       {teamMaterials.length === 0 ? (
                         <span className="muted tiny">пока нет</span>
                       ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 200, overflowY: "auto", paddingRight: 4 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 220, overflowY: "auto", paddingRight: 4 }}>
                           {teamMaterials.map((m, idx) => (
                             <div
                               key={idx}
                               style={{
                                 padding: "6px 8px",
-                                background: "rgba(255, 255, 255, 0.04)",
-                                border: "1px solid rgba(255, 255, 255, 0.08)",
-                                borderRadius: 6,
+                                background: "rgba(255, 255, 255, 0.05)",
+                                border: "1px solid rgba(255, 255, 255, 0.12)",
+                                borderRadius: 8,
                                 fontSize: 12,
                               }}
                             >
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
                                 <span style={{ fontWeight: 700, color: "var(--accent)" }}>
-                                  {KIND_LABEL[m.kind] || m.kind || "материал"}
+                                  {m.kind === "video" ? "🎬 Видео" : m.kind === "photo" ? "📸 Фото" : "💬 Текст"}
                                 </span>
-                                <span className="muted tiny" style={{ margin: 0 }}>{time(m.at)}</span>
+                                <span
+                                  style={{
+                                    background: "rgba(255, 204, 77, 0.15)",
+                                    color: "#ffcc4d",
+                                    padding: "1px 6px",
+                                    borderRadius: 4,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  🕒 {time(m.at)}
+                                </span>
                               </div>
-                              <div style={{ color: "#d7fff6", fontWeight: 600, marginTop: 2 }}>
+                              <div style={{ color: "#d7fff6", fontWeight: 600, marginTop: 3, fontSize: 12 }}>
                                 📍 {materialLocationText(m)}
                               </div>
                               {m.text && (
-                                <div className="muted tiny" style={{ marginTop: 2, whiteSpace: "pre-wrap" }}>
+                                <div className="muted tiny" style={{ marginTop: 2, whiteSpace: "pre-wrap", color: "#ccc" }}>
                                   📝 {m.text}
                                 </div>
                               )}
@@ -420,6 +505,67 @@ export default function AdminProgress() {
         </div>
       )}
 
+      {/* 📂 Все материалы от капитанов (лента поступления) */}
+      {submissions.length > 0 && (
+        <div style={{ marginTop: 24, padding: "16px", background: "rgba(255,255,255,0.03)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+            <h3 style={{ margin: 0, fontSize: 16, color: "var(--accent)" }}>
+              📂 Все присланные материалы капитанов ({submissions.length})
+            </h3>
+            <span className="muted tiny">Сортировка: сначала новые</span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10, maxHeight: 320, overflowY: "auto", paddingRight: 4 }}>
+            {submissions.map((sub, sIdx) => (
+              <div
+                key={sIdx}
+                style={{
+                  padding: "10px 12px",
+                  background: "rgba(255, 255, 255, 0.04)",
+                  border: "1px solid rgba(255, 255, 255, 0.09)",
+                  borderRadius: 8,
+                  fontSize: 12,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                  <span style={{ fontWeight: 800, color: "#fff" }}>
+                    {sub.teamNumber ? `Команда №${sub.teamNumber}` : "Одиночка"}
+                    {sub.teamName ? ` «${sub.teamName}»` : ""}
+                  </span>
+                  <span
+                    style={{
+                      background: "rgba(255, 204, 77, 0.15)",
+                      color: "#ffcc4d",
+                      padding: "1px 6px",
+                      borderRadius: 4,
+                      fontSize: 11,
+                      fontWeight: 700,
+                    }}
+                  >
+                    🕒 {time(sub.at)}
+                  </span>
+                </div>
+                {sub.captainName && (
+                  <div style={{ fontSize: 11, color: "var(--accent)", marginBottom: 3 }}>
+                    👑 {sub.captainName}
+                  </div>
+                )}
+                <div style={{ color: "#d7fff6", fontWeight: 600, fontSize: 12, marginBottom: 2 }}>
+                  📍 {materialLocationText(sub)}
+                </div>
+                <div style={{ fontSize: 11, color: "#aaa" }}>
+                  Тип: <b>{sub.kind === "video" ? "🎬 Видео" : sub.kind === "photo" ? "📸 Фото" : "💬 Текст"}</b>
+                </div>
+                {sub.text && (
+                  <div style={{ marginTop: 4, fontSize: 12, color: "#ddd", whiteSpace: "pre-wrap", background: "rgba(0,0,0,0.2)", padding: "4px 6px", borderRadius: 4 }}>
+                    📝 {sub.text}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt" style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
         <button className="btn ghost no-print" onClick={() => navigate("/admin")}>
           🔲 К генерации QR-кодов
@@ -437,6 +583,20 @@ export default function AdminProgress() {
             {resetting ? "Удаляю…" : "🗑 Удалить весь квест"}
           </button>
         )}
+      </div>
+
+      {/* ← КНОПКА НАЗАД */}
+      <div style={{ display: "flex", justifyContent: "center", margin: "24px 0 8px" }}>
+        <button
+          className="btn ghost no-print"
+          onClick={() => {
+            if (window.history.length > 1) navigate(-1);
+            else navigate("/admin");
+          }}
+          style={{ minWidth: 180 }}
+        >
+          ← Назад
+        </button>
       </div>
     </div>
   );
