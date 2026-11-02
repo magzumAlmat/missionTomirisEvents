@@ -1,0 +1,211 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Миссия Томирис: Полный сценарий квеста и архитектура",
+    "locale": "ru-RU",
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "frontend": { "label": "Пользовательский интерфейс (React)" },
+        "backend": { "label": "Бэкенд сервер (Express API :3001)" },
+        "security": { "label": "Telegram Боты (@thisMirrorbot)" }
+      }
+    },
+    "output": "quest-architecture.html"
+  },
+  "lanes": [
+    { "id": "client_ui", "label": "1. Интерфейс участников (React Web App)" },
+    { "id": "tg_bots", "label": "2. Telegram боты (@thisMirrorbot & Организаторы)" },
+    { "id": "server_api", "label": "3. Бэкенд и База данных (Express & JSON)" },
+    { "id": "admin_ui", "label": "4. Панель управления и Дэшборд" }
+  ],
+  "mainPath": [
+    "step_register",
+    "step_start_pos",
+    "step_riddle",
+    "step_arrival_flow",
+    "step_task_flow",
+    "step_dashboard"
+  ],
+  "nodes": [
+    {
+      "id": "step_register",
+      "lane": "client_ui",
+      "col": 0,
+      "type": "frontend",
+      "label": "Регистрация участников",
+      "sublabel": "/register · Капитан или Одиночка",
+      "tag": "Шаг 1",
+      "icon": "person"
+    },
+    {
+      "id": "step_start_pos",
+      "lane": "client_ui",
+      "col": 1,
+      "type": "frontend",
+      "label": "Точка 0: Сбор и Старт",
+      "sublabel": "Пазл в багажнике · Таймер игры",
+      "tag": "Шаг 2",
+      "icon": "clock"
+    },
+    {
+      "id": "step_riddle",
+      "lane": "client_ui",
+      "col": 2,
+      "type": "frontend",
+      "label": "Загадка локации (Точки 1-10)",
+      "sublabel": "Разгадать или Открыть адрес (0 б.)",
+      "tag": "Шаг 3",
+      "icon": "decision"
+    },
+    {
+      "id": "step_open_address",
+      "lane": "admin_ui",
+      "col": 2,
+      "type": "security",
+      "label": "Открыт адрес локации",
+      "sublabel": "Штраф: 0 баллов за разгадку",
+      "tag": "0 баллов",
+      "icon": "failure"
+    },
+    {
+      "id": "step_arrival_flow",
+      "lane": "tg_bots",
+      "col": 3,
+      "type": "security",
+      "label": "Прибытие & Селфи",
+      "sublabel": "Отправка в @thisMirrorbot",
+      "tag": "Селфи",
+      "icon": "active"
+    },
+    {
+      "id": "step_arrival_api",
+      "lane": "server_api",
+      "col": 3,
+      "type": "backend",
+      "label": "Фиксация прибытия",
+      "sublabel": "markArrival · Очередь и баллы",
+      "tag": "API :3001",
+      "icon": "backend"
+    },
+    {
+      "id": "step_task_flow",
+      "lane": "client_ui",
+      "col": 4,
+      "type": "frontend",
+      "label": "Выполнение задания точки",
+      "sublabel": "Творческое задание Хранительницы",
+      "tag": "Шаг 4",
+      "icon": "active"
+    },
+    {
+      "id": "step_video_upload",
+      "lane": "tg_bots",
+      "col": 4,
+      "type": "security",
+      "label": "Видео / Фото задания",
+      "sublabel": "Отправка в @thisMirrorbot",
+      "tag": "Контроль",
+      "icon": "security"
+    },
+    {
+      "id": "step_dashboard",
+      "lane": "admin_ui",
+      "col": 5,
+      "type": "frontend",
+      "label": "Дэшборд организаторов",
+      "sublabel": "/admin/progress · Таблица, материалы",
+      "tag": "Финиш",
+      "icon": "flag"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "step_register",
+      "to": "step_start_pos",
+      "label": "Создание команды"
+    },
+    {
+      "id": "e2",
+      "from": "step_start_pos",
+      "to": "step_riddle",
+      "label": "Старт квеста"
+    },
+    {
+      "id": "e3_alt",
+      "from": "step_riddle",
+      "to": "step_open_address",
+      "label": "Не отгадал загадку",
+      "role": "branch",
+      "variant": "security"
+    },
+    {
+      "id": "e3_arrival",
+      "from": "step_riddle",
+      "to": "step_arrival_flow",
+      "label": "Прибыл на место"
+    },
+    {
+      "id": "e3_alt_arrival",
+      "from": "step_open_address",
+      "to": "step_arrival_flow",
+      "label": "Выезд по адресу",
+      "variant": "dashed"
+    },
+    {
+      "id": "e4",
+      "from": "step_arrival_flow",
+      "to": "step_arrival_api",
+      "label": "Кнопка «Подтвердить прибытие»"
+    },
+    {
+      "id": "e5",
+      "from": "step_arrival_api",
+      "to": "step_task_flow",
+      "label": "Открытие текста задания"
+    },
+    {
+      "id": "e6",
+      "from": "step_task_flow",
+      "to": "step_video_upload",
+      "label": "Съёмка видео/фото"
+    },
+    {
+      "id": "e7",
+      "from": "step_video_upload",
+      "to": "step_dashboard",
+      "label": "Материалы в дэшборд"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Механика начисления баллов",
+      "items": [
+        "1-е место по прибытию: 10 баллов, 2-е: 9 б., 8-е и далее: 3 б.",
+        "Использование подсказки к загадке: штраф -3 балла",
+        "Открытие адреса («Не отгадал»): 0 баллов за локацию"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Интеграция с Telegram (@thisMirrorbot)",
+      "items": [
+        "Капитан отправляет селфи перед нажатием кнопки прибытия",
+        "Видео и фото материалов привязываются к номеру команды и точке",
+        "Организаторы видят материалы и точное время в дэшборде"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Управление и контроль",
+      "items": [
+        "Защита админки паролем (PasswordGate)",
+        "Ручное подтверждение прибытия организатором при сбоях связи",
+        "Автоматическое обновление статусов каждые 15 секунд"
+      ]
+    }
+  ]
+}
