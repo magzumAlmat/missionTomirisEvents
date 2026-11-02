@@ -249,55 +249,60 @@ export default function AdminProgress() {
         {updatedAt && <div className="muted">обновлено {time(updatedAt.toISOString())}</div>}
       </div>
 
-      {rows.length === 0 ? (
-        <p className="center muted mt">
-          Пока ни одной команды. Как только капитаны зарегистрируются, они появятся здесь.
-        </p>
-      ) : (
-        <div className="board-scroll">
-          <table className="board">
-            <thead>
-              <tr>
-                <th className="board-team">Команда и капитан</th>
-                {QUEST.stations.map((s) => (
-                  <th
-                    key={s.id}
-                    title={`${s.id}. ${s.name}`}
+      <div className="board-scroll">
+        <table className="board">
+          <thead>
+            <tr>
+              <th className="board-team">Команда и капитан</th>
+              {QUEST.stations.map((s) => (
+                <th
+                  key={s.id}
+                  title={`${s.id}. ${s.name}`}
+                  style={{
+                    minWidth: 125,
+                    maxWidth: 160,
+                    padding: "8px 6px",
+                    verticalAlign: "top",
+                    textAlign: "center",
+                  }}
+                >
+                  <div style={{ fontWeight: 800, fontSize: 13, color: "var(--accent)" }}>
+                    Точка {s.id}
+                  </div>
+                  <div
                     style={{
-                      minWidth: 125,
-                      maxWidth: 160,
-                      padding: "8px 6px",
-                      verticalAlign: "top",
-                      textAlign: "center",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "#d7fff6",
+                      lineHeight: 1.25,
+                      marginTop: 3,
+                      whiteSpace: "normal",
+                      wordBreak: "break-word",
                     }}
                   >
-                    <div style={{ fontWeight: 800, fontSize: 13, color: "var(--accent)" }}>
-                      Точка {s.id}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: "#d7fff6",
-                        lineHeight: 1.25,
-                        marginTop: 3,
-                        whiteSpace: "normal",
-                        wordBreak: "break-word",
-                      }}
-                    >
-                      {s.name}
-                    </div>
-                  </th>
-                ))}
-                <th>Итог</th>
-                <th>Пройдено</th>
-                <th>Последняя</th>
-                <th style={{ minWidth: 260 }}>Материалы капитанов и время</th>
-                <th className="no-print">Действия</th>
+                    {s.name}
+                  </div>
+                </th>
+              ))}
+              <th>Итог</th>
+              <th>Пройдено</th>
+              <th>Последняя</th>
+              <th style={{ minWidth: 260 }}>Материалы капитанов и время</th>
+              <th className="no-print">Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={QUEST.stations.length + 6}
+                  style={{ textAlign: "center", padding: "30px 10px", color: "var(--muted)" }}
+                >
+                  Пока ни одной команды. Как только капитаны зарегистрируются, они появятся в этой таблице.
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => {
+            ) : (
+              rows.map((r) => {
                 const teamMaterials = submissions.filter(
                   (m) => Number(m.teamNumber) === Number(r.teamNumber)
                 );
@@ -499,11 +504,10 @@ export default function AdminProgress() {
                     </td>
                   </tr>
                 );
-              })}
+              }))}
             </tbody>
           </table>
         </div>
-      )}
 
       {/* 📂 Все материалы от капитанов (лента поступления) */}
       {submissions.length > 0 && (

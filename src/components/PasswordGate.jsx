@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "";
 const UNLOCK_KEY = "event_tomiris_admin_ok";
@@ -18,6 +19,7 @@ export function isUnlocked() {
  * чтобы разблокировка на одной открывала и остальные.
  */
 export default function PasswordGate({ onOk }) {
+  const navigate = useNavigate();
   const [val, setVal] = useState("");
   const [err, setErr] = useState(false);
 
@@ -49,6 +51,21 @@ export default function PasswordGate({ onOk }) {
         Войти
       </button>
       {err && <div className="feedback err">Неверный пароль.</div>}
+
+      {/* ← КНОПКА НАЗАД */}
+      <div style={{ display: "flex", justifyContent: "center", margin: "20px 0 8px" }}>
+        <button
+          type="button"
+          className="btn ghost"
+          onClick={() => {
+            if (window.history.length > 1) navigate(-1);
+            else navigate("/");
+          }}
+          style={{ minWidth: 180 }}
+        >
+          ← Назад
+        </button>
+      </div>
     </div>
   );
 }
