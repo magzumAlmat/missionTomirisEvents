@@ -477,7 +477,9 @@ export function computeStationScores(progress) {
     const arrivals = [];
     for (const [key, p] of entries) {
       const at = p?.arrivals?.[String(sid)]?.at;
-      if (at) arrivals.push({ key, at });
+      // Если капитан не разгадал загадку и открыл адрес — баллы за локацию не начисляются (0 б.)
+      const isNotGuessed = Boolean(p?.notGuessed?.[String(sid)]);
+      if (at && !isNotGuessed) arrivals.push({ key, at });
     }
     arrivals.sort((a, b) => {
       if (a.at === b.at) return 0;

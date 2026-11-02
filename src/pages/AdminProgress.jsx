@@ -14,8 +14,9 @@ function time(iso) {
 /** Состояние точки у команды: задание / адрес / прибытие / разгадка / подсказка. */
 function cellState(row, stationId) {
   const id = String(stationId);
-  if (row.stations?.[id]) return "solved";
+  if (row.stations?.[id] && row.notGuessed?.[id]) return "not_guessed_solved";
   if (row.notGuessed?.[id]) return "not_guessed";
+  if (row.stations?.[id]) return "solved";
   if (row.arrivals?.[id]) return "arrived";
   if (row.riddleSolved?.[id]) return "riddle";
   if (row.hints?.[id]) return "hinted";
@@ -24,7 +25,8 @@ function cellState(row, stationId) {
 
 const CELL_STYLE = {
   solved: { background: "rgba(76, 217, 100, 0.22)", color: "#4cd964", label: "✓" },
-  not_guessed: { background: "rgba(255, 107, 107, 0.2)", color: "#ff6b6b", label: "❌" },
+  not_guessed: { background: "rgba(255, 107, 107, 0.22)", color: "#ff8585", label: "❌" },
+  not_guessed_solved: { background: "rgba(255, 107, 107, 0.25)", color: "#ff8585", label: "❌" },
   arrived: { background: "rgba(255, 193, 7, 0.18)", color: "var(--accent)", label: "📍" },
   riddle: { background: "rgba(107, 229, 201, 0.18)", color: "#6be5c9", label: "🔓" },
   hinted: { background: "rgba(255, 193, 7, 0.25)", color: "#ffc107", label: "💡" },
@@ -401,7 +403,8 @@ export default function AdminProgress() {
                       const riddleAt = typeof r.riddleSolved?.[sid] === "object" ? r.riddleSolved[sid]?.at : r.riddleSolved?.[sid];
                       const hintAt = typeof r.hints?.[sid] === "object" ? r.hints[sid]?.at : r.hints?.[sid];
                       const notGuessedAt = typeof r.notGuessed?.[sid] === "object" ? r.notGuessed[sid]?.at : r.notGuessed?.[sid];
-                      const stationScore = Number(r.scores?.[sid] ?? 0);
+                      const isNotGuessed = Boolean(notGuessedAt);
+                      const stationScore = isNotGuessed ? 0 : Number(r.scores?.[sid] ?? 0);
                       const scoreText = s.id === 0 ? "—" : `${stationScore} б.`;
 
                       // Собираем ВСЕ действия с временами (не стираем по мере прогресса)
@@ -422,7 +425,12 @@ export default function AdminProgress() {
                       const markKey = `${r.key}-${s.id}`;
 
                       // Tooltip: все действия с временами и баллы
-                      const titleParts = [s.name, `⭐ Баллы: ${scoreText}`];
+                      const titleParts = [s.name];
+                      if (isNotGuessed) {
+                        titleParts.push("❌ Локация не засчитана: 0 б. (капитан не отгадал загадку и открыл адрес)");
+                      } else {
+                        titleParts.push(`⭐ Баллы: ${scoreText}`);
+                      }
                       for (const a of actions) {
                         titleParts.push(`${a.icon} ${a.label}: ${a.t}`);
                       }
@@ -449,9 +457,31 @@ export default function AdminProgress() {
                                 </div>
                               ))
                             )}
-                            <div style={{ marginTop: 4, fontWeight: 800, fontSize: 11 }}>
-                              ⭐ {scoreText}
-                            </div>
+                            {isNotGuessed ? (
+                              <div
+                                style={{
+                                  marginTop: 4,
+                                  fontWeight: 700,
+                                  fontSize: 10,
+                                  color: "#ff9999",
+                                  background: "rgba(255, 69, 58, 0.22)",
+                                  padding: "2px 5px",
+                                  borderRadius: 4,
+                                  border: "1px solid rgba(255, 69, 58, 0.4)",
+                                  lineHeight: 1.25,
+                                  whiteSpace: "normal",
+                                  wordBreak: "break-word",
+                                  maxWidth: 130,
+                                  textAlign: "center",
+                                }}
+                              >
+                                ❌ Не засчитана (0 б.)
+                              </div>
+                            ) : (
+                              <div style={{ marginTop: 4, fontWeight: 800, fontSize: 11 }}>
+                                ⭐ {scoreText}
+                              </div>
+                            )}
                             {stMaterials.length > 0 && (
                               <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 3 }}>
                                 {stMaterials.map((sm, smIdx) => (

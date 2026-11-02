@@ -67,4 +67,19 @@ assert.equal(last.a[1], 10);
 assert.equal(last.g[1], 4); // 7-е место
 assert.equal(last.h[1], 0); // 8-е место (3) минус подсказка (3)
 
+// 5) Если адрес открыт капитаном (notGuessed), локация не засчитывается: 0 баллов.
+const notGuessedScores = computeStationScores({
+  a: {
+    arrivals: { 1: { at: "2026-01-01T10:00:00.000Z" } },
+    notGuessed: { 1: { at: "2026-01-01T09:59:00.000Z" } },
+    hints: {},
+  },
+  b: {
+    arrivals: { 1: { at: "2026-01-01T10:01:00.000Z" } },
+    hints: {},
+  },
+});
+assert.equal(notGuessedScores.a[1], 0); // открыл адрес — 0 баллов (локация не засчитана)
+assert.equal(notGuessedScores.b[1], 10); // честно разгадал — 1-е место (10 баллов)
+
 console.log("✅ Баллы: все проверки прошли");
