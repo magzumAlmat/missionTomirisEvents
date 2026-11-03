@@ -45,6 +45,7 @@ import {
   findCaptainByPhone,
   createCaptain,
   subscribeToCaptain,
+  addParticipantToCaptainDirect,
   updateCaptainSlots,
   moveUserBetweenCaptains,
   unsubscribeFromCaptain,
@@ -951,8 +952,15 @@ app.post("/api/admin/move-user", async (req, res) => {
       fs.writeFileSync(soloFile, JSON.stringify(soloUsers, null, 2), "utf8");
     }
 
-    // Подписать на капитана
-    const subResult = subscribeToCaptain({ captainId: toCaptainId, name: userName, phone, hasCar: userHasCar });
+    // Удалить запись «без команды» из participants.json, чтобы checkPhoneRegistration не блокировала
+    const pIdx = participants.findIndex(u => (u.phone || "").replace(/\D/g, "").slice(-10) === phoneClean);
+    if (pIdx >= 0) {
+      participants.splice(pIdx, 1);
+      fs.writeFileSync(partFile, JSON.stringify(participants, null, 2), "utf8");
+    }
+
+    // Подписать на капитана напрямую (без повторной проверки регистрации)
+    const subResult = addParticipantToCaptainDirect({ captainId: toCaptainId, name: userName, phone, hasCar: userHasCar });
     if (subResult.error) {
       return res.status(400).json({ ok: false, error: subResult.error });
     }

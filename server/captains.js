@@ -194,6 +194,32 @@ export function unsubscribeFromCaptain({ captainId, phone }) {
   return { ok: true, captain, removed };
 }
 
+/**
+ * Напрямую добавить пользователя к капитану, минуя checkPhoneRegistration.
+ * Используется при перемещении уже зарегистрированных пользователей (из solo → капитан).
+ */
+export function addParticipantToCaptainDirect({ captainId, name, phone, hasCar }) {
+  const captains = listCaptains();
+  const captain = captains.find((c) => c.id === captainId);
+  if (!captain) return { error: "Капитан не найден" };
+  if (!captain.active) return { error: "Приём на этого капитана закрыт" };
+  if (captain.currentParticipants >= Math.max(0, captain.slots - 1)) {
+    return { error: "У капитана нет свободных мест" };
+  }
+  const phoneClean = normalizePhone(phone);
+  const alreadySubscribed = captain.participants.some((p) => normalizePhone(p.phone) === phoneClean);
+  if (alreadySubscribed) return { error: "Пользователь уже в этой команде" };
+  captain.currentParticipants += 1;
+  captain.participants.push({
+    name: String(name || "").trim(),
+    phone: String(phone || "").trim(),
+    hasCar: !!hasCar,
+    subscribedAt: new Date().toISOString(),
+  });
+  writeJson(CAPTAINS_FILE, captains);
+  return { ok: true, captain };
+}
+
 export function moveUserBetweenCaptains({ fromCaptainId, toCaptainId, phone }) {
   const fromCaptain = findCaptainById(fromCaptainId);
   const toCaptain = findCaptainById(toCaptainId);

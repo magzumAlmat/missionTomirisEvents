@@ -560,7 +560,7 @@ export default function Station() {
       {riddleSolved && !taskComplete && station?.id !== 1 && <span className="done-badge">✓ Локация разгадана</span>}
 
       <div className="eyebrow">
-        Точка {station.id} из {QUEST.stations.length}
+        Точка {station.id + 1} из {QUEST.stations.length}
       </div>
 
       {/* Название локации открываем только после прибытия/адреса/завершения. */}
