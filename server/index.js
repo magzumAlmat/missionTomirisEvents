@@ -946,24 +946,51 @@ app.post("/api/admin/move-user", async (req, res) => {
     const userName = idx >= 0 ? soloUsers[idx].name : (pUser ? pUser.name : phone);
     const userHasCar = idx >= 0 ? soloUsers[idx].hasCar : (pUser ? pUser.hasCar : false);
 
-    // Удалить из solo
+    // Удалить из solo_users.json
     if (idx >= 0) {
       soloUsers.splice(idx, 1);
       fs.writeFileSync(soloFile, JSON.stringify(soloUsers, null, 2), "utf8");
     }
 
-    // Удалить запись «без команды» из participants.json, чтобы checkPhoneRegistration не блокировала
+    // Подписать на капитана напрямую (без повторной проверки регистрации)
+    // Сначала удаляем старую запись из participants.json (если есть),
+    // чтобы checkPhoneRegistration не блокировала добавление в captains.json.
     const pIdx = participants.findIndex(u => (u.phone || "").replace(/\D/g, "").slice(-10) === phoneClean);
     if (pIdx >= 0) {
       participants.splice(pIdx, 1);
       fs.writeFileSync(partFile, JSON.stringify(participants, null, 2), "utf8");
     }
 
-    // Подписать на капитана напрямую (без повторной проверки регистрации)
     const subResult = addParticipantToCaptainDirect({ captainId: toCaptainId, name: userName, phone, hasCar: userHasCar });
     if (subResult.error) {
       return res.status(400).json({ ok: false, error: subResult.error });
     }
+
+    // Найти команду капитана из teams.json, чтобы обновить participants.json
+    const captainTeam = findTeamByCaptainPhone(subResult.captain.phone);
+
+    // Обновить / создать запись в participants.json с данными команды
+    // (перечитываем, т.к. файл мог измениться выше)
+    let partsUpdated = [];
+    try { partsUpdated = JSON.parse(fs.readFileSync(partFile, "utf8")); } catch {}
+    const existingIdx = partsUpdated.findIndex(u => (u.phone || "").replace(/\D/g, "").slice(-10) === phoneClean);
+    const updatedEntry = {
+      id: pUser?.id || Date.now(),
+      name: userName,
+      phone: String(phone).trim(),
+      hasCar: userHasCar,
+      hasTeam: true,
+      teamName: captainTeam ? captainTeam.name : (subResult.captain.teamName || subResult.captain.name || ""),
+      teamSize: subResult.captain.slots || 0,
+      teamNumber: captainTeam ? captainTeam.number : (pUser?.teamNumber || null),
+      createdAt: pUser?.createdAt || new Date().toISOString(),
+    };
+    if (existingIdx >= 0) {
+      partsUpdated[existingIdx] = updatedEntry;
+    } else {
+      partsUpdated.push(updatedEntry);
+    }
+    fs.writeFileSync(partFile, JSON.stringify(partsUpdated, null, 2), "utf8");
 
     try {
       const free = Math.max(0, subResult.captain.slots - 1 - subResult.captain.currentParticipants);
@@ -986,6 +1013,24 @@ app.post("/api/admin/move-user", async (req, res) => {
   if (result.error) {
     return res.status(400).json({ ok: false, error: result.error });
   }
+
+  // Обновить participants.json: сменить teamName/teamNumber на новую команду
+  try {
+    const movePhoneClean = normalizePhone(phone);
+    const newCaptainTeam = findTeamByCaptainPhone(result.toCaptain.phone);
+    const parts = readParticipants();
+    const partEntry = parts.find(p => normalizePhone(p.phone) === movePhoneClean);
+    if (partEntry) {
+      partEntry.hasTeam = true;
+      partEntry.teamName = newCaptainTeam ? newCaptainTeam.name : (result.toCaptain.teamName || result.toCaptain.name || "");
+      partEntry.teamNumber = newCaptainTeam ? newCaptainTeam.number : partEntry.teamNumber;
+      partEntry.teamSize = result.toCaptain.slots || partEntry.teamSize;
+      saveParticipants(parts);
+    }
+  } catch (e) {
+    console.error("move-user: не удалось обновить participants.json", e.message);
+  }
+
   // Уведомить админов
   try {
     const free = Math.max(0, result.toCaptain.slots - 1 - result.toCaptain.currentParticipants);
