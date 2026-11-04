@@ -931,39 +931,57 @@ app.post("/api/admin/move-user", async (req, res) => {
 
   // Перемещение из «без капитана» (solo) в капитана
   if (fromCaptainId === "__solo__") {
-    const phoneClean = String(phone).replace(/\D/g, "").slice(-10);
+    const phoneClean = normalizePhone(phone);
+    if (!phoneClean) {
+      return res.status(400).json({ ok: false, error: "Неверный номер телефона пользователя." });
+    }
     // Найти пользователя среди solo
     const soloFile = path.join(__dirname, "solo_users.json");
     let soloUsers = [];
     try { soloUsers = JSON.parse(fs.readFileSync(soloFile, "utf8")); } catch {}
-    const idx = soloUsers.findIndex(u => (u.phone || "").replace(/\D/g, "").slice(-10) === phoneClean);
+    const idx = soloUsers.findIndex(u => normalizePhone(u.phone) === phoneClean);
     // Также проверим participants.json
     const partFile = path.join(__dirname, "participants.json");
     let participants = [];
     try { participants = JSON.parse(fs.readFileSync(partFile, "utf8")); } catch {}
-    const pUser = participants.find(u => (u.phone || "").replace(/\D/g, "").slice(-10) === phoneClean);
+    const pUser = participants.find(u => normalizePhone(u.phone) === phoneClean);
 
-    const userName = idx >= 0 ? soloUsers[idx].name : (pUser ? pUser.name : phone);
-    const userHasCar = idx >= 0 ? soloUsers[idx].hasCar : (pUser ? pUser.hasCar : false);
+    if (idx < 0 && !pUser) {
+      return res.status(404).json({ ok: false, error: "Пользователь без капитана не найден." });
+    }
+    if (pUser && (pUser.hasTeam || pUser.teamNumber)) {
+      return res.status(400).json({ ok: false, error: "Пользователь уже состоит в команде." });
+    }
 
-    // Удалить из solo_users.json
+    const userName = idx >= 0 ? soloUsers[idx].name : pUser.name;
+    const userHasCar = idx >= 0 ? soloUsers[idx].hasCar : pUser.hasCar;
+
+    // Проверяем целевую команду до удаления исходной записи, чтобы при ошибке
+    // свободного места или недоступного капитана не потерять участника.
+    const targetCaptain = listCaptains().find((captain) => String(captain.id) === String(toCaptainId));
+    if (!targetCaptain) {
+      return res.status(404).json({ ok: false, error: "Целевой капитан не найден." });
+    }
+    const hasFreeSlot = Number(targetCaptain.currentParticipants) < Math.max(0, Number(targetCaptain.slots) - 1);
+    if (!hasFreeSlot) {
+      return res.status(400).json({ ok: false, error: "У капитана нет свободных мест." });
+    }
+
+    // Подписать на капитана напрямую (без повторной проверки регистрации).
+    // Для participant без капитана удаляем запись только после успешной подписки.
+    const subResult = addParticipantToCaptainDirect({ captainId: toCaptainId, name: userName, phone, hasCar: userHasCar });
+    if (subResult.error) {
+      return res.status(400).json({ ok: false, error: subResult.error });
+    }
+
     if (idx >= 0) {
       soloUsers.splice(idx, 1);
       fs.writeFileSync(soloFile, JSON.stringify(soloUsers, null, 2), "utf8");
     }
-
-    // Подписать на капитана напрямую (без повторной проверки регистрации)
-    // Сначала удаляем старую запись из participants.json (если есть),
-    // чтобы checkPhoneRegistration не блокировала добавление в captains.json.
-    const pIdx = participants.findIndex(u => (u.phone || "").replace(/\D/g, "").slice(-10) === phoneClean);
+    const pIdx = participants.findIndex((participant) => normalizePhone(participant.phone) === phoneClean);
     if (pIdx >= 0) {
       participants.splice(pIdx, 1);
       fs.writeFileSync(partFile, JSON.stringify(participants, null, 2), "utf8");
-    }
-
-    const subResult = addParticipantToCaptainDirect({ captainId: toCaptainId, name: userName, phone, hasCar: userHasCar });
-    if (subResult.error) {
-      return res.status(400).json({ ok: false, error: subResult.error });
     }
 
     // Найти команду капитана из teams.json, чтобы обновить participants.json

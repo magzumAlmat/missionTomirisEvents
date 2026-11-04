@@ -203,12 +203,15 @@ export function addParticipantToCaptainDirect({ captainId, name, phone, hasCar }
   const captain = captains.find((c) => c.id === captainId);
   if (!captain) return { error: "Капитан не найден" };
   if (!captain.active) return { error: "Приём на этого капитана закрыт" };
-  if (captain.currentParticipants >= Math.max(0, captain.slots - 1)) {
-    return { error: "У капитана нет свободных мест" };
-  }
+  captain.participants = Array.isArray(captain.participants) ? captain.participants : [];
+  captain.currentParticipants = Math.max(Number(captain.currentParticipants) || 0, captain.participants.length);
   const phoneClean = normalizePhone(phone);
+  if (!phoneClean) return { error: "Неверный номер телефона пользователя" };
   const alreadySubscribed = captain.participants.some((p) => normalizePhone(p.phone) === phoneClean);
   if (alreadySubscribed) return { error: "Пользователь уже в этой команде" };
+  if (captain.currentParticipants >= Math.max(0, Number(captain.slots) - 1)) {
+    return { error: "У капитана нет свободных мест" };
+  }
   captain.currentParticipants += 1;
   captain.participants.push({
     name: String(name || "").trim(),
@@ -225,21 +228,26 @@ export function moveUserBetweenCaptains({ fromCaptainId, toCaptainId, phone }) {
   const toCaptain = findCaptainById(toCaptainId);
   if (!fromCaptain) return { error: "Исходный капитан не найден" };
   if (!toCaptain) return { error: "Целевой капитан не найден" };
-  const phoneClean = String(phone || "").replace(/\D/g, "").slice(-10);
-  const idx = fromCaptain.participants.findIndex((p) => {
-    return (p.phone || "").replace(/\D/g, "").slice(-10) === phoneClean;
-  });
+  const phoneClean = normalizePhone(phone);
+  if (!phoneClean) return { error: "Неверный номер телефона пользователя" };
+  const fromParticipants = Array.isArray(fromCaptain.participants) ? fromCaptain.participants : [];
+  const toParticipants = Array.isArray(toCaptain.participants) ? toCaptain.participants : [];
+  const idx = fromParticipants.findIndex((p) => normalizePhone(p.phone) === phoneClean);
   if (idx === -1) return { error: "Пользователь не найден в исходной команде" };
-  if (toCaptain.currentParticipants >= Math.max(0, toCaptain.slots - 1)) {
+  const targetParticipantCount = Math.max(Number(toCaptain.currentParticipants) || 0, toParticipants.length);
+  if (targetParticipantCount >= Math.max(0, Number(toCaptain.slots) - 1)) {
     return { error: "У целевого капитана нет свободных мест" };
   }
-  const alreadyInTarget = toCaptain.participants.some((p) => {
-    return (p.phone || "").replace(/\D/g, "").slice(-10) === phoneClean;
-  });
+  const alreadyInTarget = toParticipants.some((p) => normalizePhone(p.phone) === phoneClean);
   if (alreadyInTarget) return { error: "Пользователь уже в целевой команде" };
-  const moved = fromCaptain.participants.splice(idx, 1)[0];
-  fromCaptain.currentParticipants -= 1;
-  toCaptain.currentParticipants += 1;
+  if (String(fromCaptainId) === String(toCaptainId)) {
+    return { error: "Исходная и целевая команды совпадают" };
+  }
+  const moved = fromParticipants.splice(idx, 1)[0];
+  fromCaptain.participants = fromParticipants;
+  fromCaptain.currentParticipants = Math.max(0, fromParticipants.length);
+  toCaptain.participants = toParticipants;
+  toCaptain.currentParticipants = targetParticipantCount + 1;
   toCaptain.participants.push(moved);
   writeJson(CAPTAINS_FILE, listCaptains());
   return { ok: true, fromCaptain, toCaptain, moved };
