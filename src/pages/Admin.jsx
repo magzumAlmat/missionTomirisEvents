@@ -3,8 +3,9 @@ import QRCode from "qrcode";
 import { useNavigate } from "react-router-dom";
 import { QUEST, INCLUDE_START_QR } from "../questConfig.js";
 import PasswordGate, { isUnlocked } from "../components/PasswordGate.jsx";
-import { fetchCaptains, createCaptain, updateCaptainSlots, moveUserBetweenCaptains, unsubscribeFromCaptain, fetchSoloUsers, deleteAllCaptains, deleteAllParticipants, deleteCaptain, deleteParticipant, fetchSettings, saveSettings } from "../lib/api.js";
+import { fetchCaptains, registerCaptain, updateCaptainSlots, moveUserBetweenCaptains, unsubscribeFromCaptain, fetchSoloUsers, deleteAllCaptains, deleteAllParticipants, deleteCaptain, deleteParticipant, fetchSettings, saveSettings } from "../lib/api.js";
 import { clearAllLocalUserData } from "../lib/questSync.js";
+import { isValidPhone } from "../lib/phone.js";
 
 /** Список точек, для которых генерируем QR. */
 function buildItems(base) {
@@ -42,6 +43,7 @@ export default function Admin() {
   const [captains, setCaptains] = useState([]);
   const [loadingCaptains, setLoadingCaptains] = useState(false);
   const [captainMsg, setCaptainMsg] = useState("");
+  const [createdCaptainAccess, setCreatedCaptainAccess] = useState(null);
 
   // Создание капитана
   const [newCaptainName, setNewCaptainName] = useState("");
@@ -141,14 +143,30 @@ export default function Admin() {
   // Создание капитана
   async function onCreateCaptain() {
     setCaptainMsg("");
+    setCreatedCaptainAccess(null);
+    if (!newCaptainName.trim() || !isValidPhone(newCaptainPhone)) {
+      setCaptainMsg("❌ Укажите имя и корректный номер телефона (от 10 до 15 цифр).");
+      return;
+    }
+    if (!Number.isInteger(Number(newCaptainSlots)) || Number(newCaptainSlots) < 2 || Number(newCaptainSlots) > 5) {
+      setCaptainMsg("❌ Количество слотов должно быть от 2 до 5.");
+      return;
+    }
     try {
-      await createCaptain({
-        name: newCaptainName,
-        phone: newCaptainPhone,
+      const registration = await registerCaptain({
+        name: newCaptainName.trim(),
+        phone: newCaptainPhone.trim(),
         slots: Number(newCaptainSlots) || 5,
         hasCar: newCaptainHasCar,
       });
-      setCaptainMsg("✅ Капитан создан!");
+      const accessUrl = `${window.location.origin}/#/profile?phone=${encodeURIComponent(newCaptainPhone.trim())}&teamNumber=${encodeURIComponent(registration.teamNumber || "")}`;
+      setCreatedCaptainAccess({
+        name: newCaptainName.trim(),
+        phone: newCaptainPhone.trim(),
+        teamNumber: registration.teamNumber,
+        url: accessUrl,
+      });
+      setCaptainMsg("✅ Капитан зарегистрирован и готов к игре!");
       setNewCaptainName("");
       setNewCaptainPhone("");
       setNewCaptainSlots("5");
@@ -440,6 +458,7 @@ export default function Admin() {
                       </button>
                     </div>
                   </div>
+                  {cap.teamNumber && <div style={{ marginTop: 6, fontSize: 13, color: "var(--accent)" }}>Команда №{cap.teamNumber}</div>}
                   {cap.participants && cap.participants.length > 0 && (
                     <div style={{ marginTop: 8, fontSize: 13 }}>
                       <strong>Участники:</strong>
@@ -489,6 +508,23 @@ export default function Admin() {
 
           {/* Создание капитана */}
           <h3 style={{ marginTop: 24 }}>➕ Создать капитана</h3>
+          {createdCaptainAccess && (
+            <div className="feedback ok" style={{ marginBottom: 12 }}>
+              <strong>✅ Доступ капитана к игре</strong>
+              <div style={{ marginTop: 8 }}>Имя: {createdCaptainAccess.name}</div>
+              <div>Телефон для входа: {createdCaptainAccess.phone}</div>
+              <div>Команда №{createdCaptainAccess.teamNumber}</div>
+              <a href={createdCaptainAccess.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 8, color: "var(--accent)", wordBreak: "break-all" }}>
+                {createdCaptainAccess.url}
+              </a>
+              <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => navigator.clipboard?.writeText(`${createdCaptainAccess.name} — ${createdCaptainAccess.phone} — Команда №${createdCaptainAccess.teamNumber} — ${createdCaptainAccess.url}`)}>
+                📋 Копировать данные входа
+              </button>
+              <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8 }}>
+                Ссылка содержит телефон капитана. Отправляйте её только самому капитану.
+              </div>
+            </div>
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <input
               type="text"

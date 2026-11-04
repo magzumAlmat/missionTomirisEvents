@@ -815,6 +815,30 @@ app.get("/api/captains/summary", (_req, res) => {
   res.json({ ok: true, captains });
 });
 
+/** Завершить игровую регистрацию капитана, созданного из админки. */
+app.post("/api/admin/register-captain", (req, res) => {
+  if (!requireToken(res)) return;
+  const { name, phone, slots, hasCar, teamName } = req.body || {};
+  if (!name || !phone) {
+    return res.status(400).json({ ok: false, error: "Нужны имя и телефон капитана." });
+  }
+
+  const result = createCaptain({ name, phone, slots, hasCar, teamName });
+  if (result.error) {
+    return res.status(400).json({ ok: false, error: result.error });
+  }
+
+  const team = result.teamNumber ? findTeamByNumber(result.teamNumber) : findTeamByCaptainPhone(phone);
+  const questState = getQuestState();
+  res.json({
+    ok: true,
+    captain: result.captain,
+    teamNumber: team?.number || result.teamNumber || null,
+    teamName: team?.name || result.captain.teamName,
+    questId: questState.questId,
+  });
+});
+
 /** Создать нового капитана (для организаторов) */
 app.post("/api/captains/create", async (req, res) => {
   if (!requireToken(res)) return;

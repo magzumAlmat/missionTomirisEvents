@@ -9,7 +9,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { checkPhoneRegistration, normalizePhone } from "./phoneValidator.js";
-import { bumpQuestState, deleteTeam, listTeams } from "./store.js";
+import { bumpQuestState, findOrCreateTeam, findTeamByCaptainPhone, listTeams, teamKey } from "./store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CAPTAINS_FILE = path.join(__dirname, "captains.json");
@@ -55,6 +55,14 @@ export function findCaptainByPhone(phone) {
 export function createCaptain({ name, phone, slots, hasCar, teamName }) {
   const captains = listCaptains();
   const phoneNorm = normalizePhone(phone);
+  const participants = readJson(DB_FILE, []);
+
+  const cleanName = String(name || "").trim();
+  const cleanPhone = String(phone || "").trim();
+  const cleanTeamName = String(teamName || `Команда ${cleanName}`).trim();
+  if (!cleanName || !phoneNorm) {
+    return { error: "Укажите имя и корректный телефон капитана." };
+  }
 
   const numSlots = Number(slots);
   if (!numSlots || numSlots < 2 || numSlots > 5) {
@@ -63,25 +71,44 @@ export function createCaptain({ name, phone, slots, hasCar, teamName }) {
     };
   }
 
+  if (!Array.isArray(participants)) {
+    return { error: "Не удалось прочитать список участников." };
+  }
+
+  const existingCap = captains.find((c) => normalizePhone(c.phone) === phoneNorm);
+  if (existingCap) {
+    const participant = participants.find((p) => normalizePhone(p.phone) === phoneNorm);
+    const team = findTeamByCaptainPhone(phone)
+      || (existingCap.teamNumber ? listTeams().find((item) => Number(item.number) === Number(existingCap.teamNumber)) : null);
+    if (!team) return { error: "Не удалось найти команду для этого капитана." };
+    if (existingCap.teamName !== team.name || cleanTeamName !== team.name) {
+      return { error: "Для этого телефона уже создан другой капитан." };
+    }
+    if (!participant) {
+      participants.push({
+        id: Date.now(),
+        name: cleanName,
+        phone: cleanPhone,
+        hasCar: !!hasCar,
+        hasTeam: true,
+        teamName: team.name,
+        teamSize: numSlots,
+        teamNumber: team.number,
+        createdAt: new Date().toISOString(),
+      });
+      if (!writeJson(DB_FILE, participants)) {
+        return { error: "Не удалось сохранить игровую регистрацию капитана." };
+      }
+    }
+    return { captain: existingCap, teamNumber: team.number };
+  }
+
   // Проверяем, зарегистрирован ли уже этот номер в завершённых регистрациях (participants.json)
-  const participants = readJson(DB_FILE, []);
   const inParticipants = Array.isArray(participants) && participants.some((p) => normalizePhone(p.phone) === phoneNorm);
   if (inParticipants) {
     return {
       error: `Номер телефона ${phone} уже зарегистрирован в квесте. Повторная регистрация невозможна.`,
     };
-  }
-
-  // Если капитан с таким номером уже есть в captains.json (например, от предыдущей незавершённой попытки) — обновляем его данные
-  const existingCap = captains.find((c) => normalizePhone(c.phone) === phoneNorm);
-  if (existingCap) {
-    existingCap.name = String(name || "").trim();
-    existingCap.slots = numSlots;
-    existingCap.hasCar = !!hasCar;
-    existingCap.teamName = String(teamName || "").trim();
-    existingCap.createdAt = new Date().toISOString();
-    writeJson(CAPTAINS_FILE, captains);
-    return { captain: existingCap };
   }
 
   // Обычная проверка на случай, если телефон числится где-то ещё (например, в подписчиках другого капитана)
@@ -92,22 +119,57 @@ export function createCaptain({ name, phone, slots, hasCar, teamName }) {
     };
   }
 
+  if (listTeams().some((existing) => existing.key === teamKey(cleanTeamName))) {
+    return { error: `Команда «${cleanTeamName}» уже существует. Укажите другое название.` };
+  }
+  const teamSnapshot = listTeams();
+  const team = findOrCreateTeam({
+    name: cleanTeamName,
+    captainName: cleanName,
+    captainPhone: cleanPhone,
+    size: numSlots,
+  });
+  if (!team) return { error: "Не удалось создать команду капитана." };
+
   const id = `cap_${Date.now()}`;
+  const participant = {
+    id: Date.now(),
+    name: cleanName,
+    phone: cleanPhone,
+    hasCar: !!hasCar,
+    hasTeam: true,
+    teamName: cleanTeamName,
+    teamSize: numSlots,
+    teamNumber: team.number,
+    createdAt: new Date().toISOString(),
+  };
   const captain = {
     id,
-    name: String(name || "").trim(),
-    phone: String(phone || "").trim(),
-    teamName: String(teamName || "").trim(),
+    name: cleanName,
+    phone: cleanPhone,
+    teamName: cleanTeamName,
     slots: numSlots,
     currentParticipants: 0,
     participants: [],
     hasCar: !!hasCar,
     createdAt: new Date().toISOString(),
     active: true,
+    teamNumber: team.number,
   };
   captains.push(captain);
-  writeJson(CAPTAINS_FILE, captains);
-  return { captain };
+  if (!writeJson(CAPTAINS_FILE, captains)) {
+    writeJson(TEAMS_FILE, teamSnapshot);
+    return { error: "Не удалось сохранить капитана." };
+  }
+
+  participants.push(participant);
+  if (!writeJson(DB_FILE, participants)) {
+    writeJson(CAPTAINS_FILE, captains.filter((item) => item.id !== id));
+    writeJson(TEAMS_FILE, teamSnapshot);
+    return { error: "Не удалось сохранить игровую регистрацию капитана." };
+  }
+
+  return { captain, teamNumber: team.number };
 }
 
 export function updateCaptainSlots(captainId, newSlots) {

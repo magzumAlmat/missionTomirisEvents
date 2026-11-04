@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getPhone } from "../lib/phone.js";
+import { getPhone, setPhone } from "../lib/phone.js";
 import { getName, setName, getTeam, setTeam, getTeamNumber, setTeamNumber } from "../lib/team.js";
 import { fetchTeams, fetchCaptains, fetchProgress, HAS_BACKEND } from "../lib/api.js";
 import { QUEST } from "../questConfig.js";
@@ -38,7 +38,12 @@ export default function Profile() {
   useEffect(() => {
     async function loadProfile() {
       try {
-        const phone = getPhone();
+        const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
+        const invitedPhone = params.get("phone") || "";
+        const invitedTeamNumber = params.get("teamNumber") || "";
+        if (invitedPhone) setPhone(invitedPhone);
+        if (invitedTeamNumber) setTeamNumber(invitedTeamNumber);
+        const phone = invitedPhone || getPhone();
         if (!phone) {
           navigate("/register", { replace: true });
           return;
@@ -53,7 +58,7 @@ export default function Profile() {
         );
 
         // 2. Fetch teammates
-        const teamNumber = getTeamNumber();
+        const teamNumber = invitedTeamNumber || getTeamNumber();
         let members = [];
         if (teamNumber) {
           const teamsData = await fetchTeams();
@@ -65,7 +70,13 @@ export default function Profile() {
           }
         }
 
-        setProfile(prev => ({ ...prev, isCaptain }));
+        setProfile(prev => ({
+          ...prev,
+          phone,
+          teamName: getTeam() || prev.teamName,
+          teamNumber: teamNumber || prev.teamNumber,
+          isCaptain,
+        }));
         setTeammates(members);
       } catch (e) {
         console.error("Profile load error:", e);

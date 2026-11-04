@@ -151,6 +151,11 @@ export async function createCaptain({ name, phone, slots, hasCar, teamName }) {
   return post("/api/captains/create", { name, phone, slots, hasCar, teamName });
 }
 
+/** Завершить игровую регистрацию уже созданного капитана. */
+export async function registerCaptain({ name, phone, slots, hasCar, teamName }) {
+  return post("/api/admin/register-captain", { name, phone, slots, hasCar, teamName });
+}
+
 /** Подписаться на капитана */
 export async function subscribeToCaptain({ captainId, name, phone, hasCar }) {
   return post("/api/subscribe-to-captain", { captainId, name, phone, hasCar });
