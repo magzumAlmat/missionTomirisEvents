@@ -48,6 +48,7 @@ export default function Admin() {
   // Создание капитана
   const [newCaptainName, setNewCaptainName] = useState("");
   const [newCaptainPhone, setNewCaptainPhone] = useState("");
+  const [newCaptainTeamName, setNewCaptainTeamName] = useState("");
   const [newCaptainSlots, setNewCaptainSlots] = useState("5");
   const [newCaptainHasCar, setNewCaptainHasCar] = useState(true);
 
@@ -144,8 +145,8 @@ export default function Admin() {
   async function onCreateCaptain() {
     setCaptainMsg("");
     setCreatedCaptainAccess(null);
-    if (!newCaptainName.trim() || !isValidPhone(newCaptainPhone)) {
-      setCaptainMsg("❌ Укажите имя и корректный номер телефона (от 10 до 15 цифр).");
+    if (!newCaptainName.trim() || !newCaptainTeamName.trim() || !isValidPhone(newCaptainPhone)) {
+      setCaptainMsg("❌ Укажите имя капитана, название команды и корректный номер телефона (от 10 до 15 цифр).");
       return;
     }
     if (!Number.isInteger(Number(newCaptainSlots)) || Number(newCaptainSlots) < 2 || Number(newCaptainSlots) > 5) {
@@ -156,6 +157,7 @@ export default function Admin() {
       const registration = await registerCaptain({
         name: newCaptainName.trim(),
         phone: newCaptainPhone.trim(),
+        teamName: newCaptainTeamName.trim(),
         slots: Number(newCaptainSlots) || 5,
         hasCar: newCaptainHasCar,
       });
@@ -163,12 +165,14 @@ export default function Admin() {
       setCreatedCaptainAccess({
         name: newCaptainName.trim(),
         phone: newCaptainPhone.trim(),
+        teamName: registration.teamName || newCaptainTeamName.trim(),
         teamNumber: registration.teamNumber,
         url: accessUrl,
       });
       setCaptainMsg("✅ Капитан зарегистрирован и готов к игре!");
       setNewCaptainName("");
       setNewCaptainPhone("");
+      setNewCaptainTeamName("");
       setNewCaptainSlots("5");
       // Перезагружаем список
       const data = await fetchCaptains();
@@ -513,11 +517,11 @@ export default function Admin() {
               <strong>✅ Доступ капитана к игре</strong>
               <div style={{ marginTop: 8 }}>Имя: {createdCaptainAccess.name}</div>
               <div>Телефон для входа: {createdCaptainAccess.phone}</div>
-              <div>Команда №{createdCaptainAccess.teamNumber}</div>
+              <div>Команда: {createdCaptainAccess.teamName} №{createdCaptainAccess.teamNumber}</div>
               <a href={createdCaptainAccess.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 8, color: "var(--accent)", wordBreak: "break-all" }}>
                 {createdCaptainAccess.url}
               </a>
-              <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => navigator.clipboard?.writeText(`${createdCaptainAccess.name} — ${createdCaptainAccess.phone} — Команда №${createdCaptainAccess.teamNumber} — ${createdCaptainAccess.url}`)}>
+              <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => navigator.clipboard?.writeText(`${createdCaptainAccess.name} — ${createdCaptainAccess.phone} — Команда ${createdCaptainAccess.teamName} №${createdCaptainAccess.teamNumber} — ${createdCaptainAccess.url}`)}>
                 📋 Копировать данные входа
               </button>
               <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8 }}>
@@ -538,6 +542,13 @@ export default function Admin() {
               placeholder="Телефон"
               value={newCaptainPhone}
               onChange={(e) => setNewCaptainPhone(e.target.value)}
+              style={{ padding: 10, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", color: "white" }}
+            />
+            <input
+              type="text"
+              placeholder="Название команды"
+              value={newCaptainTeamName}
+              onChange={(e) => setNewCaptainTeamName(e.target.value)}
               style={{ padding: 10, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", color: "white" }}
             />
             <input
