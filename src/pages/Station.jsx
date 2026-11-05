@@ -568,8 +568,8 @@ export default function Station() {
         <h2 style={{ marginBottom: 12 }}>{station.name}</h2>
       )}
 
-      {/* Загадка первой локации тоже показывается: её текст задан в конфигурации точки. */}
-      {riddleText && !isStartStation && (
+      {/* На первой локации загадка скрыта: она уже была разгадана на стартовой точке. */}
+      {riddleText && !isStartStation && station?.id !== 1 && (
         <div className="task riddle-block" style={{ whiteSpace: "pre-wrap" }}>
           <div className="eyebrow" style={{ color: "var(--accent)", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
             <span>🔮</span> ЗАГАДКА
