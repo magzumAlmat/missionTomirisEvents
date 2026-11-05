@@ -611,66 +611,6 @@ export default function AdminProgress() {
           </table>
         </div>
 
-      {/* 📂 Все материалы от капитанов (лента поступления) */}
-      {submissions.length > 0 && (
-        <div style={{ marginTop: 24, padding: "16px", background: "rgba(255,255,255,0.03)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-            <h3 style={{ margin: 0, fontSize: 16, color: "var(--accent)" }}>
-              📂 Все присланные материалы капитанов ({submissions.length})
-            </h3>
-            <span className="muted tiny">Сортировка: сначала новые</span>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10, maxHeight: 320, overflowY: "auto", paddingRight: 4 }}>
-            {submissions.map((sub, sIdx) => (
-              <div
-                key={sIdx}
-                style={{
-                  padding: "10px 12px",
-                  background: "rgba(255, 255, 255, 0.04)",
-                  border: "1px solid rgba(255, 255, 255, 0.09)",
-                  borderRadius: 8,
-                  fontSize: 12,
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                  <span style={{ fontWeight: 800, color: "#fff" }}>
-                    {sub.teamNumber ? `Команда №${sub.teamNumber}` : "Одиночка"}
-                    {sub.teamName ? ` «${sub.teamName}»` : ""}
-                  </span>
-                  <span
-                    style={{
-                      background: "rgba(255, 204, 77, 0.15)",
-                      color: "#ffcc4d",
-                      padding: "1px 6px",
-                      borderRadius: 4,
-                      fontSize: 11,
-                      fontWeight: 700,
-                    }}
-                  >
-                    🕒 {time(sub.at)}
-                  </span>
-                </div>
-                {sub.captainName && (
-                  <div style={{ fontSize: 11, color: "var(--accent)", marginBottom: 3 }}>
-                    👑 {sub.captainName}
-                  </div>
-                )}
-                <div style={{ color: "#d7fff6", fontWeight: 600, fontSize: 12, marginBottom: 2 }}>
-                  📍 {materialLocationText(sub)}
-                </div>
-                <div style={{ fontSize: 11, color: "#aaa" }}>
-                  Тип: <b>{sub.kind === "video" ? "🎬 Видео" : sub.kind === "photo" ? "📸 Фото" : "💬 Текст"}</b>
-                </div>
-                {sub.text && (
-                  <div style={{ marginTop: 4, fontSize: 12, color: "#ddd", whiteSpace: "pre-wrap", background: "rgba(0,0,0,0.2)", padding: "4px 6px", borderRadius: 4 }}>
-                    📝 {sub.text}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="mt" style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
         <button className="btn ghost no-print" onClick={() => navigate("/admin")}>

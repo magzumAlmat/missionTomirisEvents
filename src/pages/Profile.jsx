@@ -12,7 +12,8 @@ import { syncQuestEpoch, clearLocalQuestProgress, clearAllLocalUserData } from "
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { solvedCount, applyServer } = useProgress();
+  const { solvedCount, isSolved, applyServer } = useProgress();
+  const completedLocations = QUEST.stations.slice(1).filter((station) => isSolved(station.id));
   const { isGameStarted, timeLeft, displayDate, displayTime, place } = useGameStatus();
   const [profile, setProfile] = useState({
     name: getName(),
@@ -336,11 +337,11 @@ export default function Profile() {
                 <h3 style={{ fontSize: 16, marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span>📍 Пройденные локации:</span>
                   <span style={{ fontSize: 13, color: "var(--ok)", fontWeight: 700 }}>
-                    {solvedCount} из {QUEST.stations.length}
+                    {completedLocations.length} из {QUEST.stations.length - 1}
                   </span>
                 </h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {QUEST.stations.slice(0, solvedCount).map((st) => (
+                  {completedLocations.length > 0 ? completedLocations.map((st) => (
                     <div
                       key={st.id}
                       style={{
@@ -383,7 +384,11 @@ export default function Profile() {
                         </div>
                       )}
                     </div>
-                  ))}
+                  )) : (
+                    <p className="muted" style={{ margin: 0, fontSize: 14 }}>
+                      Игровые локации пока не пройдены.
+                    </p>
+                  )}
                 </div>
               </div>
             )}
