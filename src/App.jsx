@@ -8,6 +8,7 @@ import AdminProgress from "./pages/AdminProgress.jsx";
 import Register from "./pages/Register.jsx";
 import Landing from "./pages/Landing.jsx";
 import Profile from "./pages/Profile.jsx";
+import Rules from "./pages/Rules.jsx";
 
 export default function App() {
   const location = useLocation();
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="/reg" element={<Register />} />
         <Route path="/s/:id" element={<Station />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/rules" element={<Rules />} />
 
         <Route path="/admin" element={<Admin />} />
         <Route path="/admin/progress" element={<AdminProgress />} />
@@ -41,6 +43,8 @@ export default function App() {
         <div className="footer">
           {!isStationPage && (
             <>
+              <Link className="small" to="/rules">📜 Правила игры</Link>
+              {" · "}
               <Link className="small" to="/landing">✨ Презентация</Link>
               {" · "}
               <Link className="small" to="/register">📝 Регистрация</Link>
