@@ -560,7 +560,7 @@ export default function Station() {
       {riddleSolved && !taskComplete && station?.id !== 1 && <span className="done-badge">✓ Локация разгадана</span>}
 
       <div className="eyebrow">
-        Точка {station.id + 1} из {QUEST.stations.length}
+        Точка {isStartStation ? 0 : station.id} из {QUEST.stations.length - 1}
       </div>
 
       {/* Название локации открываем только после прибытия/адреса/завершения. */}
@@ -568,8 +568,8 @@ export default function Station() {
         <h2 style={{ marginBottom: 12 }}>{station.name}</h2>
       )}
 
-      {/* ЗАГАДКА (на точке 1 текст загадки скрыт) */}
-      {riddleText && !isStartStation && station?.id !== 1 && (
+      {/* Загадка первой локации тоже показывается: её текст задан в конфигурации точки. */}
+      {riddleText && !isStartStation && (
         <div className="task riddle-block" style={{ whiteSpace: "pre-wrap" }}>
           <div className="eyebrow" style={{ color: "var(--accent)", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
             <span>🔮</span> ЗАГАДКА
