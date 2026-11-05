@@ -26,6 +26,19 @@ function buildItems(base) {
   return items;
 }
 
+function copyTextFallback(text) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  if (!copied) throw new Error("Браузер не скопировал текст");
+}
+
 export default function Admin() {
   const navigate = useNavigate();
   const [unlocked, setUnlocked] = useState(isUnlocked);
@@ -44,6 +57,7 @@ export default function Admin() {
   const [loadingCaptains, setLoadingCaptains] = useState(false);
   const [captainMsg, setCaptainMsg] = useState("");
   const [createdCaptainAccess, setCreatedCaptainAccess] = useState(null);
+  const [copyAccessMessage, setCopyAccessMessage] = useState("");
 
   // Создание капитана
   const [newCaptainName, setNewCaptainName] = useState("");
@@ -170,6 +184,7 @@ export default function Admin() {
         url: accessUrl,
       });
       setCaptainMsg("✅ Капитан зарегистрирован и готов к игре!");
+      setCopyAccessMessage("");
       setNewCaptainName("");
       setNewCaptainPhone("");
       setNewCaptainTeamName("");
@@ -179,6 +194,28 @@ export default function Admin() {
       setCaptains(data.captains || []);
     } catch (e) {
       setCaptainMsg("❌ " + e.message);
+    }
+  }
+
+  async function onCopyCaptainAccess() {
+    if (!createdCaptainAccess) return;
+    const { name, phone, teamName, teamNumber, url } = createdCaptainAccess;
+    const text = `${name} — ${phone} — Команда ${teamName} №${teamNumber} — ${url}`;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        copyTextFallback(text);
+      }
+      setCopyAccessMessage("✅ Данные входа скопированы.");
+    } catch {
+      try {
+        copyTextFallback(text);
+        setCopyAccessMessage("✅ Данные входа скопированы.");
+      } catch {
+        setCopyAccessMessage("Не удалось скопировать. Выделите и скопируйте данные вручную.");
+      }
     }
   }
 
@@ -521,9 +558,10 @@ export default function Admin() {
               <a href={createdCaptainAccess.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 8, color: "var(--accent)", wordBreak: "break-all" }}>
                 {createdCaptainAccess.url}
               </a>
-              <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => navigator.clipboard?.writeText(`${createdCaptainAccess.name} — ${createdCaptainAccess.phone} — Команда ${createdCaptainAccess.teamName} №${createdCaptainAccess.teamNumber} — ${createdCaptainAccess.url}`)}>
+              <button type="button" className="btn ghost" style={{ marginTop: 8 }} onClick={onCopyCaptainAccess}>
                 📋 Копировать данные входа
               </button>
+              {copyAccessMessage && <div role="status" style={{ marginTop: 8 }}>{copyAccessMessage}</div>}
               <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8 }}>
                 Ссылка содержит телефон капитана. Отправляйте её только самому капитану.
               </div>
