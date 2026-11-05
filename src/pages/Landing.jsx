@@ -346,7 +346,7 @@ export default function Landing() {
       </div>
 
       {/* 📌 ЗАКРЕПЛЕННАЯ ПЛАШКА ДЛЯ МОБИЛЬНЫХ */}
-      <div className="sticky-mobile-bar">
+      {/* <div className="sticky-mobile-bar">
         <div className="sticky-timer">
           <span className="sticky-label">До старта:</span>
           <span className="sticky-val">
@@ -356,7 +356,7 @@ export default function Landing() {
         <button className="btn green small-btn" onClick={() => navigate("/register")}>
           🔥 Участвовать
         </button>
-      </div>
+      </div> */}
     </div>
   );
 }
