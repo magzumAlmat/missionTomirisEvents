@@ -52,7 +52,7 @@ export function findCaptainByPhone(phone) {
   return listCaptains().find((c) => (c.phone || "").replace(/\D/g, "").slice(-10) === phoneClean) || null;
 }
 
-export function createCaptain({ name, phone, slots, hasCar, teamName }) {
+export function createCaptain({ name, phone, slots, hasCar, teamName }, { registerParticipant = true } = {}) {
   const captains = listCaptains();
   const phoneNorm = normalizePhone(phone);
   const participants = readJson(DB_FILE, []);
@@ -84,7 +84,7 @@ export function createCaptain({ name, phone, slots, hasCar, teamName }) {
     if (existingCap.teamName !== team.name || cleanTeamName !== team.name) {
       return { error: "Для этого телефона уже создан другой капитан." };
     }
-    if (!participant) {
+    if (!participant && registerParticipant) {
       participants.push({
         id: Date.now(),
         name: cleanName,
@@ -161,6 +161,8 @@ export function createCaptain({ name, phone, slots, hasCar, teamName }) {
     writeJson(TEAMS_FILE, teamSnapshot);
     return { error: "Не удалось сохранить капитана." };
   }
+
+  if (!registerParticipant) return { captain, teamNumber: team.number };
 
   participants.push(participant);
   if (!writeJson(DB_FILE, participants)) {

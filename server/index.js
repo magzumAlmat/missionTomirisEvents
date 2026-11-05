@@ -850,7 +850,10 @@ app.post("/api/captains/create", async (req, res) => {
   if (!name || !phone) {
     return res.status(400).json({ ok: false, error: "Нужны имя и телефон капитана" });
   }
-  const result = createCaptain({ name, phone, slots, hasCar, teamName });
+  const result = createCaptain(
+    { name, phone, slots, hasCar, teamName },
+    { registerParticipant: false }
+  );
   if (result.error) {
     return res.status(400).json({ ok: false, error: result.error });
   }

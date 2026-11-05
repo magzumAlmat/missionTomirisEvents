@@ -127,6 +127,7 @@ export default function Register() {
 
   // Валидация уникальности номера телефона
   const [phoneDuplicateError, setPhoneDuplicateError] = useState("");
+  const [duplicateRegistration, setDuplicateRegistration] = useState(null);
   const [checkingPhone, setCheckingPhone] = useState(false);
 
   const phoneOk = isValidPhone(phone);
@@ -191,6 +192,7 @@ export default function Register() {
   function onPhoneChange(v) {
     setPhoneState(v);
     setPhoneDuplicateError("");
+    setDuplicateRegistration(null);
   }
 
   // Проверка телефона на дубликаты в реальном времени
@@ -211,8 +213,10 @@ export default function Register() {
           if (res && res.registered) {
             const desc = res.details?.description ? ` (${res.details.description})` : "";
             setPhoneDuplicateError(`Этот номер телефона уже зарегистрирован${desc}. Один номер не может участвовать дважды.`);
+            setDuplicateRegistration(res.details || null);
           } else {
             setPhoneDuplicateError("");
+            setDuplicateRegistration(null);
           }
         })
         .catch(() => {
@@ -258,9 +262,11 @@ export default function Register() {
       if (res && res.registered) {
         const desc = res.details?.description ? ` (${res.details.description})` : "";
         setPhoneDuplicateError(`Этот номер телефона уже зарегистрирован${desc}. Один номер не может участвовать дважды.`);
+        setDuplicateRegistration(res.details || null);
         return;
       }
       setPhoneDuplicateError("");
+      setDuplicateRegistration(null);
       setErr("");
       setCurrentStep(2);
       return;
@@ -404,6 +410,15 @@ export default function Register() {
       resetProgress();
       setStatus("done");
     } catch (e) {
+      if (e.code === "PHONE_ALREADY_REGISTERED") {
+        setStatus("idle");
+        setErr("");
+        setCurrentStep(1);
+        setPhoneDuplicateError(e.message || "Этот номер уже зарегистрирован.");
+        const existing = await checkPhone(phone);
+        setDuplicateRegistration(existing?.details || null);
+        return;
+      }
       setStatus("error");
       setErr(e.message || "Ошибка при регистрации.");
     }
@@ -491,6 +506,7 @@ export default function Register() {
             setCaptainSlots("4");
             setSelectedCaptainId(null);
             setPhoneDuplicateError("");
+            setDuplicateRegistration(null);
             setErr("");
             setStatus("idle");
             setCurrentStep(1);
@@ -574,8 +590,18 @@ export default function Register() {
               >
                 ⚠️ <b>Номер уже занят:</b> {phoneDuplicateError}
                 <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
-                  Если это вы, вы уже зарегистрированы в квесте — нажмите кнопку «На главную» внизу.
+                  Если это вы, повторная регистрация не нужна.
                 </div>
+                {duplicateRegistration?.teamNumber && (
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    style={{ marginTop: 8, width: "100%", color: "#fff" }}
+                    onClick={() => navigate(`/profile?phone=${encodeURIComponent(phone)}&teamNumber=${encodeURIComponent(duplicateRegistration.teamNumber)}`)}
+                  >
+                    👤 Открыть профиль команды
+                  </button>
+                )}
               </div>
             ) : !phoneOk && phone.length > 0 ? (
               <p className="err-text tiny" style={{ marginTop: 4 }}>

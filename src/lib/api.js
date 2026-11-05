@@ -40,7 +40,9 @@ export async function registerParticipant({ name, phone, hasCar, hasTeam, teamNa
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {
-    throw new Error(data.error || "Не удалось отправить заявку.");
+    const error = new Error(data.error || "Не удалось отправить заявку.");
+    error.code = data.code;
+    throw error;
   }
   return data;
 }
