@@ -656,28 +656,32 @@ export default function Station() {
                 </button>
               )}
 
-              <button
-                className="btn ghost"
-                onClick={openHint}
-                disabled={hintLoading}
-              >
-                {hintLoading
-                  ? "Загружаем…"
-                  : hintReceived
-                    ? "💡 Посмотреть подсказку"
-                    : "💡 Получить подсказку к локации"}
-              </button>
+              {station?.id !== 1 && (
+                <>
+                  <button
+                    className="btn ghost"
+                    onClick={openHint}
+                    disabled={hintLoading}
+                  >
+                    {hintLoading
+                      ? "Загружаем…"
+                      : hintReceived
+                        ? "💡 Посмотреть подсказку"
+                        : "💡 Получить подсказку к локации"}
+                  </button>
 
-              <button
-                className="btn ghost"
-                onClick={() => setShowAddressConfirm(true)}
-                disabled={addressSending}
-                style={{ borderColor: "#ff6b6b", color: "#ff6b6b" }}
-              >
-                {addressSending
-                  ? "Открываем…"
-                  : "❌ Я не разгадал(а) локацию — показать адрес"}
-              </button>
+                  <button
+                    className="btn ghost"
+                    onClick={() => setShowAddressConfirm(true)}
+                    disabled={addressSending}
+                    style={{ borderColor: "#ff6b6b", color: "#ff6b6b" }}
+                  >
+                    {addressSending
+                      ? "Открываем…"
+                      : "❌ Я не разгадал(а) локацию — показать адрес"}
+                  </button>
+                </>
+              )}
             </>
           )}
 
