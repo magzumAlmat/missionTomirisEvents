@@ -548,9 +548,14 @@ export default function Station() {
   const riddleText = station.riddle || (
     station.task ? station.task.split("ЗАДАНИЕ")[0].replace(/^ЗАГАДКА\s*/i, "").trim() : ""
   );
-  const taskVisible = Boolean((arrived || addressRevealed || taskComplete) && station.detailedTask);
-  const canSolveRiddle = !isStartStation && !riddleSolved && !arrived && !addressRevealed && !taskComplete;
-  const canArrive = !isStartStation && riddleSolved && !arrived && !addressRevealed && !taskComplete;
+  const isFirstStation = station.id === 1;
+  const taskVisible = Boolean(
+    (arrived || (!isFirstStation && addressRevealed) || taskComplete) && station.detailedTask
+  );
+  const canSolveRiddle = !isStartStation && !isFirstStation && !riddleSolved && !arrived && !addressRevealed && !taskComplete;
+  const canArrive = !isStartStation && !arrived && !taskComplete && (
+    isFirstStation || (riddleSolved && !addressRevealed)
+  );
   const canComplete = taskVisible && !taskComplete;
   const hasHistory = Boolean(station.history && station.history.trim());
 
