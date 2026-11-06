@@ -70,7 +70,7 @@ export default function Rules() {
           <ul style={{ margin: 0, paddingLeft: 22, lineHeight: 1.65 }}>
             {section.items.map((item) => (
               <li key={item} style={{ marginBottom: 8 }}>
-                {item.split(MIRROR_BOT_URL).map((part, index) =>
+                {item.split(/(https:\/\/t\.me\/thisMirrorbot)/g).map((part, index) =>
                   part === MIRROR_BOT_URL ? (
                     <a
                       key={index}
