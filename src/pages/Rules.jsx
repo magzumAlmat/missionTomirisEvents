@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 
+const MIRROR_BOT_URL = "https://t.me/thisMirrorbot";
+
 const sections = [
   {
     title: "1. Капитан команды",
@@ -66,7 +68,25 @@ export default function Rules() {
         <section key={section.title} style={{ marginTop: 22 }}>
           <h2 style={{ marginBottom: 10 }}>{section.title}</h2>
           <ul style={{ margin: 0, paddingLeft: 22, lineHeight: 1.65 }}>
-            {section.items.map((item) => <li key={item} style={{ marginBottom: 8 }}>{item}</li>)}
+            {section.items.map((item) => (
+              <li key={item} style={{ marginBottom: 8 }}>
+                {item.split(MIRROR_BOT_URL).map((part, index) =>
+                  part === MIRROR_BOT_URL ? (
+                    <a
+                      key={index}
+                      href={MIRROR_BOT_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: "var(--accent)", textDecoration: "underline" }}
+                    >
+                      {part}
+                    </a>
+                  ) : (
+                    part
+                  )
+                )}
+              </li>
+            ))}
           </ul>
           {section.note && (
             <p className="muted" style={{ marginTop: 12, lineHeight: 1.6 }}>{section.note}</p>
