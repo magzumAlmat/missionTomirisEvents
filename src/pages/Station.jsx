@@ -602,13 +602,15 @@ export default function Station() {
             style={{ fontSize: 15, lineHeight: 1.6 }}
             dangerouslySetInnerHTML={{ __html: station.detailedTask.replace(/\n/g, "<br/>") }}
           />
-          <div style={{ marginTop: 16, fontSize: 14, color: "var(--accent)", fontWeight: "bold" }}>
-            Воспользуйтесь телеграм ботом{" "}
-            <a href={MIRROR_BOT} target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "underline" }}>
-              {MIRROR_BOT.replace("https://", "")}
-            </a>{" "}
-            чтобы отправлять фото и видео Хранительнице.
-          </div>
+          {station.id !== 10 && (
+            <div style={{ marginTop: 16, fontSize: 14, color: "var(--accent)", fontWeight: "bold" }}>
+              Воспользуйтесь телеграм ботом{" "}
+              <a href={MIRROR_BOT} target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "underline" }}>
+                {MIRROR_BOT.replace("https://", "")}
+              </a>{" "}
+              чтобы отправлять фото и видео Хранительнице.
+            </div>
+          )}
         </div>
       )}
 
@@ -925,6 +927,8 @@ export default function Station() {
               Подтвердите, что пазл собран и показан Хранительнице. После этого
               откроется следующая точка.
             </p>
+          ) : station.id === 10 ? (
+            <p>Подтвердите выполнение финального задания Хранительнице. Отправлять материалы в Telegram-бот не нужно.</p>
           ) : (
             <>
               <p>

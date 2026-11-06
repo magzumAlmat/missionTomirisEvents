@@ -23,6 +23,12 @@ function cellState(row, stationId) {
   return "empty";
 }
 
+function completedStationCount(row) {
+  return QUEST.stations.filter((station) =>
+    station.id !== 0 && Boolean(row.stations?.[String(station.id)])
+  ).length;
+}
+
 const CELL_STYLE = {
   solved: { background: "rgba(76, 217, 100, 0.22)", color: "#4cd964", label: "✓" },
   not_guessed: { background: "rgba(255, 107, 107, 0.22)", color: "#ff8585", label: "❌" },
@@ -135,7 +141,7 @@ export default function AdminProgress() {
   const [unlocked, setUnlocked] = useState(isUnlocked);
   const [rows, setRows] = useState([]);
   const [submissions, setSubmissions] = useState([]);
-  const [total, setTotal] = useState(QUEST.stations.length);
+  const total = QUEST.stations.filter((station) => station.id !== 0).length;
   const [updatedAt, setUpdatedAt] = useState(null);
   const [err, setErr] = useState("");
   const [deleting, setDeleting] = useState(null);
@@ -160,9 +166,10 @@ export default function AdminProgress() {
   async function handleDelete(row) {
     if (!row.teamNumber) return;
     const label = `№${row.teamNumber} ${row.teamName || "без названия"}`;
+    const solvedCount = completedStationCount(row);
     const hasProgress = row.solved > 0 || Object.keys(row.arrivals || {}).length > 0;
     const extra = hasProgress
-      ? `\n⚠️ У команды есть прогресс (${row.solved}/${total} точек) — он будет удалён.`
+      ? `\n⚠️ У команды есть прогресс (${solvedCount}/${total} точек) — он будет удалён.`
       : "";
     if (!window.confirm(`Удалить команду ${label}?\nПрогресс и материалы капитана тоже будут удалены.${extra}`)) return;
     setDeleting(row.key);
@@ -234,7 +241,6 @@ export default function AdminProgress() {
 
         if (standingsRes.status === "fulfilled") {
           setRows(standingsRes.value.rows || []);
-          setTotal(standingsRes.value.total || QUEST.stations.length);
           setUpdatedAt(new Date());
           setErr("");
         } else {
@@ -530,7 +536,7 @@ export default function AdminProgress() {
                       <b>{r.totalScore ?? 0}</b> б.
                     </td>
                     <td className="board-num">
-                      {r.solved}/{total}
+                      {completedStationCount(r)}/{total}
                     </td>
                     <td className="board-num" style={{ textAlign: "center", minWidth: 155, fontSize: 12 }}>
                       {lastInfo ? (
