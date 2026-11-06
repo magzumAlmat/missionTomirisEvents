@@ -34,7 +34,6 @@ import {
   solveStation,
   standings,
   listTeams,
-  deleteTeam,
   listSubmissions,
   markHint,
   markNotGuessed,
@@ -56,6 +55,7 @@ import {
   deleteAllParticipants,
   deleteCaptain,
   deleteParticipant,
+  deleteTeamAndRegistrations,
 } from "./captains.js";
 import { checkPhoneRegistration, normalizePhone } from "./phoneValidator.js";
 
@@ -566,9 +566,9 @@ app.get("/api/teams", (_req, res) => {
   res.json({ ok: true, teams });
 });
 
-/** Удалить команду (админ): команда + её прогресс + материалы капитана. */
+/** Удалить команду, её прогресс, материалы и регистрации всех участников. */
 app.delete("/api/teams/:number", (req, res) => {
-  const result = deleteTeam(req.params.number);
+  const result = deleteTeamAndRegistrations(req.params.number);
   if (!result.ok) {
     return res.status(404).json({ ok: false, error: result.error });
   }
@@ -576,9 +576,8 @@ app.delete("/api/teams/:number", (req, res) => {
 });
 
 /**
- * Удалить весь квест (админ): все команды + весь прогресс + все материалы.
- * База участников (participants.json) НЕ трогается — она накопительная.
- * То же самое делает команда /finish_quest в Telegram, но из админки.
+ * Удалить весь квест (админ): команды, прогресс, материалы и регистрации участников.
+ * После сброса участники смогут зарегистрироваться заново.
  */
 app.post("/api/admin/reset-quest", (req, res) => {
   if (!requireToken(res)) return;

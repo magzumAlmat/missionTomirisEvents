@@ -171,7 +171,11 @@ export default function AdminProgress() {
     const extra = hasProgress
       ? `\n⚠️ У команды есть прогресс (${solvedCount}/${total} точек) — он будет удалён.`
       : "";
-    if (!window.confirm(`Удалить команду ${label}?\nПрогресс и материалы капитана тоже будут удалены.${extra}`)) return;
+    if (!window.confirm(
+      `Удалить команду ${label}?\n` +
+      `Будут удалены прогресс, материалы и регистрации капитана и участников.${extra}\n\n` +
+      `После удаления участники смогут зарегистрироваться заново. Локальные данные на их устройствах очистятся при следующем обращении к сайту.`
+    )) return;
     setDeleting(row.key);
     try {
       await deleteTeam(row.teamNumber);
@@ -195,8 +199,9 @@ export default function AdminProgress() {
       `Будут удалены безвозвратно:\n` +
       `• все команды (${rows.length})\n` +
       `• весь прогресс по точкам\n` +
-      `• все материалы от капитанов\n\n` +
-      `📇 База участников сохранится.\n` +
+      `• все материалы от капитанов\n` +
+      `• регистрации капитанов и участников\n\n` +
+      `Участники смогут зарегистрироваться заново. Локальные данные на их устройствах очистятся при следующем обращении к сайту.\n` +
       `Нумерация команд начнётся заново с №1.\n\n` +
       `Продолжить?`
     )) return;
@@ -214,7 +219,7 @@ export default function AdminProgress() {
         `• команд: ${removed.teams ?? 0}\n` +
         `• записей прогресса: ${removed.progress ?? 0}\n` +
         `• материалов: ${removed.submissions ?? 0}\n\n` +
-        `📇 Сохранено участников: ${data.keptParticipants ?? 0}`
+        `🧹 Осталось регистраций: ${data.keptParticipants ?? 0}`
       );
       const fresh = await fetchStandings();
       setRows(fresh.rows || []);
@@ -630,7 +635,7 @@ export default function AdminProgress() {
             className="btn btn-danger no-print"
             disabled={resetting}
             onClick={handleResetQuest}
-            title="Удалить все команды, прогресс и материалы. База участников сохранится."
+            title="Удалить команды, весь прогресс, материалы и регистрации участников. После этого они смогут зарегистрироваться заново."
           >
             {resetting ? "Удаляю…" : "🗑 Удалить весь квест"}
           </button>

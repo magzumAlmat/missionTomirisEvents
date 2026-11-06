@@ -9,7 +9,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { checkPhoneRegistration, normalizePhone } from "./phoneValidator.js";
-import { bumpQuestState, findOrCreateTeam, findTeamByCaptainPhone, listTeams, teamKey } from "./store.js";
+import { bumpQuestState, deleteTeam as deleteTeamRecord, findOrCreateTeam, findTeamByCaptainPhone, listTeams, teamKey } from "./store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CAPTAINS_FILE = path.join(__dirname, "captains.json");
@@ -416,6 +416,73 @@ export function deleteAllParticipants() {
   return { ok: true, removed: true };
 }
 
+/** Удалить команду и её регистрации, чтобы участники могли начать заново. */
+export function deleteTeamAndRegistrations(teamNumber) {
+  const number = Number(teamNumber);
+  const team = listTeams().find((item) => Number(item.number) === number);
+  if (!team) return { ok: false, error: `Команда №${number} не найдена.` };
+
+  const sameTeamName = (name) => Boolean(name && teamKey(name) === teamKey(team.name));
+  const captains = readJson(CAPTAINS_FILE, []);
+  const isTeamCaptain = (captain) =>
+    Number(captain.teamNumber) === number ||
+    sameTeamName(captain.teamName) ||
+    (team.captainPhone && normalizePhone(captain.phone) === normalizePhone(team.captainPhone));
+  const teamCaptains = captains.filter(isTeamCaptain);
+  const teamPhones = new Set();
+  const addPhone = (phone) => {
+    const normalized = normalizePhone(phone);
+    if (normalized) teamPhones.add(normalized);
+  };
+
+  teamCaptains.forEach((captain) => {
+    addPhone(captain.phone);
+    (captain.participants || []).forEach((participant) => addPhone(participant.phone));
+  });
+
+  const participants = readJson(DB_FILE, []);
+  const belongsToTeam = (participant) =>
+    Number(participant.teamNumber) === number || sameTeamName(participant.teamName);
+  participants.filter(belongsToTeam).forEach((participant) => addPhone(participant.phone));
+
+  const soloUsers = readJson(SOLO_FILE, []);
+  soloUsers.filter(belongsToTeam).forEach((participant) => addPhone(participant.phone));
+
+  const remainingParticipants = participants.filter(
+    (participant) => !belongsToTeam(participant) && !teamPhones.has(normalizePhone(participant.phone))
+  );
+  const remainingCaptains = captains
+    .filter((captain) => !isTeamCaptain(captain))
+    .map((captain) => {
+      const members = (captain.participants || []).filter(
+        (participant) => !teamPhones.has(normalizePhone(participant.phone))
+      );
+      return { ...captain, participants: members, currentParticipants: members.length };
+    });
+  const remainingSoloUsers = soloUsers.filter(
+    (participant) => !belongsToTeam(participant) && !teamPhones.has(normalizePhone(participant.phone))
+  );
+
+  if (!writeJson(DB_FILE, remainingParticipants)) {
+    return { ok: false, error: "Не удалось обновить базу участников." };
+  }
+  if (!writeJson(CAPTAINS_FILE, remainingCaptains)) {
+    return { ok: false, error: "Не удалось обновить список капитанов." };
+  }
+  if (!writeJson(SOLO_FILE, remainingSoloUsers)) {
+    return { ok: false, error: "Не удалось обновить список одиночных участников." };
+  }
+
+  const result = deleteTeamRecord(number);
+  if (!result.ok) return result;
+  bumpQuestState();
+
+  return {
+    ok: true,
+    removed: { ...result.removed, registrations: teamPhones.size },
+  };
+}
+
 /** Удалить одного капитана */
 export function deleteCaptain(captainId) {
   const captains = listCaptains();
@@ -430,7 +497,7 @@ export function deleteCaptain(captainId) {
   const teams = listTeams();
   const capTeam = teams.find((t) => normalizePhone(t.captainPhone) === phoneNorm);
   if (capTeam) {
-    deleteTeam(capTeam.number);
+    deleteTeamRecord(capTeam.number);
   }
 
   // Удаляем из participants.json
