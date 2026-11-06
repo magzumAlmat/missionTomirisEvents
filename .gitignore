@@ -16,5 +16,6 @@ server/submissions.json
 server/*.tmp
 server/captains.json
 server/participants.json
+server/participantsArchive.json
 server/solo_users.json
 server/questSettings.json

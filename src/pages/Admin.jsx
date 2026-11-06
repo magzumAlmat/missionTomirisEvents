@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 import { useNavigate } from "react-router-dom";
 import { QUEST, INCLUDE_START_QR } from "../questConfig.js";
 import PasswordGate, { isUnlocked } from "../components/PasswordGate.jsx";
-import { fetchCaptains, registerCaptain, updateCaptainSlots, moveUserBetweenCaptains, unsubscribeFromCaptain, fetchSoloUsers, deleteAllCaptains, deleteAllParticipants, deleteCaptain, deleteParticipant, fetchSettings, saveSettings } from "../lib/api.js";
+import { fetchCaptains, registerCaptain, updateCaptainSlots, moveUserBetweenCaptains, unsubscribeFromCaptain, fetchSoloUsers, deleteAllCaptains, deleteAllParticipants, deleteCaptain, deleteParticipant, fetchSettings, saveSettings, participantsCsvUrl, HAS_BACKEND } from "../lib/api.js";
 import { clearAllLocalUserData } from "../lib/questSync.js";
 import { isValidPhone } from "../lib/phone.js";
 
@@ -830,7 +830,24 @@ export default function Admin() {
       {/* Одиночные пользователи (и участники) */}
       {activeTab === "solo" && (
         <div>
-          <h3>🙋 Все участники</h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <h3 style={{ margin: 0 }}>🙋 Все участники</h3>
+            {HAS_BACKEND ? (
+              <a
+                className="btn ghost"
+                href={participantsCsvUrl()}
+                download="tomiris-participants.csv"
+                style={{ textDecoration: "none" }}
+              >
+                📥 Выгрузить CSV для Excel
+              </a>
+            ) : (
+              <button className="btn ghost" disabled>📥 Выгрузить CSV для Excel</button>
+            )}
+          </div>
+          <p className="muted" style={{ marginTop: 8 }}>
+            В архив входят текущие и ранее зарегистрированные участники; удаление из панели его не очищает.
+          </p>
           {soloUsers.length === 0 ? (
             <p className="muted">Пока нет участников.</p>
           ) : (

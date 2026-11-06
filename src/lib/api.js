@@ -194,6 +194,12 @@ export async function fetchCaptainsSummary() {
   return data;
 }
 
+/** URL для скачивания накопительного CSV-архива участников. */
+export function participantsCsvUrl() {
+  if (!API_URL) return "";
+  return `${API_URL.replace(/\/$/, "")}/api/admin/participants.csv`;
+}
+
 /** Получить одиночных пользователей (админ) */
 export async function fetchSoloUsers() {
   if (!API_URL) throw new Error("Бэкенд не подключён (VITE_API_URL).");

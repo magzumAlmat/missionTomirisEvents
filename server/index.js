@@ -18,6 +18,7 @@ import { fileURLToPath } from "url";
 import { startVideoBot } from "./videoBot.js";
 import { ALL_DONE, STATION_SECRETS, TOTAL_STATIONS, findStation } from "./questSecret.js";
 import { buildParticipantsListText, buildStandingsText, durationText, escapeHtml } from "./messages.js";
+import { archiveParticipants, listArchivedParticipants } from "./participantArchive.js";
 import {
   findOrCreateTeam,
   findTeamByNumber,
@@ -77,6 +78,14 @@ function saveParticipants(list) {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(list, null, 2), "utf8");
   } catch (e) {}
+}
+
+function archiveParticipantSafely(participant) {
+  try {
+    archiveParticipants([participant]);
+  } catch (e) {
+    console.error("Не удалось добавить регистрацию в архив участников:", e.message);
+  }
 }
 
 const app = express();
@@ -729,6 +738,11 @@ app.post("/api/register", async (req, res) => {
 
   participants.push(newEntry);
   saveParticipants(participants);
+  try {
+    archiveParticipants([{ name: newEntry.name, phone: newEntry.phone, role: isCaptain ? "Капитан" : "Участник" }]);
+  } catch (e) {
+    console.error("Не удалось добавить регистрацию в архив участников:", e.message);
+  }
 
   const driversCount = participants.filter((p) => p.hasCar).length;
   const totalCount = participants.length;
@@ -827,6 +841,7 @@ app.post("/api/admin/register-captain", (req, res) => {
     return res.status(400).json({ ok: false, error: result.error });
   }
 
+  archiveParticipantSafely({ name, phone, role: "Капитан" });
   const team = result.teamNumber ? findTeamByNumber(result.teamNumber) : findTeamByCaptainPhone(phone);
   const questState = getQuestState();
   res.json({
@@ -892,6 +907,7 @@ app.post("/api/subscribe-to-captain", async (req, res) => {
   if (result.error) {
     return res.status(400).json({ ok: false, error: result.error });
   }
+  archiveParticipantSafely({ name, phone, role: "Участник" });
   // Уведомить админов о подписке
   try {
     const free = Math.max(0, result.captain.slots - 1 - result.captain.currentParticipants);
@@ -1142,6 +1158,7 @@ app.post("/api/admin/add-solo", async (req, res) => {
   if (result.error) {
     return res.status(400).json({ ok: false, error: result.error });
   }
+  archiveParticipantSafely({ name, phone, role: "Участник" });
   // Уведомить админов
   try {
     const text = `🙋 <b>ОДИНОЧНЫЙ УЧАСТНИК</b>\n\n` +
@@ -1158,48 +1175,88 @@ app.post("/api/admin/add-solo", async (req, res) => {
   res.json({ ok: true });
 });
 
-/** Получить список всех участников (кроме капитанов) (для админов) */
-app.get("/api/admin/solo-users", (_req, res) => {
+function buildAdminParticipantList() {
   const participants = readParticipants();
   const captains = listCaptains();
-  const captainPhones = new Set(captains.map(c => (c.phone || "").replace(/\D/g, "").slice(-10)));
+  const captainPhones = new Set(captains.map((captain) => (captain.phone || "").replace(/\D/g, "").slice(-10)));
   const subscribedPhones = new Set();
-  captains.forEach(c => {
-    (c.participants || []).forEach(p => {
-      subscribedPhones.add((p.phone || "").replace(/\D/g, "").slice(-10));
+  captains.forEach((captain) => {
+    (captain.participants || []).forEach((participant) => {
+      subscribedPhones.add((participant.phone || "").replace(/\D/g, "").slice(-10));
     });
   });
-  
-  const soloUsersData = listSoloUsers(); // из solo_users.json
-  
-  // Объединяем и дедуплицируем по телефону
+
   const uniqueUsers = new Map();
-  
-  soloUsersData.forEach(u => {
-    const phoneClean = (u.phone || "").replace(/\D/g, "").slice(-10);
+  listSoloUsers().forEach((user) => {
+    const phoneClean = (user.phone || "").replace(/\D/g, "").slice(-10);
+    if (!phoneClean) return;
     uniqueUsers.set(phoneClean, {
-      ...u,
+      ...user,
       isCaptain: captainPhones.has(phoneClean),
-      isSubscribed: subscribedPhones.has(phoneClean)
+      isSubscribed: subscribedPhones.has(phoneClean),
     });
   });
 
-  participants.forEach(p => {
-    const phoneClean = (p.phone || "").replace(/\D/g, "").slice(-10);
+  participants.forEach((participant) => {
+    const phoneClean = (participant.phone || "").replace(/\D/g, "").slice(-10);
+    if (!phoneClean) return;
     uniqueUsers.set(phoneClean, {
-      name: p.name,
-      phone: p.phone,
-      hasCar: p.hasCar,
-      hasTeam: p.hasTeam,
-      teamName: p.teamName,
-      registeredAt: p.createdAt || new Date().toISOString(),
+      name: participant.name,
+      phone: participant.phone,
+      hasCar: participant.hasCar,
+      hasTeam: participant.hasTeam,
+      teamName: participant.teamName,
+      registeredAt: participant.createdAt || new Date().toISOString(),
       isCaptain: captainPhones.has(phoneClean),
-      isSubscribed: subscribedPhones.has(phoneClean)
+      isSubscribed: subscribedPhones.has(phoneClean),
     });
   });
 
-  const users = Array.from(uniqueUsers.values());
+  return Array.from(uniqueUsers.values());
+}
+
+function syncParticipantArchive(users) {
+  archiveParticipants(users.map((user) => ({
+    name: user.name,
+    phone: user.phone,
+    role: user.isCaptain ? "Капитан" : "Участник",
+  })));
+}
+
+function csvField(value) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+/** Получить список всех участников для админки. */
+app.get("/api/admin/solo-users", (_req, res) => {
+  const users = buildAdminParticipantList();
+  try {
+    syncParticipantArchive(users);
+  } catch (e) {
+    console.error("Не удалось синхронизировать архив участников:", e.message);
+  }
   res.json({ ok: true, users });
+});
+
+/** Скачать накопительный список участников для Excel. */
+app.get("/api/admin/participants.csv", (_req, res) => {
+  try {
+    syncParticipantArchive(buildAdminParticipantList());
+    const rows = [
+      ["Имя", "Телефон", "Роль"],
+      ...listArchivedParticipants().map((participant) => [
+        participant.name,
+        participant.phone,
+        participant.role,
+      ]),
+    ];
+    const csv = `\uFEFF${rows.map((row) => row.map(csvField).join(";")).join("\r\n")}`;
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="tomiris-participants.csv"');
+    res.send(csv);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message || "Не удалось выгрузить участников." });
+  }
 });
 
 /** Удалить ВСЕХ капитанов (админ) */
