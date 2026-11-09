@@ -9,11 +9,14 @@ import { syncQuestEpoch, clearLocalQuestProgress, clearAllLocalUserData } from "
 
 export default function Start() {
   const navigate = useNavigate();
-  const { solvedCount, applyServer } = useProgress();
+  const { solvedCount, allSolved, finished, applyServer } = useProgress();
   const [team, setTeamState] = useState(getTeam());
   const [phone, setPhoneState] = useState(getPhone());
   const poster = QUEST.poster || {};
   const started = solvedCount > 0;
+  const finalStation = QUEST.stations.find((s) => s.isFinal) || QUEST.stations[QUEST.stations.length - 1];
+  const isFinished = allSolved || finished || solvedCount >= QUEST.stations.length;
+  const targetStation = isFinished ? finalStation : (QUEST.stations[solvedCount] || finalStation);
 
   // Реагируем на сброс авторизации и квеста в реальном времени
   useEffect(() => {
@@ -108,11 +111,12 @@ export default function Start() {
             className="btn green"
             style={{ marginBottom: 4 }}
             onClick={() => {
-              const nextStation = QUEST.stations[solvedCount] || QUEST.stations[0];
-              navigate(`/s/${nextStation.code || nextStation.id}`);
+              navigate(`/s/${targetStation.code || targetStation.id}`);
             }}
           >
-            🚀 Продолжить квест (Локация {QUEST.stations[solvedCount]?.id ?? solvedCount})
+            {isFinished
+              ? `🏆 Финишная локация (Локация ${finalStation.id})`
+              : `🚀 Продолжить квест (Локация ${targetStation.id})`}
           </button>
         )}
         {phone ? (

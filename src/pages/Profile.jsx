@@ -263,6 +263,18 @@ export default function Profile() {
                 ? "Квест завершён вашей командой. Итоги подводит организатор."
                 : "Точки проходит капитан со своего телефона. Вы можете смотреть состав команды и статус здесь."}
             </p>
+            {solvedCount >= QUEST.stations.length && (
+              <button
+                className="btn green mt"
+                style={{ width: "100%", marginTop: 14 }}
+                onClick={() => {
+                  const finalStation = QUEST.stations.find((s) => s.isFinal) || QUEST.stations[QUEST.stations.length - 1];
+                  navigate(`/s/${finalStation.code || finalStation.id}`);
+                }}
+              >
+                🏆 Финишная локация (Точка {QUEST.stations.find((s) => s.isFinal)?.id ?? (QUEST.stations.length - 1)})
+              </button>
+            )}
           </div>
         )}
 
@@ -278,6 +290,16 @@ export default function Profile() {
             <p className="muted" style={{ fontSize: 14, lineHeight: 1.55, margin: 0 }}>
               Команда прошла все точки. Итоги подводит организатор.
             </p>
+            <button
+              className="btn green mt"
+              style={{ width: "100%", marginTop: 14 }}
+              onClick={() => {
+                const finalStation = QUEST.stations.find((s) => s.isFinal) || QUEST.stations[QUEST.stations.length - 1];
+                navigate(`/s/${finalStation.code || finalStation.id}`);
+              }}
+            >
+              🏆 Финишная локация (Точка {QUEST.stations.find((s) => s.isFinal)?.id ?? (QUEST.stations.length - 1)})
+            </button>
           </div>
         )}
 
