@@ -524,9 +524,19 @@ export default function AdminProgress() {
                                   type="button"
                                   aria-label={`Уменьшить баллы на локации ${s.id}`}
                                   title="Убавить 1 балл"
-                                  disabled={adjustingScore === scoreAdjustmentKey || stationScore <= 0}
+                                  disabled={adjustingScore === scoreAdjustmentKey}
                                   onClick={() => handleAdjustStationScore(r, s.id, -1)}
-                                  style={{ width: 24, height: 22, padding: 0, border: "1px solid rgba(255,255,255,0.25)", borderRadius: 5, background: "rgba(255,255,255,0.08)", color: "inherit", cursor: "pointer" }}
+                                  style={{
+                                    width: 24,
+                                    height: 22,
+                                    padding: 0,
+                                    border: "1px solid rgba(255,255,255,0.25)",
+                                    borderRadius: 5,
+                                    background: "rgba(255,255,255,0.08)",
+                                    color: "inherit",
+                                    cursor: adjustingScore === scoreAdjustmentKey ? "not-allowed" : "pointer",
+                                    opacity: adjustingScore === scoreAdjustmentKey ? 0.5 : 1,
+                                  }}
                                 >
                                   −
                                 </button>
@@ -537,9 +547,19 @@ export default function AdminProgress() {
                                   type="button"
                                   aria-label={`Увеличить баллы на локации ${s.id}`}
                                   title="Добавить 1 балл"
-                                  disabled={adjustingScore === scoreAdjustmentKey || stationScore <= 0}
-                                  onClick={() => handleAdjustStationScore(r, s.id, -1)}
-                                  style={{ width: 24, height: 22, padding: 0, border: "1px solid rgba(255,255,255,0.25)", borderRadius: 5, background: "rgba(255,255,255,0.08)", color: "inherit", cursor: "pointer" }}
+                                  disabled={adjustingScore === scoreAdjustmentKey}
+                                  onClick={() => handleAdjustStationScore(r, s.id, 1)}
+                                  style={{
+                                    width: 24,
+                                    height: 22,
+                                    padding: 0,
+                                    border: "1px solid rgba(255,255,255,0.25)",
+                                    borderRadius: 5,
+                                    background: "rgba(255,255,255,0.08)",
+                                    color: "inherit",
+                                    cursor: adjustingScore === scoreAdjustmentKey ? "not-allowed" : "pointer",
+                                    opacity: adjustingScore === scoreAdjustmentKey ? 0.5 : 1,
+                                  }}
                                 >
                                   +
                                 </button>

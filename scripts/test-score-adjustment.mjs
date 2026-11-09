@@ -53,6 +53,20 @@ try {
   assert.equal(row.scores[1], 10, "декремент уменьшает базовый счёт ровно на один балл");
   assert.equal(row.totalScore, 10, "общий итог уменьшается вместе с баллами локации");
 
+  // Проверка ухода в отрицательные баллы
+  for (let i = 0; i < 12; i++) {
+    store.adjustManualStationScore({ key, teamNumber: team.number, stationId: 1, delta: -1 });
+  }
+  row = store.standings().find((item) => item.teamNumber === team.number);
+  assert.equal(row.scores[1], -2, "баллы могут становиться отрицательными");
+  assert.equal(row.totalScore, -2, "общий итог пересчитывается с учётом отрицательных баллов");
+
+  // Проверка увеличения из отрицательных баллов
+  store.adjustManualStationScore({ key, teamNumber: team.number, stationId: 1, delta: 1 });
+  row = store.standings().find((item) => item.teamNumber === team.number);
+  assert.equal(row.scores[1], -1, "инкремент из отрицательных баллов работает корректно");
+  assert.equal(row.totalScore, -1, "общий итог также возрастает");
+
   console.log("✅ Ручные корректировки сохраняются и пересчитывают общий итог");
 } finally {
   fs.rmSync(testDir, { recursive: true, force: true });

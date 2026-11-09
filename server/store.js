@@ -523,7 +523,7 @@ export function computeStationScores(progress) {
   for (const [key, entry] of entries) {
     for (const sid of SCORED_STATION_IDS) {
       const adjustment = Number(entry?.manualScoreAdjustments?.[String(sid)]) || 0;
-      scores[key][sid] = Math.max(0, scores[key][sid] + adjustment);
+      scores[key][sid] = scores[key][sid] + adjustment;
     }
   }
 
