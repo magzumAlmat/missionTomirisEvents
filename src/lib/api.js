@@ -92,6 +92,11 @@ export async function markSolved({ stationCode, phone, teamNumber }) {
   return post("/api/mark-solved", { stationCode, phone, teamNumber });
 }
 
+/** Админ: изменить баллы команды или участника на локации на один балл. */
+export async function adminAdjustStationScore({ teamNumber, progressKey, stationId, delta }) {
+  return post("/api/admin/adjust-station-score", { teamNumber, progressKey, stationId, delta });
+}
+
 /** Админ: засчитать прибытие команды на локацию вручную. */
 export async function adminMarkArrival({ teamNumber, stationId }) {
   return post("/api/admin/mark-arrival", { teamNumber, stationId });

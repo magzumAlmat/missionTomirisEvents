@@ -26,6 +26,7 @@ import {
   findTeamByCaptainPhone,
   teamKey,
   getProgress,
+  adjustManualStationScore,
   markArrival,
   markFinished,
   participantsByTeam,
@@ -505,6 +506,50 @@ app.post("/api/admin/settings", (req, res) => {
  * (например, потерял связь или забыл нажать). Время фиксируется текущее.
  * body: { teamNumber, stationId }
  */
+app.post("/api/admin/adjust-station-score", (req, res) => {
+  const { teamNumber, progressKey: requestedProgressKey, stationId, delta } = req.body || {};
+  const station = findStation(stationId);
+  if (!station || station.id === 0) {
+    return res.status(400).json({ ok: false, error: "Выберите игровую локацию от 1 до 10." });
+  }
+  if (![1, -1].includes(Number(delta))) {
+    return res.status(400).json({ ok: false, error: "Корректировка должна быть +1 или -1 балл." });
+  }
+
+  let key = "";
+  let teamName = "";
+  let resolvedTeamNumber = null;
+  if (teamNumber != null && teamNumber !== "") {
+    const team = findTeamByNumber(teamNumber);
+    if (!team) return res.status(404).json({ ok: false, error: "Команда не найдена." });
+    resolvedTeamNumber = team.number;
+    teamName = team.name;
+    key = progressKey({ teamNumber: team.number });
+  } else if (/^p\d{6,10}$/.test(String(requestedProgressKey || ""))) {
+    key = String(requestedProgressKey);
+    if (!getProgress(key)) {
+      return res.status(404).json({ ok: false, error: "Прогресс участника не найден." });
+    }
+  } else {
+    return res.status(400).json({ ok: false, error: "Не удалось определить команду или участника." });
+  }
+
+  const entry = adjustManualStationScore({
+    key,
+    teamNumber: resolvedTeamNumber,
+    teamName,
+    stationId: station.id,
+    delta: Number(delta),
+  });
+  if (!entry) {
+    return res.status(400).json({ ok: false, error: "Не удалось изменить баллы." });
+  }
+  res.json({
+    ok: true,
+    adjustment: Number(entry.manualScoreAdjustments?.[String(station.id)]) || 0,
+  });
+});
+
 app.post("/api/admin/mark-arrival", (req, res) => {
   const { teamNumber, stationId } = req.body || {};
   const team = findTeamByNumber(teamNumber);

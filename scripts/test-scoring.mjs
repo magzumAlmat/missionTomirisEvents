@@ -82,4 +82,23 @@ const notGuessedScores = computeStationScores({
 assert.equal(notGuessedScores.a[1], 0); // открыл адрес — 0 баллов (локация не засчитана)
 assert.equal(notGuessedScores.b[1], 10); // честно разгадал — 1-е место (10 баллов)
 
+// 6) Ручные корректировки прибавляются к базовым баллам и не опускают локацию ниже нуля.
+const manuallyAdjusted = computeStationScores({
+  a: {
+    arrivals: { 1: { at: "2026-01-01T10:00:00.000Z" } },
+    hints: {},
+    manualScoreAdjustments: { 1: 2, 2: 3 },
+  },
+  b: {
+    arrivals: { 1: { at: "2026-01-01T10:01:00.000Z" } },
+    hints: {},
+    manualScoreAdjustments: { 1: -1 },
+  },
+  c: { arrivals: {}, hints: {}, manualScoreAdjustments: { 1: -2 } },
+});
+assert.equal(manuallyAdjusted.a[1], 12); // 10 базовых + 2 вручную
+assert.equal(manuallyAdjusted.a[2], 3); // можно вручную начислить без прибытия
+assert.equal(manuallyAdjusted.b[1], 8); // 9 базовых − 1 вручную
+assert.equal(manuallyAdjusted.c[1], 0); // ниже нуля баллы не опускаются
+
 console.log("✅ Баллы: все проверки прошли");

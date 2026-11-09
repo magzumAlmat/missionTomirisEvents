@@ -165,6 +165,7 @@ function blankEntry({ teamNumber, teamName, phone }) {
     solved: {},
     hints: {},
     notGuessed: {},
+    manualScoreAdjustments: {},
     finishedAt: null,
     startedAt: new Date().toISOString(),
   };
@@ -184,6 +185,25 @@ export function markArrival({ key, teamNumber, teamName, phone, stationId }) {
 
   const sid = String(stationId);
   if (!entry.arrivals[sid]) entry.arrivals[sid] = { at: new Date().toISOString() };
+  all[key] = entry;
+  writeJson(PROGRESS_FILE, all);
+  return entry;
+}
+
+export function adjustManualStationScore({ key, teamNumber, teamName, stationId, delta }) {
+  const stationIdNum = Number(stationId);
+  const deltaNum = Number(delta);
+  if (!key || !SCORED_STATION_IDS.includes(stationIdNum) || ![-1, 1].includes(deltaNum)) {
+    return null;
+  }
+
+  const all = readProgress();
+  const entry = all[key] || blankEntry({ teamNumber, teamName });
+  if (!entry.manualScoreAdjustments) entry.manualScoreAdjustments = {};
+  const sid = String(stationIdNum);
+  const nextAdjustment = (Number(entry.manualScoreAdjustments[sid]) || 0) + deltaNum;
+  if (nextAdjustment === 0) delete entry.manualScoreAdjustments[sid];
+  else entry.manualScoreAdjustments[sid] = nextAdjustment;
   all[key] = entry;
   writeJson(PROGRESS_FILE, all);
   return entry;
@@ -460,7 +480,8 @@ export function arrivalPoints(place) {
  *  - место определяется по времени arrivals[sid] среди всех команд;
  *  - подсказка на локации вычитает 3 балла (один раз, сколько бы раз её ни открывали);
  *  - меньше 0 баллов за локацию не бывает;
- *  - команда без прибытия на локацию получает 0 за неё.
+ *  - без прибытия баллы за локацию равны 0 до ручной корректировки;
+ *  - ручная корректировка прибавляется к базовым баллам и сохраняется отдельно.
  *
  * Если несколько команд отметились в одну и ту же миллисекунду, они делят место
  * и получают одинаковые баллы (а не произвольный порядок по ключу команды).
@@ -497,6 +518,13 @@ export function computeStationScores(progress) {
       const penalty = progress[key]?.hints?.[String(sid)] ? 3 : 0;
       scores[key][sid] = Math.max(0, base - penalty);
     });
+  }
+
+  for (const [key, entry] of entries) {
+    for (const sid of SCORED_STATION_IDS) {
+      const adjustment = Number(entry?.manualScoreAdjustments?.[String(sid)]) || 0;
+      scores[key][sid] = Math.max(0, scores[key][sid] + adjustment);
+    }
   }
 
   return scores;
@@ -537,6 +565,7 @@ export function standings() {
         hints: {},
         notGuessed: {},
         riddleSolved: {},
+        manualScoreAdjustments: {},
         scores: scores[key] ? { ...scores[key] } : {},
         totalScore: 0,
         ...seed,
@@ -572,6 +601,7 @@ export function standings() {
     row.riddleSolved = Object.fromEntries(
       Object.entries(p.solved || {}).map(([id, v]) => [id, v.at || null])
     );
+    row.manualScoreAdjustments = { ...(p.manualScoreAdjustments || {}) };
     row.scores = scores[key] ? { ...scores[key] } : {};
     if (!row.teamName && p.teamName) row.teamName = p.teamName;
     if (!row.teamNumber && p.teamNumber) row.teamNumber = p.teamNumber;

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
-import { fetchStandings, fetchSubmissions, deleteTeam, resetQuest, adminMarkArrival, HAS_BACKEND } from "../lib/api.js";
+import { fetchStandings, fetchSubmissions, deleteTeam, resetQuest, adminAdjustStationScore, adminMarkArrival, HAS_BACKEND } from "../lib/api.js";
 import PasswordGate, { isUnlocked } from "../components/PasswordGate.jsx";
 import { clearLocalQuestProgress, clearAllLocalUserData, syncQuestEpoch } from "../lib/questSync.js";
 
@@ -146,7 +146,28 @@ export default function AdminProgress() {
   const [err, setErr] = useState("");
   const [deleting, setDeleting] = useState(null);
   const [marking, setMarking] = useState(null);
+  const [adjustingScore, setAdjustingScore] = useState(null);
   const [resetting, setResetting] = useState(false);
+
+  async function handleAdjustStationScore(row, stationId, delta) {
+    const adjustmentKey = `${row.key}-${stationId}`;
+    setAdjustingScore(adjustmentKey);
+    try {
+      await adminAdjustStationScore({
+        teamNumber: row.teamNumber,
+        progressKey: row.key,
+        stationId,
+        delta,
+      });
+      const data = await fetchStandings();
+      setRows(data.rows || []);
+      setErr("");
+    } catch (e) {
+      setErr(e.message || "Не удалось изменить баллы.");
+    } finally {
+      setAdjustingScore(null);
+    }
+  }
 
   async function handleMarkArrival(row, stationId) {
     if (!row.teamNumber) return;
@@ -296,7 +317,8 @@ export default function AdminProgress() {
       <p className="muted">
         Обновляется само каждые 15 секунд. 🔓 — локация разгадана, 📍 — прибытие
         подтверждено, ✓ — задание завершено, 💡 — подсказка, ❌ — открыт адрес.
-        ⭐ — баллы за локацию (без творческих).
+        ⭐ — баллы за локацию (без творческих). Кнопки −/+ в ячейках меняют баллы
+        на 1, итог пересчитывается автоматически.
       </p>
 
       {!HAS_BACKEND && (
@@ -415,7 +437,9 @@ export default function AdminProgress() {
                       const hintAt = typeof r.hints?.[sid] === "object" ? r.hints[sid]?.at : r.hints?.[sid];
                       const notGuessedAt = typeof r.notGuessed?.[sid] === "object" ? r.notGuessed[sid]?.at : r.notGuessed?.[sid];
                       const isNotGuessed = Boolean(notGuessedAt);
-                      const stationScore = isNotGuessed ? 0 : Number(r.scores?.[sid] ?? 0);
+                      const stationScore = Number(r.scores?.[sid] ?? 0);
+                      const manualScoreAdjustment = Number(r.manualScoreAdjustments?.[sid] || 0);
+                      const scoreAdjustmentKey = `${r.key}-${s.id}`;
                       const scoreText = s.id === 0 ? "—" : `${stationScore} б.`;
 
                       // Собираем ВСЕ действия с временами (не стираем по мере прогресса)
@@ -438,9 +462,11 @@ export default function AdminProgress() {
                       // Tooltip: все действия с временами и баллы
                       const titleParts = [s.name];
                       if (isNotGuessed) {
-                        titleParts.push("❌ Локация не засчитана: 0 б. (капитан не отгадал загадку и открыл адрес)");
-                      } else {
-                        titleParts.push(`⭐ Баллы: ${scoreText}`);
+                        titleParts.push("❌ Капитан открыл адрес без самостоятельной разгадки");
+                      }
+                      titleParts.push(`⭐ Баллы: ${scoreText}`);
+                      if (manualScoreAdjustment) {
+                        titleParts.push(`✍️ Ручная корректировка: ${manualScoreAdjustment > 0 ? "+" : ""}${manualScoreAdjustment} б.`);
                       }
                       for (const a of actions) {
                         titleParts.push(`${a.icon} ${a.label}: ${a.t}`);
@@ -468,7 +494,7 @@ export default function AdminProgress() {
                                 </div>
                               ))
                             )}
-                            {isNotGuessed ? (
+                            {isNotGuessed && (
                               <div
                                 style={{
                                   marginTop: 4,
@@ -486,11 +512,37 @@ export default function AdminProgress() {
                                   textAlign: "center",
                                 }}
                               >
-                                ❌ Не засчитана (0 б.)
+                                ❌ Адрес открыт
                               </div>
-                            ) : (
-                              <div style={{ marginTop: 4, fontWeight: 800, fontSize: 11 }}>
-                                ⭐ {scoreText}
+                            )}
+                            <div style={{ marginTop: 4, fontWeight: 800, fontSize: 11 }}>
+                              ⭐ {scoreText}
+                            </div>
+                            {s.id !== 0 && (
+                              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 4, marginTop: 5 }}>
+                                <button
+                                  type="button"
+                                  aria-label={`Уменьшить баллы на локации ${s.id}`}
+                                  title="Убавить 1 балл"
+                                  disabled={adjustingScore === scoreAdjustmentKey || stationScore <= 0}
+                                  onClick={() => handleAdjustStationScore(r, s.id, -1)}
+                                  style={{ width: 24, height: 22, padding: 0, border: "1px solid rgba(255,255,255,0.25)", borderRadius: 5, background: "rgba(255,255,255,0.08)", color: "inherit", cursor: "pointer" }}
+                                >
+                                  −
+                                </button>
+                                <span title="Ручная корректировка баллов" style={{ minWidth: 32, fontSize: 9, opacity: 0.85 }}>
+                                  {manualScoreAdjustment > 0 ? `+${manualScoreAdjustment}` : manualScoreAdjustment} ручн.
+                                </span>
+                                <button
+                                  type="button"
+                                  aria-label={`Увеличить баллы на локации ${s.id}`}
+                                  title="Добавить 1 балл"
+                                  disabled={adjustingScore === scoreAdjustmentKey || stationScore <= 0}
+                                  onClick={() => handleAdjustStationScore(r, s.id, -1)}
+                                  style={{ width: 24, height: 22, padding: 0, border: "1px solid rgba(255,255,255,0.25)", borderRadius: 5, background: "rgba(255,255,255,0.08)", color: "inherit", cursor: "pointer" }}
+                                >
+                                  +
+                                </button>
                               </div>
                             )}
                             {stMaterials.length > 0 && (
