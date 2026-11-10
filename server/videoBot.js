@@ -357,7 +357,6 @@ async function forwardVideo(msg, sender, kind, { station = null, location = "" }
     `👤 <b>Капитан:</b> ${escapeHtml(sender.captainName)}\n` +
     (sender.phone ? `📞 <b>Телефон:</b> ${escapeHtml(sender.phone)}\n` : "") +
     `📍 <b>Локация:</b> ${escapeHtml(locationText || "не указана")}\n` +
-    `🏷 <b>Локация №:</b> ${stationLabel}\n` +
     `📎 <b>Материал №:</b> ${submissionNum} от этой команды\n` +
     `🕒 <b>Время:</b> ${time}` +
     caption;
