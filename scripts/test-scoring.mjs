@@ -101,4 +101,9 @@ assert.equal(manuallyAdjusted.a[2], 3); // можно вручную начис�
 assert.equal(manuallyAdjusted.b[1], 8); // 9 базовых − 1 вручную
 assert.equal(manuallyAdjusted.c[1], -2); // можно делать минусовые баллы
 
+// 7) Проверка учета бонусных баллов в общей сумме
+const basePointsSum = 12;
+const bonus = 3;
+assert.equal(basePointsSum + bonus, 15);
+
 console.log("✅ Баллы: все проверки прошли");

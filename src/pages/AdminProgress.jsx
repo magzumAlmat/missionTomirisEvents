@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { QUEST } from "../questConfig.js";
-import { fetchStandings, fetchSubmissions, deleteTeam, resetQuest, adminAdjustStationScore, adminMarkArrival, HAS_BACKEND } from "../lib/api.js";
+import { fetchStandings, fetchSubmissions, deleteTeam, resetQuest, adminAdjustStationScore, adminAdjustBonusScore, adminMarkArrival, HAS_BACKEND } from "../lib/api.js";
 import PasswordGate, { isUnlocked } from "../components/PasswordGate.jsx";
 import { clearLocalQuestProgress, clearAllLocalUserData, syncQuestEpoch } from "../lib/questSync.js";
 
@@ -164,6 +164,41 @@ export default function AdminProgress() {
       setErr("");
     } catch (e) {
       setErr(e.message || "Не удалось изменить баллы.");
+    } finally {
+      setAdjustingScore(null);
+    }
+  }
+
+  async function handleAdjustBonusScore(row, delta) {
+    const adjustmentKey = `${row.key}-bonus`;
+    setAdjustingScore(adjustmentKey);
+    setRows((prevRows) =>
+      prevRows.map((r) => {
+        if (r.key === row.key) {
+          const newBonus = (Number(r.bonusScore) || 0) + delta;
+          const currentTotal = Number(r.totalScore) || 0;
+          return {
+            ...r,
+            bonusScore: newBonus,
+            totalScore: currentTotal + delta,
+          };
+        }
+        return r;
+      })
+    );
+    try {
+      await adminAdjustBonusScore({
+        teamNumber: row.teamNumber,
+        progressKey: row.key,
+        delta,
+      });
+      const data = await fetchStandings();
+      setRows(data.rows || []);
+      setErr("");
+    } catch (e) {
+      setErr(e.message || "Не удалось изменить бонусные баллы.");
+      const data = await fetchStandings().catch(() => null);
+      if (data?.rows) setRows(data.rows);
     } finally {
       setAdjustingScore(null);
     }
@@ -626,6 +661,118 @@ export default function AdminProgress() {
                     })}
                   </tr>
                 ))}
+
+                {/* Бонусные баллы */}
+                <tr>
+                  <td
+                    style={{
+                      fontWeight: 800,
+                      fontSize: 12,
+                      textAlign: "center",
+                      verticalAlign: "middle",
+                      padding: "10px 6px",
+                      position: "sticky",
+                      left: 0,
+                      zIndex: 2,
+                      background: "var(--bg2, #0d1224)",
+                    }}
+                  >
+                    <div style={{ fontWeight: 800, fontSize: 13, color: "#ffcc4d" }}>
+                      ⭐ Бонусные баллы
+                    </div>
+                  </td>
+                  {rows.map((r) => {
+                    const bonusScore = Number(r.bonusScore || 0);
+                    const bonusAdjustmentKey = `${r.key}-bonus`;
+                    return (
+                      <td key={r.key} className="board-cell">
+                        <div
+                          className="board-dot"
+                          style={{
+                            background:
+                              bonusScore > 0
+                                ? "rgba(255, 204, 77, 0.18)"
+                                : bonusScore < 0
+                                ? "rgba(255, 107, 107, 0.18)"
+                                : "rgba(255, 255, 255, 0.04)",
+                            color:
+                              bonusScore > 0
+                                ? "#ffcc4d"
+                                : bonusScore < 0
+                                ? "#ff8585"
+                                : "inherit",
+                            padding: "8px 6px",
+                          }}
+                        >
+                          <div style={{ fontWeight: 800, fontSize: 12 }}>
+                            ⭐ {bonusScore > 0 ? `+${bonusScore}` : bonusScore} б.
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "center",
+                              alignItems: "center",
+                              gap: 5,
+                              marginTop: 5,
+                            }}
+                          >
+                            <button
+                              type="button"
+                              aria-label={`Уменьшить бонусные баллы команды ${r.teamNumber || r.teamName}`}
+                              title="Убавить 1 бонусный балл"
+                              disabled={adjustingScore === bonusAdjustmentKey}
+                              onClick={() => handleAdjustBonusScore(r, -1)}
+                              style={{
+                                width: 24,
+                                height: 22,
+                                padding: 0,
+                                border: "1px solid rgba(255,255,255,0.25)",
+                                borderRadius: 5,
+                                background: "rgba(255,255,255,0.08)",
+                                color: "inherit",
+                                cursor:
+                                  adjustingScore === bonusAdjustmentKey
+                                    ? "not-allowed"
+                                    : "pointer",
+                                opacity: adjustingScore === bonusAdjustmentKey ? 0.5 : 1,
+                                fontSize: 13,
+                                fontWeight: 700,
+                              }}
+                            >
+                              −
+                            </button>
+                            <span style={{ fontSize: 9, opacity: 0.85, minWidth: 32 }}>бонус</span>
+                            <button
+                              type="button"
+                              aria-label={`Увеличить бонусные баллы команды ${r.teamNumber || r.teamName}`}
+                              title="Добавить 1 бонусный балл"
+                              disabled={adjustingScore === bonusAdjustmentKey}
+                              onClick={() => handleAdjustBonusScore(r, 1)}
+                              style={{
+                                width: 24,
+                                height: 22,
+                                padding: 0,
+                                border: "1px solid rgba(255,255,255,0.25)",
+                                borderRadius: 5,
+                                background: "rgba(255,255,255,0.08)",
+                                color: "inherit",
+                                cursor:
+                                  adjustingScore === bonusAdjustmentKey
+                                    ? "not-allowed"
+                                    : "pointer",
+                                opacity: adjustingScore === bonusAdjustmentKey ? 0.5 : 1,
+                                fontSize: 13,
+                                fontWeight: 700,
+                              }}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
 
                 {/* Итог */}
                 <tr>

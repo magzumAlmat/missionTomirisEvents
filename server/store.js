@@ -166,6 +166,7 @@ function blankEntry({ teamNumber, teamName, phone }) {
     hints: {},
     notGuessed: {},
     manualScoreAdjustments: {},
+    bonusScore: 0,
     finishedAt: null,
     startedAt: new Date().toISOString(),
   };
@@ -204,6 +205,26 @@ export function adjustManualStationScore({ key, teamNumber, teamName, stationId,
   const nextAdjustment = (Number(entry.manualScoreAdjustments[sid]) || 0) + deltaNum;
   if (nextAdjustment === 0) delete entry.manualScoreAdjustments[sid];
   else entry.manualScoreAdjustments[sid] = nextAdjustment;
+  all[key] = entry;
+  writeJson(PROGRESS_FILE, all);
+  return entry;
+}
+
+export function adjustBonusScore({ key, teamNumber, teamName, delta }) {
+  const deltaNum = Number(delta);
+  if (!key || ![-1, 1].includes(deltaNum)) {
+    return null;
+  }
+
+  const all = readProgress();
+  const entry = all[key] || blankEntry({ teamNumber, teamName });
+  const current = Number(entry.bonusScore) || 0;
+  const next = current + deltaNum;
+  if (next === 0) {
+    delete entry.bonusScore;
+  } else {
+    entry.bonusScore = next;
+  }
   all[key] = entry;
   writeJson(PROGRESS_FILE, all);
   return entry;
@@ -566,6 +587,7 @@ export function standings() {
         notGuessed: {},
         riddleSolved: {},
         manualScoreAdjustments: {},
+        bonusScore: 0,
         scores: scores[key] ? { ...scores[key] } : {},
         totalScore: 0,
         ...seed,
@@ -602,6 +624,7 @@ export function standings() {
       Object.entries(p.solved || {}).map(([id, v]) => [id, v.at || null])
     );
     row.manualScoreAdjustments = { ...(p.manualScoreAdjustments || {}) };
+    row.bonusScore = Number(p.bonusScore) || 0;
     row.scores = scores[key] ? { ...scores[key] } : {};
     if (!row.teamName && p.teamName) row.teamName = p.teamName;
     if (!row.teamNumber && p.teamNumber) row.teamNumber = p.teamNumber;
@@ -637,7 +660,7 @@ export function standings() {
     row.totalScore = SCORED_STATION_IDS.reduce(
       (sum, sid) => sum + (Number(row.scores?.[sid]) || 0),
       0
-    );
+    ) + (Number(row.bonusScore) || 0);
   }
 
   return [...rows.values()].sort((a, b) => {

@@ -97,6 +97,11 @@ export async function adminAdjustStationScore({ teamNumber, progressKey, station
   return post("/api/admin/adjust-station-score", { teamNumber, progressKey, stationId, delta });
 }
 
+/** Админ: изменить бонусные баллы команды или участника на один балл. */
+export async function adminAdjustBonusScore({ teamNumber, progressKey, delta }) {
+  return post("/api/admin/adjust-bonus-score", { teamNumber, progressKey, delta });
+}
+
 /** Админ: засчитать прибытие команды на локацию вручную. */
 export async function adminMarkArrival({ teamNumber, stationId }) {
   return post("/api/admin/mark-arrival", { teamNumber, stationId });

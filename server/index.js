@@ -27,6 +27,7 @@ import {
   teamKey,
   getProgress,
   adjustManualStationScore,
+  adjustBonusScore,
   markArrival,
   markFinished,
   participantsByTeam,
@@ -608,6 +609,45 @@ app.post("/api/admin/adjust-station-score", (req, res) => {
   res.json({
     ok: true,
     adjustment: Number(entry.manualScoreAdjustments?.[String(station.id)]) || 0,
+  });
+});
+
+app.post("/api/admin/adjust-bonus-score", (req, res) => {
+  const { teamNumber, progressKey: requestedProgressKey, delta } = req.body || {};
+  if (![1, -1].includes(Number(delta))) {
+    return res.status(400).json({ ok: false, error: "Корректировка должна быть +1 или -1 балл." });
+  }
+
+  let key = "";
+  let teamName = "";
+  let resolvedTeamNumber = null;
+  if (teamNumber != null && teamNumber !== "") {
+    const team = findTeamByNumber(teamNumber);
+    if (!team) return res.status(404).json({ ok: false, error: "Команда не найдена." });
+    resolvedTeamNumber = team.number;
+    teamName = team.name;
+    key = progressKey({ teamNumber: team.number });
+  } else if (/^p\d{6,10}$/.test(String(requestedProgressKey || ""))) {
+    key = String(requestedProgressKey);
+    if (!getProgress(key)) {
+      return res.status(404).json({ ok: false, error: "Прогресс участника не найден." });
+    }
+  } else {
+    return res.status(400).json({ ok: false, error: "Не удалось определить команду или участника." });
+  }
+
+  const entry = adjustBonusScore({
+    key,
+    teamNumber: resolvedTeamNumber,
+    teamName,
+    delta: Number(delta),
+  });
+  if (!entry) {
+    return res.status(400).json({ ok: false, error: "Не удалось изменить бонусные баллы." });
+  }
+  res.json({
+    ok: true,
+    bonusScore: Number(entry.bonusScore) || 0,
   });
 });
 
