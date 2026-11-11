@@ -9,6 +9,8 @@ import Register from "./pages/Register.jsx";
 import Landing from "./pages/Landing.jsx";
 import Profile from "./pages/Profile.jsx";
 import Rules from "./pages/Rules.jsx";
+import ConsentPersonalData from "./pages/ConsentPersonalData.jsx";
+import ConsentPublication from "./pages/ConsentPublication.jsx";
 
 export default function App() {
   const location = useLocation();
@@ -33,6 +35,8 @@ export default function App() {
         <Route path="/s/:id" element={<Station />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/rules" element={<Rules />} />
+        <Route path="/consent-personal-data" element={<ConsentPersonalData />} />
+        <Route path="/consent-publication" element={<ConsentPublication />} />
 
         <Route path="/admin" element={<Admin />} />
         <Route path="/admin/progress" element={<AdminProgress />} />

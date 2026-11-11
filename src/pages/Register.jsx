@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { registerParticipant, HAS_BACKEND, fetchCaptains, subscribeToCaptain, addSoloUser, createCaptain, fetchTeams, checkPhone } from "../lib/api.js";
 import { getPhone, setPhone, isValidPhone } from "../lib/phone.js";
 import { getTeam, setTeam, getName, setName, setTeamNumber } from "../lib/team.js";
@@ -130,6 +130,10 @@ export default function Register() {
   const [duplicateRegistration, setDuplicateRegistration] = useState(null);
   const [checkingPhone, setCheckingPhone] = useState(false);
 
+  // Согласия (чекбоксы)
+  const [consentPersonalData, setConsentPersonalData] = useState(false);
+  const [consentPublication, setConsentPublication] = useState(false);
+
   const phoneOk = isValidPhone(phone);
   const nameOk = name.trim().length > 0;
 
@@ -248,7 +252,7 @@ export default function Register() {
     JOIN_TEAM: teamName.trim().length > 0,
   }[registrationType];
 
-  const formOk = nameOk && phoneOk && typeOk;
+  const formOk = nameOk && phoneOk && typeOk && consentPersonalData && consentPublication;
 
   async function handleNextStep() {
     if (currentStep === 1) {
@@ -511,6 +515,8 @@ export default function Register() {
             setStatus("idle");
             setCurrentStep(1);
             setRegistrationType(null);
+            setConsentPersonalData(false);
+            setConsentPublication(false);
           }}
         >
           Зарегистрировать ещё одного участника
@@ -801,6 +807,102 @@ export default function Register() {
         )}
 
         {err && <div className="feedback err">{err}</div>}
+
+        {currentStep === 3 && (
+          <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 12 }}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                cursor: "pointer",
+                fontSize: 13,
+                lineHeight: 1.5,
+                color: "rgba(255,255,255,0.85)",
+                padding: "10px 14px",
+                borderRadius: 12,
+                background: consentPersonalData
+                  ? "rgba(76, 217, 100, 0.08)"
+                  : "rgba(255,255,255,0.04)",
+                border: consentPersonalData
+                  ? "1px solid rgba(76, 217, 100, 0.3)"
+                  : "1px solid rgba(255,255,255,0.1)",
+                transition: "all 0.2s ease",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={consentPersonalData}
+                onChange={(e) => setConsentPersonalData(e.target.checked)}
+                style={{
+                  width: 18,
+                  height: 18,
+                  marginTop: 2,
+                  flexShrink: 0,
+                  accentColor: "#4cd964",
+                  cursor: "pointer",
+                }}
+              />
+              <span>
+                Я согласен(-на) на{" "}
+                <Link
+                  to="/consent-personal-data"
+                  target="_blank"
+                  style={{ color: "#ffcc4d", textDecoration: "underline" }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  сбор и обработку персональных данных
+                </Link>
+              </span>
+            </label>
+
+            <label
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                cursor: "pointer",
+                fontSize: 13,
+                lineHeight: 1.5,
+                color: "rgba(255,255,255,0.85)",
+                padding: "10px 14px",
+                borderRadius: 12,
+                background: consentPublication
+                  ? "rgba(76, 217, 100, 0.08)"
+                  : "rgba(255,255,255,0.04)",
+                border: consentPublication
+                  ? "1px solid rgba(76, 217, 100, 0.3)"
+                  : "1px solid rgba(255,255,255,0.1)",
+                transition: "all 0.2s ease",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={consentPublication}
+                onChange={(e) => setConsentPublication(e.target.checked)}
+                style={{
+                  width: 18,
+                  height: 18,
+                  marginTop: 2,
+                  flexShrink: 0,
+                  accentColor: "#4cd964",
+                  cursor: "pointer",
+                }}
+              />
+              <span>
+                Я согласен(-на) на{" "}
+                <Link
+                  to="/consent-publication"
+                  target="_blank"
+                  style={{ color: "#ffcc4d", textDecoration: "underline" }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  публикацию контента
+                </Link>
+              </span>
+            </label>
+          </div>
+        )}
 
         <div className="modal-actions" style={{ marginTop: 20, display: "flex", gap: 10 }}>
           {currentStep > 1 && (
