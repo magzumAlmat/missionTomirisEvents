@@ -265,16 +265,16 @@ export default function Landing() {
             <div className="step-content">
               <h3>Капитан и отчёты</h3>
               <p className="muted" style={{ margin: "2px 0 0", fontSize: "14px", lineHeight: "1.5" }}>
-                Только капитан команды работает с сайтом, отправляет фото и видео в Telegram{" "}
+                Только капитан команды выполняет действия на сайте игры и отправляет фото/видеоматериалы в Telegram{" "}
                 <a
                   href="https://t.me/thisMirrorbot"
                   target="_blank"
                   rel="noreferrer"
                   style={{ color: "var(--accent)", textDecoration: "underline", fontWeight: 600 }}
                 >
-                  @thisMirrorbot 
+                  @thisMirrorbot
                 </a>{" "}
-                и общается с Хранительницей. Остальные участники могут свободно общаться в общем чате.
+                и взаимодействует с Хранительницей.
               </p>
             </div>
           </div>
