@@ -345,89 +345,108 @@ export default function AdminProgress() {
         <table className="board">
           <thead>
             <tr>
-              <th className="board-team">Команда и капитан</th>
-              {QUEST.stations.map((s) => (
+              <th
+                style={{
+                  minWidth: 120,
+                  padding: "8px 6px",
+                  verticalAlign: "middle",
+                  textAlign: "center",
+                  position: "sticky",
+                  left: 0,
+                  zIndex: 3,
+                  background: "var(--bg2, #0d1224)",
+                }}
+              >
+                Точка / Команда
+              </th>
+              {rows.map((r) => (
                 <th
-                  key={s.id}
-                  title={`${s.id}. ${s.name}`}
+                  key={r.key}
                   style={{
-                    minWidth: 125,
-                    maxWidth: 160,
+                    minWidth: 160,
+                    maxWidth: 200,
                     padding: "8px 6px",
                     verticalAlign: "top",
                     textAlign: "center",
                   }}
                 >
-                  <div style={{ fontWeight: 800, fontSize: 13, color: "var(--accent)" }}>
-                    Точка {s.id}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: "#d7fff6",
-                      lineHeight: 1.25,
-                      marginTop: 3,
-                      whiteSpace: "normal",
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    {s.name}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 4, flexWrap: "wrap", justifyContent: "center" }}>
+                      {r.finishedAt && <span className="board-cup">🏆</span>}
+                      <span style={{ fontWeight: 800, fontSize: 13 }}>
+                        {r.teamNumber ? `№${r.teamNumber}` : "Одиночка"}
+                      </span>
+                    </div>
+                    <span style={{ color: "var(--txt)", fontWeight: 700, fontSize: 12 }}>
+                      {r.teamName ? `«${r.teamName}»` : "(без названия)"}
+                    </span>
+                    {r.captainName ? (
+                      <div style={{ fontSize: 11, color: "#ffcc4d", display: "flex", alignItems: "center", gap: 3, justifyContent: "center" }}>
+                        <span>👑</span>
+                        <span><b>{r.captainName}</b></span>
+                      </div>
+                    ) : (
+                      <div className="muted tiny">Капитан не указан</div>
+                    )}
+                    {r.captainPhone && (
+                      <span className="muted tiny" style={{ fontSize: 10 }}>({r.captainPhone})</span>
+                    )}
                   </div>
                 </th>
               ))}
-              <th>Итог</th>
-              <th>Пройдено</th>
-              <th style={{ minWidth: 155 }}>Последняя локация</th>
-              <th style={{ minWidth: 260 }}>Материалы капитанов и время</th>
-              <th className="no-print">Действия</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={QUEST.stations.length + 6}
+                  colSpan={2}
                   style={{ textAlign: "center", padding: "30px 10px", color: "var(--muted)" }}
                 >
                   Пока ни одной команды. Как только капитаны зарегистрируются, они появятся в этой таблице.
                 </td>
               </tr>
             ) : (
-              rows.map((r) => {
-                const teamMaterials = submissions.filter((m) => {
-                  if (r.teamNumber && m.teamNumber && Number(m.teamNumber) === Number(r.teamNumber)) return true;
-                  if (r.captainName && m.captainName && r.captainName.trim().toLowerCase() === m.captainName.trim().toLowerCase()) return true;
-                  if (r.teamName && m.teamName && r.teamName.trim().toLowerCase() === m.teamName.trim().toLowerCase()) return true;
-                  return false;
-                });
-                const lastInfo = getLastStationInfo(r, latestByTeam.get(Number(r.teamNumber)));
-
-                return (
-                  <tr key={r.key}>
-                    <td className="board-team">
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
-                        {r.finishedAt && <span className="board-cup">🏆</span>}
-                        <span style={{ fontWeight: 800, fontSize: 14 }}>
-                          {r.teamNumber ? `№${r.teamNumber}` : "Одиночка"}
-                        </span>
-                        <span style={{ color: "var(--txt)", fontWeight: 700, fontSize: 14 }}>
-                          {r.teamName ? `«${r.teamName}»` : "(без названия)"}
-                        </span>
+              <>
+                {QUEST.stations.map((s) => (
+                  <tr key={s.id}>
+                    <td
+                      style={{
+                        fontWeight: 800,
+                        fontSize: 12,
+                        textAlign: "center",
+                        verticalAlign: "top",
+                        padding: "10px 6px",
+                        position: "sticky",
+                        left: 0,
+                        zIndex: 2,
+                        background: "var(--bg2, #0d1224)",
+                      }}
+                    >
+                      <div style={{ fontWeight: 800, fontSize: 13, color: "var(--accent)" }}>
+                        Точка {s.id}
                       </div>
-                      {r.captainName ? (
-                        <div style={{ fontSize: 12, color: "#ffcc4d", marginTop: 3, display: "flex", alignItems: "center", gap: 4 }}>
-                          <span>👑</span>
-                          <span><b>{r.captainName}</b></span>
-                          {r.captainPhone && <span className="muted tiny" style={{ margin: 0 }}>({r.captainPhone})</span>}
-                        </div>
-                      ) : (
-                        <div className="muted tiny" style={{ marginTop: 2 }}>
-                          Капитан не указан
-                        </div>
-                      )}
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: "#d7fff6",
+                          lineHeight: 1.25,
+                          marginTop: 3,
+                          whiteSpace: "normal",
+                          wordBreak: "break-word",
+                        }}
+                      >
+                        {s.name}
+                      </div>
                     </td>
-                    {QUEST.stations.map((s) => {
+                    {rows.map((r) => {
+                      const teamMaterials = submissions.filter((m) => {
+                        if (r.teamNumber && m.teamNumber && Number(m.teamNumber) === Number(r.teamNumber)) return true;
+                        if (r.captainName && m.captainName && r.captainName.trim().toLowerCase() === m.captainName.trim().toLowerCase()) return true;
+                        if (r.teamName && m.teamName && r.teamName.trim().toLowerCase() === m.teamName.trim().toLowerCase()) return true;
+                        return false;
+                      });
                       const state = cellState(r, s.id);
                       const style = CELL_STYLE[state];
                       const sid = String(s.id);
@@ -442,7 +461,6 @@ export default function AdminProgress() {
                       const scoreAdjustmentKey = `${r.key}-${s.id}`;
                       const scoreText = s.id === 0 ? "—" : `${stationScore} б.`;
 
-                      // Собираем ВСЕ действия с временами (не стираем по мере прогресса)
                       const actions = [];
                       if (riddleAt) actions.push({ icon: "🔓", label: "Разгадал", t: time(riddleAt) });
                       if (arrivalAt) actions.push({ icon: "📍", label: "Прибыл", t: time(arrivalAt) });
@@ -450,16 +468,13 @@ export default function AdminProgress() {
                       if (notGuessedAt) actions.push({ icon: "❌", label: "Адрес открыт", t: time(notGuessedAt) });
                       if (solvedAt) actions.push({ icon: "✓", label: "Задание", t: time(solvedAt) });
 
-                      // Проверяем материалы для этой конкретной станции
                       const stMaterials = teamMaterials.filter((m) => matchSubmissionToStation(m, s));
 
-                      // Ручное прибытие: капитан разгадал, но не подтвердил прибытие.
                       const canMarkArrival = Boolean(
                         r.teamNumber && (riddleAt || s.id === 1 || s.id === 0) && !arrivalAt && !notGuessedAt
                       );
                       const markKey = `${r.key}-${s.id}`;
 
-                      // Tooltip: все действия с временами и баллы
                       const titleParts = [s.name];
                       if (isNotGuessed) {
                         titleParts.push("❌ Капитан открыл адрес без самостоятельной разгадки");
@@ -479,7 +494,7 @@ export default function AdminProgress() {
                       }
 
                       return (
-                        <td key={s.id} className="board-cell">
+                        <td key={r.key} className="board-cell">
                           <div
                             className="board-dot"
                             style={{ background: style.background, color: style.color }}
@@ -609,73 +624,175 @@ export default function AdminProgress() {
                         </td>
                       );
                     })}
-                    <td className="board-num">
+                  </tr>
+                ))}
+
+                {/* Итог */}
+                <tr>
+                  <td
+                    style={{
+                      fontWeight: 800,
+                      fontSize: 13,
+                      textAlign: "center",
+                      padding: "10px 6px",
+                      position: "sticky",
+                      left: 0,
+                      zIndex: 2,
+                      background: "var(--bg2, #0d1224)",
+                      color: "var(--accent)",
+                    }}
+                  >
+                    Итог
+                  </td>
+                  {rows.map((r) => (
+                    <td key={r.key} className="board-num" style={{ textAlign: "center", fontWeight: 800, fontSize: 14 }}>
                       <b>{r.totalScore ?? 0}</b> б.
                     </td>
-                    <td className="board-num">
+                  ))}
+                </tr>
+
+                {/* Пройдено */}
+                <tr>
+                  <td
+                    style={{
+                      fontWeight: 800,
+                      fontSize: 13,
+                      textAlign: "center",
+                      padding: "10px 6px",
+                      position: "sticky",
+                      left: 0,
+                      zIndex: 2,
+                      background: "var(--bg2, #0d1224)",
+                      color: "var(--accent)",
+                    }}
+                  >
+                    Пройдено
+                  </td>
+                  {rows.map((r) => (
+                    <td key={r.key} className="board-num" style={{ textAlign: "center" }}>
                       {completedStationCount(r)}/{total}
                     </td>
-                    <td className="board-num" style={{ textAlign: "center", minWidth: 155, fontSize: 12 }}>
-                      {lastInfo ? (
-                        <div>
-                          <div style={{ fontWeight: 700, color: lastInfo.isFinished ? "#4cd964" : "#ffcc4d" }}>
-                            {lastInfo.isFinished ? "🏁 Финиш" : `Точка ${lastInfo.stationId}: ${lastInfo.stationName}`}
-                          </div>
-                          <div className="muted tiny" style={{ marginTop: 2 }}>
-                            🕒 {time(lastInfo.time)} {lastInfo.type ? `(${lastInfo.type})` : ""}
-                          </div>
-                        </div>
-                      ) : (
-                        time(r.lastAt) || "—"
-                      )}
-                    </td>
-                    <td style={{ textAlign: "left", minWidth: 260, maxWidth: 360, whiteSpace: "normal", verticalAlign: "top" }}>
-                      {teamMaterials.length === 0 ? (
-                        <span className="muted tiny">пока нет</span>
-                      ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 220, overflowY: "auto", paddingRight: 4 }}>
-                          {teamMaterials.map((m, idx) => (
-                            <div
-                              key={idx}
-                              style={{
-                                padding: "6px 8px",
-                                background: "rgba(255, 255, 255, 0.05)",
-                                border: "1px solid rgba(255, 255, 255, 0.12)",
-                                borderRadius: 8,
-                                fontSize: 12,
-                              }}
-                            >
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
-                                <span style={{ fontWeight: 700, color: "var(--accent)" }}>
-                                  {m.kind === "video" ? "🎬 Видео" : m.kind === "photo" ? "📸 Фото" : "💬 Текст"}
-                                </span>
-                                <span
-                                  style={{
-                                    background: "rgba(255, 204, 77, 0.15)",
-                                    color: "#ffcc4d",
-                                    padding: "1px 6px",
-                                    borderRadius: 4,
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  🕒 {time(m.at)}
-                                </span>
-                              </div>
-                              <div style={{ color: "#d7fff6", fontWeight: 600, marginTop: 3, fontSize: 12 }}>
-                                📍 {materialLocationText(m)}
-                              </div>
-                              {m.text && (
-                                <div className="muted tiny" style={{ marginTop: 2, whiteSpace: "pre-wrap", color: "#ccc" }}>
-                                  📝 {m.text}
-                                </div>
-                              )}
+                  ))}
+                </tr>
+
+                {/* Последняя локация */}
+                <tr>
+                  <td
+                    style={{
+                      fontWeight: 800,
+                      fontSize: 13,
+                      textAlign: "center",
+                      padding: "10px 6px",
+                      position: "sticky",
+                      left: 0,
+                      zIndex: 2,
+                      background: "var(--bg2, #0d1224)",
+                      color: "var(--accent)",
+                    }}
+                  >
+                    Последняя локация
+                  </td>
+                  {rows.map((r) => {
+                    const lastInfo = getLastStationInfo(r, latestByTeam.get(Number(r.teamNumber)));
+                    return (
+                      <td key={r.key} className="board-num" style={{ textAlign: "center", fontSize: 12 }}>
+                        {lastInfo ? (
+                          <div>
+                            <div style={{ fontWeight: 700, color: lastInfo.isFinished ? "#4cd964" : "#ffcc4d" }}>
+                              {lastInfo.isFinished ? "🏁 Финиш" : `Точка ${lastInfo.stationId}`}
                             </div>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td className="board-num no-print">
+                            <div className="muted tiny" style={{ marginTop: 2 }}>
+                              🕒 {time(lastInfo.time)}
+                            </div>
+                          </div>
+                        ) : (
+                          time(r.lastAt) || "—"
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+
+                {/* Материалы */}
+                <tr>
+                  <td
+                    style={{
+                      fontWeight: 800,
+                      fontSize: 13,
+                      textAlign: "center",
+                      padding: "10px 6px",
+                      position: "sticky",
+                      left: 0,
+                      zIndex: 2,
+                      background: "var(--bg2, #0d1224)",
+                      color: "var(--accent)",
+                    }}
+                  >
+                    Материалы
+                  </td>
+                  {rows.map((r) => {
+                    const teamMaterials = submissions.filter((m) => {
+                      if (r.teamNumber && m.teamNumber && Number(m.teamNumber) === Number(r.teamNumber)) return true;
+                      if (r.captainName && m.captainName && r.captainName.trim().toLowerCase() === m.captainName.trim().toLowerCase()) return true;
+                      if (r.teamName && m.teamName && r.teamName.trim().toLowerCase() === m.teamName.trim().toLowerCase()) return true;
+                      return false;
+                    });
+                    return (
+                      <td key={r.key} style={{ textAlign: "left", minWidth: 160, whiteSpace: "normal", verticalAlign: "top" }}>
+                        {teamMaterials.length === 0 ? (
+                          <span className="muted tiny">пока нет</span>
+                        ) : (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 180, overflowY: "auto", paddingRight: 4 }}>
+                            {teamMaterials.map((m, idx) => (
+                              <div
+                                key={idx}
+                                style={{
+                                  padding: "5px 7px",
+                                  background: "rgba(255, 255, 255, 0.05)",
+                                  border: "1px solid rgba(255, 255, 255, 0.12)",
+                                  borderRadius: 6,
+                                  fontSize: 11,
+                                }}
+                              >
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4 }}>
+                                  <span style={{ fontWeight: 700, color: "var(--accent)", fontSize: 11 }}>
+                                    {m.kind === "video" ? "🎬" : m.kind === "photo" ? "📸" : "💬"}
+                                  </span>
+                                  <span style={{ fontSize: 10, color: "#ffcc4d" }}>
+                                    {time(m.at)}
+                                  </span>
+                                </div>
+                                <div style={{ color: "#d7fff6", fontWeight: 600, marginTop: 2, fontSize: 10 }}>
+                                  📍 {materialLocationText(m)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+
+                {/* Действия */}
+                <tr className="no-print">
+                  <td
+                    style={{
+                      fontWeight: 800,
+                      fontSize: 13,
+                      textAlign: "center",
+                      padding: "10px 6px",
+                      position: "sticky",
+                      left: 0,
+                      zIndex: 2,
+                      background: "var(--bg2, #0d1224)",
+                      color: "var(--accent)",
+                    }}
+                  >
+                    Действия
+                  </td>
+                  {rows.map((r) => (
+                    <td key={r.key} className="board-num">
                       {r.teamNumber && (
                         <button
                           className="btn btn-del-team"
@@ -687,12 +804,13 @@ export default function AdminProgress() {
                         </button>
                       )}
                     </td>
-                  </tr>
-                );
-              }))}
-            </tbody>
-          </table>
-        </div>
+                  ))}
+                </tr>
+              </>
+            )}
+          </tbody>
+        </table>
+      </div>
 
 
       <div className="mt" style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
