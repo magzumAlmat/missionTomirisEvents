@@ -39,10 +39,20 @@ export function archiveParticipants(participants) {
     if (!phoneKey) continue;
 
     const previous = archiveByPhone.get(phoneKey);
+    const ip = String(participant.ip || previous?.ip || "").trim();
+    const registeredAt =
+      participant.registeredAt ||
+      participant.createdAt ||
+      previous?.registeredAt ||
+      previous?.createdAt ||
+      new Date().toISOString();
+
     archiveByPhone.set(phoneKey, {
       name: String(participant.name || previous?.name || "").trim(),
       phone: String(participant.phone || previous?.phone || "").trim(),
-      role: participant.role === "Капитан" ? "Капитан" : "Участник",
+      role: participant.role === "Капитан" || previous?.role === "Капитан" ? "Капитан" : "Участник",
+      ip,
+      registeredAt,
     });
   }
 

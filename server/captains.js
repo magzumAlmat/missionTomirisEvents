@@ -52,7 +52,7 @@ export function findCaptainByPhone(phone) {
   return listCaptains().find((c) => (c.phone || "").replace(/\D/g, "").slice(-10) === phoneClean) || null;
 }
 
-export function createCaptain({ name, phone, slots, hasCar, teamName }, { registerParticipant = true } = {}) {
+export function createCaptain({ name, phone, slots, hasCar, teamName, ip }, { registerParticipant = true } = {}) {
   const captains = listCaptains();
   const phoneNorm = normalizePhone(phone);
   const participants = readJson(DB_FILE, []);
@@ -60,6 +60,7 @@ export function createCaptain({ name, phone, slots, hasCar, teamName }, { regist
   const cleanName = String(name || "").trim();
   const cleanPhone = String(phone || "").trim();
   const cleanTeamName = String(teamName || `Команда ${cleanName}`).trim();
+  const cleanIp = ip ? String(ip).trim() : "";
   if (!cleanName || !phoneNorm) {
     return { error: "Укажите имя и корректный телефон капитана." };
   }
@@ -94,6 +95,7 @@ export function createCaptain({ name, phone, slots, hasCar, teamName }, { regist
         teamName: team.name,
         teamSize: numSlots,
         teamNumber: team.number,
+        ip: cleanIp,
         createdAt: new Date().toISOString(),
       });
       if (!writeJson(DB_FILE, participants)) {
@@ -141,6 +143,7 @@ export function createCaptain({ name, phone, slots, hasCar, teamName }, { regist
     teamName: cleanTeamName,
     teamSize: numSlots,
     teamNumber: team.number,
+    ip: cleanIp,
     createdAt: new Date().toISOString(),
   };
   const captain = {
@@ -152,6 +155,7 @@ export function createCaptain({ name, phone, slots, hasCar, teamName }, { regist
     currentParticipants: 0,
     participants: [],
     hasCar: !!hasCar,
+    ip: cleanIp,
     createdAt: new Date().toISOString(),
     active: true,
     teamNumber: team.number,
@@ -197,7 +201,7 @@ export function canSubscribeToCaptain(captainId) {
   return { ok: true, captain };
 }
 
-export function subscribeToCaptain({ captainId, name, phone, hasCar }) {
+export function subscribeToCaptain({ captainId, name, phone, hasCar, ip }) {
   const validation = canSubscribeToCaptain(captainId);
   if (!validation.ok) return validation;
 
@@ -222,6 +226,7 @@ export function subscribeToCaptain({ captainId, name, phone, hasCar }) {
     name: String(name || "").trim(),
     phone: String(phone || "").trim(),
     hasCar: !!hasCar,
+    ip: ip ? String(ip).trim() : "",
     subscribedAt: new Date().toISOString(),
   });
   writeJson(CAPTAINS_FILE, captains);
@@ -262,7 +267,7 @@ export function unsubscribeFromCaptain({ captainId, phone }) {
  * Напрямую добавить пользователя к капитану, минуя checkPhoneRegistration.
  * Используется при перемещении уже зарегистрированных пользователей (из solo → капитан).
  */
-export function addParticipantToCaptainDirect({ captainId, name, phone, hasCar }) {
+export function addParticipantToCaptainDirect({ captainId, name, phone, hasCar, ip }) {
   const captains = listCaptains();
   const captain = captains.find((c) => c.id === captainId);
   if (!captain) return { error: "Капитан не найден" };
@@ -281,6 +286,7 @@ export function addParticipantToCaptainDirect({ captainId, name, phone, hasCar }
     name: String(name || "").trim(),
     phone: String(phone || "").trim(),
     hasCar: !!hasCar,
+    ip: ip ? String(ip).trim() : "",
     subscribedAt: new Date().toISOString(),
   });
   writeJson(CAPTAINS_FILE, captains);
@@ -336,7 +342,7 @@ export function getCaptainsSummary() {
   }));
 }
 
-export function addSoloUser({ name, phone, hasCar }) {
+export function addSoloUser({ name, phone, hasCar, ip }) {
   const regCheck = checkPhoneRegistration(phone);
   if (regCheck.registered) {
     return {
@@ -349,6 +355,7 @@ export function addSoloUser({ name, phone, hasCar }) {
     name: String(name || "").trim(),
     phone: String(phone || "").trim(),
     hasCar: !!hasCar,
+    ip: ip ? String(ip).trim() : "",
     registeredAt: new Date().toISOString(),
   });
   writeJson(soloFile, users);

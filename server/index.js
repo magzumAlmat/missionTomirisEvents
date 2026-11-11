@@ -90,7 +90,68 @@ function archiveParticipantSafely(participant) {
 }
 
 const app = express();
+app.set("trust proxy", true);
 app.use(express.json());
+
+function cleanIp(ip) {
+  if (!ip) return "";
+  const s = String(ip).trim();
+  if (s.startsWith("::ffff:")) return s.slice(7);
+  if (s === "::1") return "127.0.0.1";
+  return s;
+}
+
+function getClientIp(req) {
+  if (!req) return "";
+  const cfIp = req.headers && req.headers["cf-connecting-ip"];
+  if (cfIp) return cleanIp(cfIp);
+
+  const forwarded = req.headers && req.headers["x-forwarded-for"];
+  if (forwarded) {
+    const list = String(forwarded).split(",");
+    if (list.length > 0 && list[0].trim()) {
+      return cleanIp(list[0]);
+    }
+  }
+
+  const realIp = req.headers && req.headers["x-real-ip"];
+  if (realIp) return cleanIp(realIp);
+
+  const socketIp = req.socket?.remoteAddress || req.ip || "";
+  return cleanIp(socketIp);
+}
+
+function formatRegistrationDate(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString("ru-RU", {
+      timeZone: "Asia/Almaty",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  } catch (e) {
+    return "—";
+  }
+}
+
+function formatRegistrationTime(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleTimeString("ru-RU", {
+      timeZone: "Asia/Almaty",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  } catch (e) {
+    return "—";
+  }
+}
 
 // CORS: разрешаем запросы с адреса сайта (или отовсюду, если не задан).
 const ALLOWED = process.env.ALLOWED_ORIGIN || "*";
@@ -737,6 +798,7 @@ app.post("/api/register", async (req, res) => {
     !isCaptain && existingTeam && existingTeam.captainPhone
       ? findCaptainByPhone(existingTeam.captainPhone)
       : null;
+  const clientIp = getClientIp(req);
   if (existingCaptain) {
     const alreadySubscribed = (existingCaptain.participants || []).some(
       (p) => normalizePhone(p.phone) === normalizePhone(phone)
@@ -747,6 +809,7 @@ app.post("/api/register", async (req, res) => {
         name: name.trim(),
         phone: phone.trim(),
         hasCar: !!hasCar,
+        ip: clientIp,
       });
       if (sub.error) {
         return res.status(400).json({ ok: false, error: sub.error });
@@ -778,13 +841,20 @@ app.post("/api/register", async (req, res) => {
     teamName: teamNameClean,
     teamSize: inTeam ? teamSizeNum : 0,
     teamNumber: team ? team.number : null,
+    ip: clientIp,
     createdAt: new Date().toISOString(),
   };
 
   participants.push(newEntry);
   saveParticipants(participants);
   try {
-    archiveParticipants([{ name: newEntry.name, phone: newEntry.phone, role: isCaptain ? "Капитан" : "Участник" }]);
+    archiveParticipants([{
+      name: newEntry.name,
+      phone: newEntry.phone,
+      role: isCaptain ? "Капитан" : "Участник",
+      ip: clientIp,
+      registeredAt: newEntry.createdAt,
+    }]);
   } catch (e) {
     console.error("Не удалось добавить регистрацию в архив участников:", e.message);
   }
@@ -881,12 +951,13 @@ app.post("/api/admin/register-captain", (req, res) => {
     return res.status(400).json({ ok: false, error: "Нужны имя и телефон капитана." });
   }
 
-  const result = createCaptain({ name, phone, slots, hasCar, teamName });
+  const clientIp = getClientIp(req);
+  const result = createCaptain({ name, phone, slots, hasCar, teamName, ip: clientIp });
   if (result.error) {
     return res.status(400).json({ ok: false, error: result.error });
   }
 
-  archiveParticipantSafely({ name, phone, role: "Капитан" });
+  archiveParticipantSafely({ name, phone, role: "Капитан", ip: clientIp, registeredAt: new Date().toISOString() });
   const team = result.teamNumber ? findTeamByNumber(result.teamNumber) : findTeamByCaptainPhone(phone);
   const questState = getQuestState();
   res.json({
@@ -909,13 +980,15 @@ app.post("/api/captains/create", async (req, res) => {
   if (!name || !phone) {
     return res.status(400).json({ ok: false, error: "Нужны имя и телефон капитана" });
   }
+  const clientIp = getClientIp(req);
   const result = createCaptain(
-    { name, phone, slots, hasCar, teamName },
+    { name, phone, slots, hasCar, teamName, ip: clientIp },
     { registerParticipant: false }
   );
   if (result.error) {
     return res.status(400).json({ ok: false, error: result.error });
   }
+  archiveParticipantSafely({ name, phone, role: "Капитан", ip: clientIp, registeredAt: new Date().toISOString() });
   // Уведомить админов
   try {
     const free = Math.max(0, result.captain.slots - 1 - result.captain.currentParticipants);
@@ -948,11 +1021,12 @@ app.post("/api/subscribe-to-captain", async (req, res) => {
   if (!captainId || !name || !phone) {
     return res.status(400).json({ ok: false, error: "Нужны captainId, имя и телефон" });
   }
-  const result = subscribeToCaptain({ captainId, name, phone, hasCar });
+  const clientIp = getClientIp(req);
+  const result = subscribeToCaptain({ captainId, name, phone, hasCar, ip: clientIp });
   if (result.error) {
     return res.status(400).json({ ok: false, error: result.error });
   }
-  archiveParticipantSafely({ name, phone, role: "Участник" });
+  archiveParticipantSafely({ name, phone, role: "Участник", ip: clientIp, registeredAt: new Date().toISOString() });
   // Уведомить админов о подписке
   try {
     const free = Math.max(0, result.captain.slots - 1 - result.captain.currentParticipants);
@@ -1199,11 +1273,12 @@ app.post("/api/admin/add-solo", async (req, res) => {
   if (!name || !phone) {
     return res.status(400).json({ ok: false, error: "Нужны имя и телефон" });
   }
-  const result = addSoloUser({ name, phone, hasCar });
+  const clientIp = getClientIp(req);
+  const result = addSoloUser({ name, phone, hasCar, ip: clientIp });
   if (result.error) {
     return res.status(400).json({ ok: false, error: result.error });
   }
-  archiveParticipantSafely({ name, phone, role: "Участник" });
+  archiveParticipantSafely({ name, phone, role: "Участник", ip: clientIp, registeredAt: new Date().toISOString() });
   // Уведомить админов
   try {
     const text = `🙋 <b>ОДИНОЧНЫЙ УЧАСТНИК</b>\n\n` +
@@ -1237,6 +1312,8 @@ function buildAdminParticipantList() {
     if (!phoneClean) return;
     uniqueUsers.set(phoneClean, {
       ...user,
+      ip: user.ip || "",
+      registeredAt: user.registeredAt || new Date().toISOString(),
       isCaptain: captainPhones.has(phoneClean),
       isSubscribed: subscribedPhones.has(phoneClean),
     });
@@ -1251,6 +1328,7 @@ function buildAdminParticipantList() {
       hasCar: participant.hasCar,
       hasTeam: participant.hasTeam,
       teamName: participant.teamName,
+      ip: participant.ip || "",
       registeredAt: participant.createdAt || new Date().toISOString(),
       isCaptain: captainPhones.has(phoneClean),
       isSubscribed: subscribedPhones.has(phoneClean),
@@ -1265,6 +1343,8 @@ function syncParticipantArchive(users) {
     name: user.name,
     phone: user.phone,
     role: user.isCaptain ? "Капитан" : "Участник",
+    ip: user.ip || "",
+    registeredAt: user.registeredAt || "",
   })));
 }
 
@@ -1288,11 +1368,14 @@ app.get("/api/admin/participants.csv", (_req, res) => {
   try {
     syncParticipantArchive(buildAdminParticipantList());
     const rows = [
-      ["Имя", "Телефон", "Роль"],
+      ["Имя", "Телефон", "Роль", "IP-адрес", "Дата регистрации", "Время регистрации"],
       ...listArchivedParticipants().map((participant) => [
         participant.name,
         participant.phone,
         participant.role,
+        participant.ip || "",
+        formatRegistrationDate(participant.registeredAt),
+        formatRegistrationTime(participant.registeredAt),
       ]),
     ];
     const csv = `\uFEFF${rows.map((row) => row.map(csvField).join(";")).join("\r\n")}`;
