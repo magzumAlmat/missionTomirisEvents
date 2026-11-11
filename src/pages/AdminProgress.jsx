@@ -860,67 +860,6 @@ export default function AdminProgress() {
                   })}
                 </tr>
 
-                {/* Материалы */}
-                <tr>
-                  <td
-                    style={{
-                      fontWeight: 800,
-                      fontSize: 13,
-                      textAlign: "center",
-                      padding: "10px 6px",
-                      position: "sticky",
-                      left: 0,
-                      zIndex: 2,
-                      background: "var(--bg2, #0d1224)",
-                      color: "var(--accent)",
-                    }}
-                  >
-                    Материалы
-                  </td>
-                  {rows.map((r) => {
-                    const teamMaterials = submissions.filter((m) => {
-                      if (r.teamNumber && m.teamNumber && Number(m.teamNumber) === Number(r.teamNumber)) return true;
-                      if (r.captainName && m.captainName && r.captainName.trim().toLowerCase() === m.captainName.trim().toLowerCase()) return true;
-                      if (r.teamName && m.teamName && r.teamName.trim().toLowerCase() === m.teamName.trim().toLowerCase()) return true;
-                      return false;
-                    });
-                    return (
-                      <td key={r.key} style={{ textAlign: "left", minWidth: 160, whiteSpace: "normal", verticalAlign: "top" }}>
-                        {teamMaterials.length === 0 ? (
-                          <span className="muted tiny">пока нет</span>
-                        ) : (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 180, overflowY: "auto", paddingRight: 4 }}>
-                            {teamMaterials.map((m, idx) => (
-                              <div
-                                key={idx}
-                                style={{
-                                  padding: "5px 7px",
-                                  background: "rgba(255, 255, 255, 0.05)",
-                                  border: "1px solid rgba(255, 255, 255, 0.12)",
-                                  borderRadius: 6,
-                                  fontSize: 11,
-                                }}
-                              >
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4 }}>
-                                  <span style={{ fontWeight: 700, color: "var(--accent)", fontSize: 11 }}>
-                                    {m.kind === "video" ? "🎬" : m.kind === "photo" ? "📸" : "💬"}
-                                  </span>
-                                  <span style={{ fontSize: 10, color: "#ffcc4d" }}>
-                                    {time(m.at)}
-                                  </span>
-                                </div>
-                                <div style={{ color: "#d7fff6", fontWeight: 600, marginTop: 2, fontSize: 10 }}>
-                                  📍 {materialLocationText(m)}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-
                 {/* Действия */}
                 <tr className="no-print">
                   <td
