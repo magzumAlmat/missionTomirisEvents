@@ -932,8 +932,16 @@ export default function Register() {
           ) : (
             <button
               type="submit"
-              className="btn green"
-              style={{ flex: 1 }}
+              className={`btn ${formOk ? "green" : ""}`}
+              style={{
+                flex: 1,
+                ...(!formOk && {
+                  background: "rgba(255,255,255,0.12)",
+                  color: "rgba(255,255,255,0.35)",
+                  cursor: "not-allowed",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }),
+              }}
               disabled={status === "sending" || !formOk}
             >
               {status === "sending" ? "Отправка..." : "📝 Зарегистрироваться"}
