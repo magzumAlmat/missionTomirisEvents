@@ -82,7 +82,7 @@ export default function Landing() {
         {/* Картинка-постер */}
         <div className="hero-img-wrapper">
           <img
-            src="/assets/hero.jpeg"
+            src="/assets/hero.jpeg?v=2"
             alt="EventTomiris Quest Poster"
             className="hero-img"
             onError={(e) => {
