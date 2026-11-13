@@ -1,5 +1,5 @@
 node_modules
-dist
+
 qr-output
 .DS_Store
 *.log
